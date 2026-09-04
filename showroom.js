@@ -2220,7 +2220,10 @@ class ShowroomApp {
     this.crtOverlay = document.getElementById('crt-overlay');
 
     this.bestiaryGrid = document.getElementById('bestiary-grid');
-    this.bestiaryManager = this.bestiaryGrid ? new BestiaryManager(this.bestiaryGrid) : null;
+    this.bestiaryManager = new BestiaryManager(this.bestiaryGrid || 'bestiary-grid');
+    if (this.bestiaryManager) {
+      this.bestiaryManager.init();
+    }
 
     // Mini preview canvases in Gallery
     this.previewCanvases = {
@@ -2322,6 +2325,9 @@ class ShowroomApp {
       this.btnModeGallery.classList.remove('active');
       this.btnModePlayground.classList.remove('active');
       if (this.btnModeBestiary) this.btnModeBestiary.classList.add('active');
+      if (this.bestiaryManager) {
+        this.bestiaryManager.init();
+      }
     }
   }
 

@@ -2152,8 +2152,15 @@ export const BESTIARY_DATA = [
 // =============================================================================
 
 export class BestiaryManager {
-  constructor(containerId = 'bestiary-grid') {
-    this.container = document.getElementById(containerId);
+  constructor(container = 'bestiary-grid') {
+    if (typeof container === 'string') {
+      this.container = document.getElementById(container);
+    } else if (container && (container.nodeType || typeof container.querySelector === 'function')) {
+      this.container = container;
+    } else {
+      this.container = document.getElementById('bestiary-grid');
+    }
+
     this.currentCategory = 'all';
     this.enemyStates = {};
     this.canvases = {};
@@ -2165,29 +2172,47 @@ export class BestiaryManager {
         hitTimer: 0
       };
     });
+
+    if (this.container) {
+      this.init();
+    }
   }
 
   init() {
+    if (!this.container) {
+      this.container = document.getElementById('bestiary-grid');
+    }
     if (!this.container) return;
     this.wireFilterPills();
     this.renderCards();
   }
 
   wireFilterPills() {
-    const pills = document.querySelectorAll('.filter-pill');
+    const pills = document.querySelectorAll('.bestiary-filter-btn, .filter-pill');
     pills.forEach(pill => {
-      pill.addEventListener('click', () => {
+      pill.onclick = () => {
         pills.forEach(p => p.classList.remove('active'));
         pill.classList.add('active');
-        this.currentCategory = pill.dataset.filter || 'all';
+        this.currentCategory = pill.dataset.category || pill.dataset.filter || 'all';
         this.renderCards();
-      });
+      };
     });
   }
 
   renderCards() {
+    if (!this.container) {
+      this.container = document.getElementById('bestiary-grid');
+    }
     if (!this.container) return;
-    this.container.innerHTML = '';
+    if (typeof this.container.replaceChildren === 'function') {
+      this.container.replaceChildren();
+    } else {
+      this.container.innerHTML = '';
+      while (this.container.firstChild) {
+        this.container.removeChild(this.container.firstChild);
+      }
+    }
+    this.canvases = {};
 
     const filtered = this.currentCategory === 'all'
       ? BESTIARY_DATA
@@ -2201,69 +2226,58 @@ export class BestiaryManager {
 
       card.innerHTML = `
         <div class="enemy-card-header">
-          <div class="enemy-names">
-            <h3 class="enemy-name">${enemy.name}</h3>
-            <span class="enemy-title">${enemy.title}</span>
+          <div class="enemy-title-group">
+            <h3>${enemy.name}</h3>
+            <span class="enemy-eng-title">${enemy.title}</span>
           </div>
-          <span class="enemy-biome-badge ${enemy.badgeClass}">${enemy.biomeBadge}</span>
+          <div class="enemy-badges-group">
+            <span class="enemy-badge badge-role">${enemy.categoryName}</span>
+            <span class="enemy-badge ${enemy.badgeClass}">${enemy.biomeBadge}</span>
+          </div>
         </div>
 
         <div class="enemy-preview-stage">
           <canvas id="enemy-canvas-${enemy.id}" class="enemy-canvas" width="80" height="80"></canvas>
-          <div id="dmg-float-${enemy.id}" class="dmg-float hidden"></div>
+          <div id="dmg-float-${enemy.id}" class="dmg-float"></div>
           
-          <div class="enemy-preview-controls">
-            <button class="btn-preview-ctrl btn-anim-toggle" title="Animation umschalten">
-              <span class="anim-icon">▶</span> <span class="anim-state-label">${st.state.toUpperCase()}</span>
+          <div class="enemy-stage-controls">
+            <button class="stage-btn btn-anim-toggle" title="Animation umschalten">
+              <span class="anim-icon">▶</span> Modus: <span class="anim-state-label">${st.state.toUpperCase()}</span>
             </button>
-            <button class="btn-preview-ctrl btn-hit-test" title="Treffer testen (Hit Flash)">
-              💥 Hit
+            <button class="stage-btn btn-hit-test" title="Treffer testen (Hit Flash)">
+              💥 Treffer
             </button>
           </div>
         </div>
 
-        <div class="enemy-info-body">
-          <div class="enemy-stats-row">
-            <div class="stat-pill" title="Lebenspunkte">
-              <span class="stat-label">HP</span>
-              <span class="stat-val">${enemy.stats.hp}</span>
-            </div>
-            <div class="stat-pill" title="Angriffskraft">
-              <span class="stat-label">ATK</span>
-              <span class="stat-val">${enemy.stats.atk}</span>
-            </div>
-            <div class="stat-pill" title="Lauftempo">
-              <span class="stat-label">SPD</span>
-              <span class="stat-val">${enemy.stats.spd}</span>
-            </div>
-            <div class="stat-pill" title="Angriffsreichweite">
-              <span class="stat-label">RNG</span>
-              <span class="stat-val">${enemy.stats.rng.split(' ')[0]}</span>
-            </div>
+        <div class="enemy-stats-panel">
+          <div class="stat-bar-row">
+            <span class="stat-label">Leben</span>
+            <div class="stat-track"><div class="stat-fill fill-hp" style="width: ${Math.min(100, (enemy.stats.hp / 140) * 100)}%"></div></div>
+            <span class="stat-num">${enemy.stats.hp}</span>
           </div>
-
-          <div class="enemy-section">
-            <div class="enemy-section-title">⚔️ Verhalten & Taktik</div>
-            <p class="enemy-text">${enemy.behavior}</p>
+          <div class="stat-bar-row">
+            <span class="stat-label">Angriff</span>
+            <div class="stat-track"><div class="stat-fill fill-atk" style="width: ${Math.min(100, (enemy.stats.atk / 45) * 100)}%"></div></div>
+            <span class="stat-num">${enemy.stats.atk}</span>
           </div>
-
-          <div class="enemy-section">
-            <div class="enemy-section-title">🛡️ Schwäche & Konter</div>
-            <p class="enemy-text enemy-counter">${enemy.counter}</p>
-          </div>
-
-          <div class="enemy-section">
-            <div class="enemy-section-title">📜 Geisterwald-Überlieferung</div>
-            <p class="enemy-lore">${enemy.lore}</p>
-          </div>
-
-          <div class="enemy-variants-section">
-            <div class="enemy-section-title">🎨 Biom-Farbvarianten</div>
-            <div class="variants-pills">
-              ${enemy.variants.map(v => `<span class="variant-pill">${v}</span>`).join('')}
-            </div>
+          <div class="stat-chips-row">
+            <span class="stat-chip">Tempo: <b>${enemy.stats.spd}</b></span>
+            <span class="stat-chip">Reichweite: <b>${enemy.stats.rng.split(' ')[0]}</b></span>
           </div>
         </div>
+
+        <div class="enemy-tactics-box">
+          <div class="tactic-item"><span class="tactic-icon">⚔️</span> <span>${enemy.behavior}</span></div>
+          <div class="tactic-item counter-item"><span class="tactic-icon">🛡️</span> <span><strong>Konter:</strong> ${enemy.counter}</span></div>
+        </div>
+
+        <div class="enemy-variants-row">
+          <span class="variants-title">🎨 Farbvarianten:</span>
+          ${enemy.variants.map(v => `<span class="variant-pill">${v}</span>`).join('')}
+        </div>
+
+        <div class="enemy-lore-quote">„${enemy.lore}“</div>
       `;
 
       this.container.appendChild(card);
@@ -2277,7 +2291,8 @@ export class BestiaryManager {
       const btnAnim = card.querySelector('.btn-anim-toggle');
       const labelAnim = card.querySelector('.anim-state-label');
       if (btnAnim && labelAnim) {
-        btnAnim.addEventListener('click', () => {
+        btnAnim.addEventListener('click', (e) => {
+          e.stopPropagation();
           const nextState = st.state === 'idle' ? 'walk' : (st.state === 'walk' ? 'attack' : 'idle');
           st.state = nextState;
           labelAnim.textContent = nextState.toUpperCase();
@@ -2287,15 +2302,16 @@ export class BestiaryManager {
       const btnHit = card.querySelector('.btn-hit-test');
       const dmgFloat = card.querySelector(`#dmg-float-${enemy.id}`);
       if (btnHit) {
-        btnHit.addEventListener('click', () => {
+        btnHit.addEventListener('click', (e) => {
+          e.stopPropagation();
           st.hitTimer = 0.25; // White flash
           if (dmgFloat) {
             dmgFloat.textContent = `-${Math.floor(Math.random() * 14 + 18)}!`;
-            dmgFloat.classList.remove('hidden');
+            dmgFloat.classList.remove('anim-float');
+            void dmgFloat.offsetWidth; // Trigger reflow for re-animation
             dmgFloat.classList.add('anim-float');
             setTimeout(() => {
               dmgFloat.classList.remove('anim-float');
-              dmgFloat.classList.add('hidden');
             }, 650);
           }
         });
