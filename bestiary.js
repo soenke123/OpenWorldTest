@@ -1,7 +1,285 @@
 /**
  * Ocarina of Brawls - Bestiarium & Monster-Handbuch
- * 20 detaillierte, prozedural animierte Gegner-Modelle
+ * 20 detaillierte, prozedural animierte Gegner-Modelle im "Süßen Dark Ghibli 2.5D Papercraft"-Stil
+ * Inspiriert von Prinzessin Mononoke, Chihiros Reise ins Zauberland, Totoro und japanischer Mythologie
  */
+
+// =============================================================================
+// GHIBLI PAPERCRAFT DRAWING HELPERS
+// =============================================================================
+
+/** Zeichnet weichen Papierschatten unter dem Wesen */
+export function drawPaperShadow(ctx, cx, cy, rx, ry, alpha = 0.28) {
+  ctx.save();
+  ctx.fillStyle = `rgba(15, 23, 42, ${alpha})`;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Zeichnet ausdrucksstarke Ghibli-Anime-Augen mit Glanzpunkten und Wangen-Rouge */
+export function drawGhibliEyes(ctx, lx, rx, y, r, dx = 0, dy = 0, isBlinking = false, blush = true) {
+  ctx.save();
+  if (isBlinking) {
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(lx, y, r, Math.PI * 0.1, Math.PI * 0.9);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(rx, y, r, Math.PI * 0.1, Math.PI * 0.9);
+    ctx.stroke();
+  } else {
+    // Sklera / Weiß
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(lx, y, r * 1.05, r * 1.25, 0, 0, Math.PI * 2);
+    ctx.ellipse(rx, y, r * 1.05, r * 1.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Iris / Dunkel
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(lx + dx, y + dy, r * 0.75, 0, Math.PI * 2);
+    ctx.arc(rx + dx, y + dy, r * 0.75, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Glanzpunkte (Specular highlights)
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(lx + dx - r * 0.25, y + dy - r * 0.25, r * 0.3, 0, Math.PI * 2);
+    ctx.arc(rx + dx - r * 0.25, y + dy - r * 0.25, r * 0.3, 0, Math.PI * 2);
+    ctx.arc(lx + dx + r * 0.2, y + dy + r * 0.2, r * 0.15, 0, Math.PI * 2);
+    ctx.arc(rx + dx + r * 0.2, y + dy + r * 0.2, r * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Sanftes Wangen-Rouge (Blush)
+  if (blush) {
+    ctx.fillStyle = 'rgba(251, 113, 133, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(lx - r * 0.8, y + r * 0.8, r * 0.75, r * 0.38, -0.15, 0, Math.PI * 2);
+    ctx.ellipse(rx + r * 0.8, y + r * 0.8, r * 0.75, r * 0.38, 0.15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Zeichnet eine feine Porzellanmaske mit Zinnober-Kitsune-/Mononoke-Malereien */
+export function drawPorcelainMask(ctx, cx, cy, w, h, style = 'fox') {
+  ctx.save();
+  // Weicher Maskenschatten
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.beginPath();
+  ctx.ellipse(cx + 1, cy + 1, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Weißes Porzellan
+  ctx.fillStyle = '#fdfbf7';
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Zinnoberrote Ritual-Malerei
+  ctx.fillStyle = '#e11d48';
+  ctx.strokeStyle = '#e11d48';
+  ctx.lineWidth = 1.4;
+
+  if (style === 'fox') {
+    // Kitsune-Augenbrauen und Wangenwirbel
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.3, cy - h * 0.15);
+    ctx.quadraticCurveTo(cx - w * 0.15, cy - h * 0.35, cx - w * 0.05, cy - h * 0.15);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx + w * 0.3, cy - h * 0.15);
+    ctx.quadraticCurveTo(cx + w * 0.15, cy - h * 0.35, cx + w * 0.05, cy - h * 0.15);
+    ctx.stroke();
+
+    // Rote Wangenstreifen
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.4, cy + h * 0.1);
+    ctx.lineTo(cx - w * 0.15, cy + h * 0.18);
+    ctx.moveTo(cx + w * 0.4, cy + h * 0.1);
+    ctx.lineTo(cx + w * 0.15, cy + h * 0.18);
+    ctx.stroke();
+  } else if (style === 'noh') {
+    // Kaonashi / No-Face Tränenpunkte
+    ctx.beginPath();
+    ctx.ellipse(cx - w * 0.22, cy - h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + w * 0.22, cy - h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx - w * 0.22, cy + h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + w * 0.22, cy + h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Augen-Schlitze
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.ellipse(cx - w * 0.2, cy - h * 0.05, w * 0.12, h * 0.06, 0.1, 0, Math.PI * 2);
+  ctx.ellipse(cx + w * 0.2, cy - h * 0.05, w * 0.12, h * 0.06, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/** Zeichnet einen niedlichen kleinen Kodama (Baumgeist mit Wackelkopf) */
+export function drawKodama(ctx, x, y, tilt = 0, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  // Kleiner milchweißer Körper
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.ellipse(0, 4, 3, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wackelkopf
+  ctx.translate(0, -2);
+  ctx.rotate(tilt);
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 5, 4.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Neugierige hohle Augen & Mund
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.arc(-2, -0.5, 0.9, 0, Math.PI * 2);
+  ctx.arc(2, -0.5, 0.9, 0, Math.PI * 2);
+  ctx.arc(0, 1.8, 0.75, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/** Zeichnet einen flauschigen Rußmännchen-Begleiter (Susuwatari) */
+export function drawSootSprite(ctx, x, y, r, time, holdingCandy = false) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Flauschige Stachelspitzen
+  ctx.fillStyle = '#09090b';
+  ctx.beginPath();
+  const spikes = 10;
+  for (let i = 0; i < spikes; i++) {
+    const angle = (i / spikes) * Math.PI * 2;
+    const spikeR = r + Math.sin(time * 8 + i * 2) * 1.5;
+    const px = Math.cos(angle) * spikeR;
+    const py = Math.sin(angle) * spikeR;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Zentraler runder Körper
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Große Kulleraugen
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(-r * 0.35, -r * 0.15, r * 0.38, 0, Math.PI * 2);
+  ctx.arc(r * 0.35, -r * 0.15, r * 0.38, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Pupillen (blicken neugierig)
+  const pLook = Math.sin(time * 3) * 0.5;
+  ctx.fillStyle = '#09090b';
+  ctx.beginPath();
+  ctx.arc(-r * 0.35 + pLook, -r * 0.15, r * 0.18, 0, Math.PI * 2);
+  ctx.arc(r * 0.35 + pLook, -r * 0.15, r * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Konpeitō (Stern-Zuckerchen in den Pfötchen)
+  if (holdingCandy) {
+    const candyY = r * 0.7;
+    ctx.fillStyle = '#fde047';
+    ctx.beginPath();
+    ctx.arc(0, candyY, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(-1, candyY - 1, 1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+/** Zeichnet eine traditionelle japanische Papierlaterne (Chōchin) */
+export function drawPaperLantern(ctx, x, y, w, h, time, glowColor = '#f59e0b') {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Weicher Lichtschein
+  ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+  ctx.beginPath();
+  ctx.arc(0, 0, Math.max(w, h) * 0.9 + Math.sin(time * 4) * 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Aufhängung
+  ctx.strokeStyle = '#451a03';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(0, -h * 0.6);
+  ctx.lineTo(0, -h * 0.4);
+  ctx.stroke();
+
+  // Laternenkörper (Rot / Pergament)
+  ctx.fillStyle = '#dc2626';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w * 0.5, h * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Warmes inneres Licht
+  ctx.fillStyle = glowColor;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w * 0.28, h * 0.28, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bambus-Rippen
+  ctx.strokeStyle = '#7f1d1d';
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.ellipse(0, -h * 0.2, w * 0.42, h * 0.12, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h * 0.2, w * 0.42, h * 0.12, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Quaste unten
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(-1, h * 0.45, 2, 4);
+
+  ctx.restore();
+}
+
+/** Zeichnet ein zartes Kirschblütenblatt (Sakura) */
+export function drawSakuraPetal(ctx, x, y, rot, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = '#fbcfe8';
+  ctx.beginPath();
+  ctx.moveTo(0, -4);
+  ctx.quadraticCurveTo(3, -2, 2, 3);
+  ctx.quadraticCurveTo(0, 5, -2, 3);
+  ctx.quadraticCurveTo(-3, -2, 0, -4);
+  ctx.fill();
+  ctx.restore();
+}
+
+// =============================================================================
+// BESTIARY DATA (20 ENEMY MODELS - GHIBLI PAPERCRAFT EDITION)
+// =============================================================================
 
 export const BESTIARY_DATA = [
   // =========================================================================
@@ -10,7 +288,7 @@ export const BESTIARY_DATA = [
   {
     id: 'moss_archer',
     name: 'Waldläufer-Schütze',
-    title: 'Moss Archer',
+    title: 'Kitsune Moss Ranger',
     category: 'range',
     categoryName: '🏹 Fernkampf',
     biome: 'Grasland / Dichter Wald',
@@ -18,9 +296,9 @@ export const BESTIARY_DATA = [
     badgeClass: 'badge-grass',
     variants: ['Waldgrün (Standard)', 'Wüstensand (Ockergelb)', 'Schneetarn (Polarweiß)'],
     stats: { hp: 45, maxHp: 50, atk: 18, spd: 'Schnell', rng: '180px (Hoch)' },
-    behavior: 'Lauert im Unterholz und feuert gezielte Pfeilsalven ab. Nähert sich der Spieler auf unter 35px, weicht er mit einem geschickten Rückwärtssprung ins Dickicht aus.',
-    counter: 'Mit dem Schild anrücken, um Pfeile abzuwehren. Dann mit einem schnellen Dash aufschließen und die 3-Hit Schwertkombo ansetzen.',
-    lore: 'Verwendet ausgehöhlte Eichelkappen als Pfeilköcher und schläft auf den höchsten Ästen des Geisterwalds.',
+    behavior: 'Lauert lautlos im Geäst und feuert treffsichere Moospfeile. Nähert sich der Spieler auf unter 35px, springt er mit einer geschickten Rückwärtsrolle ins Blattwerk.',
+    counter: 'Mit erhobenem Schild vorrücken, um die Pfeile abprallen zu lassen. Im Moment seines Nachladens mit einem schnellen Dash zuschlagen.',
+    lore: 'Trägt eine handgeschnitzte Kitsune-Porzellanmaske. Auf seiner Schulter reist stets ein kleiner Kodama-Baumgeist mit, der ihm die Windrichtung zuflüstert.',
     palette: { primary: '#15803d', secondary: '#166534', cloth: '#22c55e', bow: '#854d0e', skin: '#fde047' },
     render(ctx, cx, cy, time, state, hitFlash) {
       const breath = Math.sin(time * 3) * 1.5;
@@ -28,77 +306,92 @@ export const BESTIARY_DATA = [
       const isWalking = state === 'walk';
       const walkCycle = Math.sin(time * 8) * 3;
 
-      // Drop shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      drawPaperShadow(ctx, cx, cy + 18, 13, 4.5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Kodama auf linker Schulter
+      const kodamaTilt = Math.sin(time * 2.5) * 0.25;
+      drawKodama(ctx, cx - 11, cy - 2 + breath * 0.6, kodamaTilt, 0.9);
+
+      // Beine & gefaltete Lederstiefel
+      ctx.fillStyle = '#334155';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 18, 12, 4, 0, 0, Math.PI * 2);
+      ctx.roundRect(cx - 5.5, cy + 8, 3.2, 9 + (isWalking ? walkCycle : 0), 1.5);
+      ctx.roundRect(cx + 2.5, cy + 8, 3.2, 9 - (isWalking ? walkCycle : 0), 1.5);
       ctx.fill();
 
-      // Hit Flash override
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      // Legs
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(cx - 5, cy + 10, 3, 8 + (isWalking ? walkCycle : 0));
-      ctx.fillRect(cx + 2, cy + 10, 3, 8 - (isWalking ? walkCycle : 0));
-
-      // Boots
       ctx.fillStyle = '#78350f';
-      ctx.fillRect(cx - 6, cy + 16, 4, 3);
-      ctx.fillRect(cx + 2, cy + 16, 4, 3);
+      ctx.beginPath();
+      ctx.roundRect(cx - 6.5, cy + 15 + (isWalking ? walkCycle : 0), 4.5, 3.2, 1.2);
+      ctx.roundRect(cx + 1.5, cy + 15 - (isWalking ? walkCycle : 0), 4.5, 3.2, 1.2);
+      ctx.fill();
 
-      // Body / Leaf Tunic
+      // Körper / Gestufter Blatt-Poncho
       ctx.fillStyle = '#166534';
-      ctx.fillRect(cx - 7, cy - 2 + breath, 14, 13);
-      ctx.fillStyle = '#22c55e';
-      ctx.fillRect(cx - 5, cy + 1 + breath, 10, 8);
-
-      // Belt & Quiver strap
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(cx - 7, cy + 7 + breath, 14, 2);
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(cx - 2, cy + 6.5 + breath, 4, 3);
-
-      // Quiver on Back with arrows
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(cx - 9, cy - 8 + breath, 4, 14);
-      ctx.fillStyle = '#f8fafc'; // Arrow feathers
-      ctx.fillRect(cx - 10, cy - 12 + breath, 2, 4);
-      ctx.fillRect(cx - 7, cy - 11 + breath, 2, 4);
-
-      // Head & Hood
-      ctx.fillStyle = '#14532d';
       ctx.beginPath();
-      ctx.arc(cx, cy - 7 + breath, 7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Pointy Hood Tip
-      ctx.beginPath();
-      ctx.moveTo(cx - 3, cy - 12 + breath);
-      ctx.lineTo(cx - 8, cy - 16 + breath);
-      ctx.lineTo(cx + 2, cy - 10 + breath);
+      ctx.moveTo(cx - 8, cy - 3 + breath);
+      ctx.quadraticCurveTo(cx - 10, cy + 11 + breath, cx - 4, cy + 12 + breath);
+      ctx.quadraticCurveTo(cx, cy + 13 + breath, cx + 4, cy + 12 + breath);
+      ctx.quadraticCurveTo(cx + 10, cy + 11 + breath, cx + 8, cy - 3 + breath);
       ctx.closePath();
       ctx.fill();
 
-      // Face Shadow & Glowing Archer Eyes
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(cx - 4, cy - 8 + breath, 8, 5);
-      ctx.fillStyle = '#facc15';
-      ctx.fillRect(cx - 2, cy - 7 + breath, 2, 2);
-      ctx.fillRect(cx + 2, cy - 7 + breath, 2, 2);
+      // Innere Blattlage (hellgrün gestuft)
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy + 1 + breath);
+      ctx.quadraticCurveTo(cx, cy + 11 + breath, cx + 5, cy + 1 + breath);
+      ctx.closePath();
+      ctx.fill();
 
-      // Bow & Hands
-      const bowPull = isAttacking ? Math.sin(time * 12) * 4 : 0;
-      const bowX = cx + 8 + (isAttacking ? 2 : 0);
+      // Gürtel & Eichel-Schnalle
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(cx - 7, cy + 6 + breath, 14, 2);
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(cx, cy + 7 + breath, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Köcher mit zarten Papier-Pfeilfedern
+      ctx.fillStyle = '#92400e';
+      ctx.fillRect(cx - 10, cy - 7 + breath, 3.5, 12);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(cx - 11, cy - 11 + breath, 1.8, 4);
+      ctx.fillRect(cx - 8.5, cy - 10 + breath, 1.8, 4);
+
+      // Kapuze mit Fuchsohren
+      ctx.fillStyle = '#14532d';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 6 + breath, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Kapuzenspitze geschwungen
+      ctx.beginPath();
+      ctx.moveTo(cx - 3, cy - 12 + breath);
+      ctx.quadraticCurveTo(cx - 8, cy - 16 + breath, cx - 11, cy - 14 + breath);
+      ctx.lineTo(cx + 1, cy - 11 + breath);
+      ctx.closePath();
+      ctx.fill();
+
+      // Kitsune Porzellan-Halbmaske mit roten Zeichen
+      drawPorcelainMask(ctx, cx, cy - 6 + breath, 10, 8.5, 'fox');
+
+      // Bogen aus Birkenholz mit Sakura-Band
+      const bowPull = isAttacking ? Math.sin(time * 12) * 4.5 : 0;
+      const bowX = cx + 8 + (isAttacking ? 3 : 0);
       const bowY = cy + 2 + breath;
 
       ctx.strokeStyle = '#854d0e';
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 2.4;
       ctx.beginPath();
       ctx.arc(bowX, bowY, 11, -Math.PI / 2.2, Math.PI / 2.2);
       ctx.stroke();
 
-      // Bow String
+      // Sakura-Bändchen am Bogenhorn
+      drawSakuraPetal(ctx, bowX - 2, bowY - 11, Math.sin(time * 4) * 0.4, 0.8);
+
+      // Bogensehne
       ctx.strokeStyle = '#f8fafc';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -107,15 +400,20 @@ export const BESTIARY_DATA = [
       ctx.lineTo(bowX - 4, bowY + 10);
       ctx.stroke();
 
-      // Arrow if attacking
+      // Leuchtender Waldpfeil bei Angriff
       if (isAttacking) {
-        ctx.fillStyle = '#e2e8f0';
-        ctx.fillRect(bowX - 8 - bowPull, bowY - 1, 16, 2);
-        ctx.fillStyle = '#0284c7';
+        ctx.strokeStyle = '#4ade80';
+        ctx.lineWidth = 1.8;
         ctx.beginPath();
-        ctx.moveTo(bowX + 10, bowY);
-        ctx.lineTo(bowX + 6, bowY - 2.5);
-        ctx.lineTo(bowX + 6, bowY + 2.5);
+        ctx.moveTo(bowX - 8 - bowPull, bowY);
+        ctx.lineTo(bowX + 11, bowY);
+        ctx.stroke();
+
+        ctx.fillStyle = '#bbf7d0';
+        ctx.beginPath();
+        ctx.moveTo(bowX + 13, bowY);
+        ctx.lineTo(bowX + 9, bowY - 2.5);
+        ctx.lineTo(bowX + 9, bowY + 2.5);
         ctx.fill();
       }
 
@@ -126,7 +424,7 @@ export const BESTIARY_DATA = [
   {
     id: 'spore_spitter',
     name: 'Sporen-Spucker',
-    title: 'Spore Spitter',
+    title: 'Spore Dumpling Yokai',
     category: 'range',
     categoryName: '🏹 Fernkampf',
     biome: 'Sumpf & Pilzgrotten',
@@ -134,71 +432,85 @@ export const BESTIARY_DATA = [
     badgeClass: 'badge-swamp',
     variants: ['Giftgrün (Standard)', 'Neon-Lila (Tiefsteinhöhle)', 'Gletscherblau (Frostpilz)'],
     stats: { hp: 55, maxHp: 60, atk: 22, spd: 'Langsam', rng: '160px (Bogen)' },
-    behavior: 'Pufft rhythmisch Sporenwolken aus. Verschießt parabolische Säuregeschosse, die beim Aufprall 3 Sekunden lang eine ätzende Pfütze hinterlassen.',
-    counter: 'Ständig in Bewegung bleiben, um den Flugbahnen auszuweichen. Sobald er nach dem Spucken nachlädt, mit dem Bogen oder Dash attackieren.',
-    lore: 'Seine Sporen riechen nach altem feuchtem Pergament, schmecken jedoch überraschend süßlich.',
+    behavior: 'Ein pummeliger Pilzgeist, der friedlich im Moos döst, bei Störung jedoch zischende Leuchtsporen im hohen Bogen spuckt. Hinterlässt beim Aufprall glitzernden Nebel.',
+    counter: 'Die bogenförmigen Flugbahnen sind langsam. Seitlich ausweichen und den kurzen Moment nutzen, in dem er nach dem Spucken erschöpft seufzt.',
+    lore: 'Seine samtige Haube duftet nach feuchtem Waldboden und süßen Blaubeeren. Mag es besonders, wenn man ihn sanft am Stiel krault.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const pulse = Math.sin(time * 4) * 2;
       const isAttacking = state === 'attack';
-      const attackSquash = isAttacking ? Math.sin(time * 10) * 3 : 0;
+      const isWalking = state === 'walk';
+      const breath = Math.sin(time * 3.5) * 1.5;
+      const squash = isAttacking ? Math.sin(time * 10) * 3 : (isWalking ? Math.sin(time * 8) * 1.5 : 0);
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 16, 14, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawPaperShadow(ctx, cx, cy + 16, 14, 5);
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
 
-      // Root Pods / Tentacle feet
-      ctx.fillStyle = '#3f2c1d';
-      for (let i = -2; i <= 2; i++) {
-        const footSway = Math.sin(time * 3 + i) * 2;
-        ctx.fillRect(cx + i * 5 - 2, cy + 12 + footSway, 4, 6);
+      // 4 zarte Wurzelbeinchen
+      ctx.fillStyle = '#451a03';
+      for (let i = -1.5; i <= 1.5; i += 1) {
+        const footWiggle = isWalking ? Math.sin(time * 8 + i * 1.5) * 2.5 : 0;
+        ctx.beginPath();
+        ctx.ellipse(cx + i * 5.5, cy + 13 + footWiggle, 2.2, 3.2, 0, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      // Bulbous Stem Body
-      ctx.fillStyle = '#831843';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 4 - attackSquash, 12 + pulse * 0.5, 12 + attackSquash, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Spore Blisters (Glow)
-      ctx.fillStyle = '#a21caf';
-      ctx.beginPath();
-      ctx.arc(cx - 7, cy + 2, 4, 0, Math.PI * 2);
-      ctx.arc(cx + 6, cy + 5, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f0abfc';
-      ctx.beginPath();
-      ctx.arc(cx - 7, cy + 1, 2, 0, Math.PI * 2);
-      ctx.arc(cx + 6, cy + 4, 1.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Top Funnel Mouth
+      // Runder, samtiger Pilzkörper (Deep Indigo & Magenta)
       ctx.fillStyle = '#581c87';
       ctx.beginPath();
-      ctx.moveTo(cx - 10, cy - 6);
-      ctx.lineTo(cx - 13 - pulse, cy - 14 - attackSquash);
-      ctx.lineTo(cx + 13 + pulse, cy - 14 - attackSquash);
-      ctx.lineTo(cx + 10, cy - 6);
+      ctx.ellipse(cx, cy + 4 - squash * 0.5, 13 + breath * 0.5, 11 + squash, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bauchbereich heller (Fliederfarbenes Pergament)
+      ctx.fillStyle = '#a855f7';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 6 - squash * 0.5, 9, 7 + squash * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Mintgrüne Leucht-Polkapunkte
+      ctx.fillStyle = '#6ee7b7';
+      ctx.beginPath();
+      ctx.arc(cx - 7, cy + 1, 2.5, 0, Math.PI * 2);
+      ctx.arc(cx + 7, cy + 3, 2, 0, Math.PI * 2);
+      ctx.arc(cx - 2, cy + 8, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Kamin-Mund auf dem Kopf
+      ctx.fillStyle = '#3b0764';
+      ctx.beginPath();
+      ctx.moveTo(cx - 6, cy - 6);
+      ctx.quadraticCurveTo(cx - 8, cy - 13 - squash, cx - 5, cy - 14 - squash);
+      ctx.lineTo(cx + 5, cy - 14 - squash);
+      ctx.quadraticCurveTo(cx + 8, cy - 13 - squash, cx + 6, cy - 6);
       ctx.closePath();
       ctx.fill();
 
-      // Glowing Maw Throat
-      ctx.fillStyle = '#4ade80';
+      // Mündungsschlund mit zartem Leuchten
+      ctx.fillStyle = '#34d399';
       ctx.beginPath();
-      ctx.ellipse(cx, cy - 14 - attackSquash, 11 + pulse, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy - 14 - squash, 6, 2.2, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Bubbling Spore Projectile when attacking
+      // Niedliche schläfrige Kulleraugen
+      const blink = Math.sin(time * 1.8) > 0.95;
+      drawGhibliEyes(ctx, cx - 4.5, cx + 4.5, cy + 2 - squash * 0.4, 2.4, 0, 0.4, blink, true);
+
+      // Schwebende Sporenbläschen
       if (isAttacking) {
-        ctx.fillStyle = '#22c55e';
+        // Große leuchtende Sporen-Kugel
+        ctx.fillStyle = '#4ade80';
         ctx.beginPath();
-        ctx.arc(cx, cy - 22 - attackSquash, 5, 0, Math.PI * 2);
+        ctx.arc(cx, cy - 22 - squash, 5.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = '#bbf7d0';
-        ctx.arc(cx - 1, cy - 23 - attackSquash, 2, 0, Math.PI * 2);
+        ctx.beginPath();
+        ctx.arc(cx - 1.5, cy - 23.5 - squash, 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Zarte kleine Schwebepartikel
+        const bubbleY = (time * 18) % 24;
+        ctx.fillStyle = 'rgba(110, 231, 183, 0.7)';
+        ctx.beginPath();
+        ctx.arc(cx + Math.sin(time * 3) * 4, cy - 16 - bubbleY, 1.8, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -207,244 +519,308 @@ export const BESTIARY_DATA = [
   },
 
   // =========================================================================
-  // 2. GROSSE MONSTER / TANKS
+  // 2. BOSS / TANK / MONSTER (KOLOSS)
   // =========================================================================
   {
     id: 'boulder_troll',
-    name: 'Fels-Troll',
-    title: 'Boulder Troll',
+    name: 'Moos-Koloss',
+    title: 'Laputa Stone Guardian',
     category: 'boss',
-    categoryName: '👹 Tanks & Trolle',
-    biome: 'Gebirge & Höhlenwände',
-    biomeBadge: 'Höhlen',
-    badgeClass: 'badge-caves',
-    variants: ['Moosfels (Standard)', 'Wüsten-Lehm (Sandrot)', 'Frost-Granit (Gletschergrau)'],
-    stats: { hp: 120, maxHp: 120, atk: 35, spd: 'Sehr Langsam', rng: '55px (Smash)' },
-    behavior: 'Monumentale Silhouette mit verheerendem Boden-Smash. Sein Keulenhieb erzeugt eine ringförmige Schockwelle, die Spieler-Schilde bei direktem Treffer sofort zerbricht!',
-    counter: 'Während des extrem langsamen Ausholens per Dash hinter ihn gelangen und den aufgeladenen Wirbelangriff zünden.',
-    lore: 'Schläft oft jahrelang regungslos im Sitzen und wird von Vögeln für einen normalen Felsen gehalten.',
+    categoryName: '🛡️ Koloss / Boss',
+    biome: 'Felsgebirge & Berggipfel',
+    biomeBadge: 'Gebirge',
+    badgeClass: 'badge-mountain',
+    variants: ['Granit-Moos (Standard)', 'Vulkanasche (Basaltschwarz)', 'Marmorglanz (Alabaster)'],
+    stats: { hp: 120, maxHp: 120, atk: 35, spd: 'Schwerfällig', rng: '50px (Flächen-Beben)' },
+    behavior: 'Uralter Steingolem, bewachsen mit Moos und Miniatur-Bonsai. Stampft im Takt der Bergadern. Rammt beide Fäuste in die Erde für verheerende Stoßwellen.',
+    counter: 'Seine wuchtigen Schläge haben lange Vorbereitung. Während er ausholt, hinter ihn rollen und den moosfreien Riss an seinem Rücken attackieren.',
+    lore: 'Wacht seit Jahrhunderten über zerfallene Himmelsruinen. Kleine Glühwürmchen schlafen nachts geborgen in seinen Steinfugen.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const breath = Math.sin(time * 2) * 1.5;
+      const breath = Math.sin(time * 2) * 1.2;
       const isAttacking = state === 'attack';
-      const armLift = isAttacking ? -16 : Math.sin(time * 3) * 2;
+      const isWalking = state === 'walk';
+      const sway = isWalking ? Math.sin(time * 4) * 3 : 0;
 
-      // Big heavy shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      drawPaperShadow(ctx, cx, cy + 22, 22, 7);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Uralter runder Felskörper (Slate Grey Papercraft)
+      ctx.fillStyle = '#334155';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 22, 22, 7, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + sway * 0.3, cy + 3 + breath, 18, 16, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      // Thick Stumpy Rock Legs
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(cx - 14, cy + 12, 10, 12);
-      ctx.fillRect(cx + 4, cy + 12, 10, 12);
-
-      // Massive Torso / Rock Slab
+      // Steinstruktur / Geschichtete Felsplatten
       ctx.fillStyle = '#475569';
       ctx.beginPath();
-      ctx.roundRect(cx - 18, cy - 10 + breath, 36, 26, 6);
+      ctx.ellipse(cx + sway * 0.3, cy + 1 + breath, 15, 12, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Moss Overgrowth on shoulders
+      // Moosdecke auf Schultern und Kopf (Lush Moss)
       ctx.fillStyle = '#15803d';
-      ctx.fillRect(cx - 18, cy - 10 + breath, 12, 5);
-      ctx.fillRect(cx + 6, cy - 10 + breath, 12, 5);
-      ctx.fillStyle = '#4ade80';
-      ctx.fillRect(cx - 15, cy - 8 + breath, 5, 2);
-
-      // Craggy Head & Jaw
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(cx - 8, cy - 18 + breath, 16, 12);
-      // Glowing Amber Eyes
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(cx - 5, cy - 14 + breath, 3, 2);
-      ctx.fillRect(cx + 2, cy - 14 + breath, 3, 2);
-      // Underbite Tusks
-      ctx.fillStyle = '#f1f5f9';
-      ctx.fillRect(cx - 6, cy - 9 + breath, 2, 4);
-      ctx.fillRect(cx + 4, cy - 9 + breath, 2, 4);
-
-      // Huge Club Hand
-      const clubX = cx + 22;
-      const clubY = cy + armLift + breath;
-
-      // Arm
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(cx + 12, cy - 4 + armLift + breath, 10, 8);
-
-      // Club Handle & Stone Head
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(clubX - 2, clubY - 14, 4, 32);
-      ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.roundRect(clubX - 7, clubY - 22, 14, 16, 3);
+      ctx.ellipse(cx + sway * 0.3, cy - 9 + breath, 14, 6, 0, 0, Math.PI * 2);
       ctx.fill();
-      // Spikes on club
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(clubX - 9, clubY - 18, 2, 3);
-      ctx.fillRect(clubX + 7, clubY - 18, 2, 3);
-      ctx.fillRect(clubX - 2, clubY - 24, 4, 2);
+
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.ellipse(cx - 3 + sway * 0.3, cy - 10 + breath, 8, 4, -0.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bonsai-Zweiglein mit 3 Blättern auf rechter Schulter
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(cx + 8 + sway * 0.3, cy - 10 + breath);
+      ctx.quadraticCurveTo(cx + 14 + sway * 0.3, cy - 15 + breath, cx + 12 + sway * 0.3, cy - 19 + breath);
+      ctx.stroke();
+
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.ellipse(cx + 12 + sway * 0.3, cy - 20 + breath, 2.5, 1.5, 0.4, 0, Math.PI * 2);
+      ctx.ellipse(cx + 15 + sway * 0.3, cy - 16 + breath, 2.2, 1.4, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Uralte leuchtende Bernstein-Augenschlitze (Laputa Look)
+      const eyeBlink = Math.sin(time * 1.5) > 0.94;
+      if (!eyeBlink) {
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath();
+        ctx.ellipse(cx - 5 + sway * 0.3, cy - 1 + breath, 3, 1.8, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx + 5 + sway * 0.3, cy - 1 + breath, 3, 1.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(cx - 5 + sway * 0.3, cy - 1 + breath, 1.2, 0, Math.PI * 2);
+        ctx.arc(cx + 5 + sway * 0.3, cy - 1 + breath, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Massive Steinfäuste
+      const armLift = isAttacking ? Math.sin(time * 8) * 12 : 0;
+      ctx.fillStyle = '#1e293b';
+      // Linke Faust
+      ctx.beginPath();
+      ctx.ellipse(cx - 16 + sway, cy + 12 + breath - armLift, 6.5, 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Rechte Faust
+      ctx.beginPath();
+      ctx.ellipse(cx + 16 + sway, cy + 12 + breath - armLift, 6.5, 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Umkreisende Glühwürmchen (Totoro / Waldgeist-Touch)
+      const fireflyAngle = time * 2;
+      const ffx = cx + Math.cos(fireflyAngle) * 22;
+      const ffy = cy + Math.sin(fireflyAngle) * 9 + breath;
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(ffx, ffy, 1.8, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.filter = 'none';
     }
   },
 
   {
-    id: 'frost_golem',
-    name: 'Frost-Gigant (Yeti)',
-    title: 'Frost Golem / Yeti',
+    id: 'frost_giant',
+    name: 'Yeti-Wächter',
+    title: 'Frosthorn Snow Totoro',
     category: 'boss',
-    categoryName: '👹 Tanks & Trolle',
-    biome: 'Tundra & Schneegipfel',
+    categoryName: '🛡️ Koloss / Boss',
+    biome: 'Gletscher & Schneegipfel',
     biomeBadge: 'Schnee',
-    badgeClass: 'badge-snow',
-    variants: ['Arktisweiß (Standard)', 'Gletscherblau', 'Höhlenschiefer (Dunkel)'],
-    stats: { hp: 110, maxHp: 110, atk: 30, spd: 'Mittel', rng: '50px (Frost-Aura)' },
-    behavior: 'Stößt eine Frostwolke aus und führt einen Zweihand-Stampfer aus. Getroffene Spieler erleiden Frostbite (Bewegungstempo für 1.5s halbiert).',
-    counter: 'Mit Dash aus der Stampfzone entkommen. Auf Distanz mit Bogenpfeilen zermürben oder hinter ihn gelangen.',
-    lore: 'Seine Körpertemperatur ist so niedrig, dass herabfallender Schnee sofort zu dicken Eispanzerplatten gefriert.',
+    badgeClass: 'badge-ice',
+    variants: ['Gletscherweiß (Standard)', 'Polar-Nacht (Arktis-Blau)', 'Kristallquarz (Türkis)'],
+    stats: { hp: 135, maxHp: 135, atk: 38, spd: 'Langsam', rng: '65px (Eis-Keule)' },
+    behavior: 'Ein gemütlicher, flauschiger Schnee-Yeti mit mächtigen Eis-Widderhörnern. Schwingt eine uralte Eiskristall-Keule und beschwört sanfte Schneewirbel.',
+    counter: 'Feuer- und Spreng-Angriffe schmelzen seine Schneefell-Rüstung. Im Moment seines Keulenschwungs unter seinen Beinen durchrollen.',
+    lore: 'An seinem linken Horn baumelt eine alte rote Papierlaterne, die ihm ein verlorener Wanderer einst zum Dank schenkte. Das Licht erlischt niemals.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const sway = Math.sin(time * 2.5) * 2;
+      const breath = Math.sin(time * 2.2) * 1.5;
       const isAttacking = state === 'attack';
+      const isWalking = state === 'walk';
+      const step = isWalking ? Math.sin(time * 6) * 3 : 0;
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      drawPaperShadow(ctx, cx, cy + 22, 20, 6);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Flauschiger schneeweißer Wolkenkörper (Totoro Snow Silhouette)
+      ctx.fillStyle = '#e2e8f0';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 22, 20, 6, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy + 5 + breath, 18, 16, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      // Thick Yeti Legs
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fillRect(cx - 12, cy + 10, 8, 12);
-      ctx.fillRect(cx + 4, cy + 10, 8, 12);
-
-      // Fluffy Shaggy Body
-      ctx.fillStyle = '#f1f5f9';
+      ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
-      ctx.roundRect(cx - 16, cy - 12 + sway * 0.5, 32, 26, 8);
+      ctx.ellipse(cx, cy + 3 + breath, 16, 14, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Ice Crystals on Back
+      // Bauchfell mit Eis-Tönung
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 7 + breath, 11, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Kulleraugen & blaue Stupsnase
+      drawGhibliEyes(ctx, cx - 5.5, cx + 5.5, cy - 2 + breath, 2.5, 0, 0.2, false, false);
+
       ctx.fillStyle = '#38bdf8';
       ctx.beginPath();
-      ctx.moveTo(cx - 12, cy - 12);
-      ctx.lineTo(cx - 15, cy - 24);
-      ctx.lineTo(cx - 7, cy - 12);
-      ctx.moveTo(cx + 7, cy - 12);
-      ctx.lineTo(cx + 15, cy - 24);
-      ctx.lineTo(cx + 12, cy - 12);
+      ctx.ellipse(cx, cy + 2.5 + breath, 2.5, 1.8, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Face Mask (Cold blue skin)
-      ctx.fillStyle = '#0284c7';
-      ctx.fillRect(cx - 7, cy - 16 + sway * 0.5, 14, 10);
+      // Transparente Gletscher-Widderhörner
+      ctx.strokeStyle = '#7dd3fc';
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      // Rechtes Horn
+      ctx.beginPath();
+      ctx.arc(cx + 12, cy - 9 + breath, 8, -Math.PI * 0.2, Math.PI * 0.7);
+      ctx.stroke();
+      // Linkes Horn
+      ctx.beginPath();
+      ctx.arc(cx - 12, cy - 9 + breath, 8, Math.PI * 0.3, Math.PI * 1.2);
+      ctx.stroke();
 
-      // Cyan Glowing Eyes
-      ctx.fillStyle = '#67e8f9';
-      ctx.fillRect(cx - 5, cy - 13 + sway * 0.5, 3, 2);
-      ctx.fillRect(cx + 2, cy - 13 + sway * 0.5, 3, 2);
+      // Rote Papierlaterne am linken Horn (schwankend im Wind)
+      const lanternSwing = Math.sin(time * 3) * 0.25;
+      drawPaperLantern(ctx, cx - 18 + lanternSwing * 6, cy - 3 + breath, 8, 10, time, '#fef08a');
 
-      // Massive Claws
-      const slamY = isAttacking ? 10 : 0;
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(cx - 20, cy - 2 + slamY, 7, 14);
-      ctx.fillRect(cx + 13, cy - 2 + slamY, 7, 14);
+      // Eiskristall-Keule in der rechten Pranke
+      const clubSwing = isAttacking ? Math.sin(time * 8) * 20 : 0;
+      ctx.save();
+      ctx.translate(cx + 16, cy + 4 + breath);
+      ctx.rotate(clubSwing * Math.PI / 180);
+      // Holzgriff
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-2, -14, 4, 18);
+      // Glänzender Eisblock
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.roundRect(-6, -22, 12, 10, 2);
+      ctx.fill();
+      ctx.fillStyle = '#e0f2fe';
+      ctx.fillRect(-4, -20, 4, 4);
+      ctx.restore();
 
-      // Ice particle aura
-      ctx.fillStyle = 'rgba(56, 189, 248, 0.6)';
-      ctx.fillRect(cx + Math.sin(time * 5) * 16, cy - 5 + Math.cos(time * 4) * 12, 2, 2);
-      ctx.fillRect(cx - Math.cos(time * 6) * 14, cy + Math.sin(time * 4) * 10, 2, 2);
+      // Flauschige Schneefüße
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.ellipse(cx - 8, cy + 18 + step, 6, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 8, cy + 18 - step, 6, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.filter = 'none';
     }
   },
 
   // =========================================================================
-  // 3. SCHLANGEN & REPTILIEN (SINUS-SCHLÄNGELN)
+  // 3. REPTILIEN & SCHLANGEN (REPTILE)
   // =========================================================================
   {
     id: 'slithering_viper',
     name: 'Smaragd-Natter',
-    title: 'Slithering Viper',
+    title: 'Jade Ribbon Dragon',
     category: 'reptile',
-    categoryName: '🐍 Schlangen',
-    biome: 'Sumpf & dichter Wald',
-    biomeBadge: 'Sumpf',
-    badgeClass: 'badge-swamp',
-    variants: ['Smaragdgrün (Standard)', 'Klapperschlange (Wüstenbraun)', 'Albino-Höhlenschlange (Weiß)'],
-    stats: { hp: 40, maxHp: 45, atk: 25, spd: 'Extrem Schnell', rng: '32px (Blitzbiss)' },
-    behavior: 'Schlängelt sich in flüssigen Sinuswellen mit hoher Geschwindigkeit heran. Rollt sich kurz zusammen und stößt mit blitzartigem Giftbiss vor.',
-    counter: 'Im Moment des Vorstoßens seitlich weghüpfen (Dash), um dem linearen Biss auszuweichen, und sofort von der Flanke zuschlagen.',
-    lore: 'Ihre Schuppen werfen sich bei jedem Vollmond ab und hinterlassen funkelnde, smaragdgrüne Pergamentstreifen.',
+    categoryName: '🐍 Reptilien & Schlangen',
+    biome: 'Dschungel & Feuchtgebiete',
+    biomeBadge: 'Dschungel',
+    badgeClass: 'badge-grass',
+    variants: ['Smaragdgrün (Standard)', 'Amethyst (Giftviper)', 'Goldkobra (Wüste)'],
+    stats: { hp: 50, maxHp: 50, atk: 24, spd: 'Sehr Schnell', rng: '30px (Giftbiss)' },
+    behavior: 'Gleitet in weichen, eleganten Sinuswellen lautlos durchs Gras. Schnellt blitzartig vor für einen giftigen Überraschungsbiss.',
+    counter: 'Ihre Gleitbahn ist vorhersehbar. Im Moment ihres Ausholens zur Seite hechten und mit einem Rundumschlag den Schwanz treffen.',
+    lore: 'Eine heilige Bote des Waldgeistes. Auf ihrer Schwanzspitze reitet ein winziger Kodama mit einem Seerosenblatt als Sonnenschirm.',
     render(ctx, cx, cy, time, state, hitFlash) {
       const isAttacking = state === 'attack';
-      const speed = isAttacking ? 10 : 6;
-      const numSegments = 7;
+      const isWalking = state === 'walk';
+      const speed = isWalking ? 6.5 : (isAttacking ? 8 : 4);
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
+      drawPaperShadow(ctx, cx, cy + 16, 22, 5);
 
-      // Draw segments from tail to head
-      for (let i = numSegments - 1; i >= 0; i--) {
-        const segProgress = i / numSegments;
-        const wave = Math.sin(time * speed - i * 0.7) * (10 * (1 - segProgress * 0.4));
-        const segX = cx - i * 5 + (isAttacking ? 8 : 0);
-        const segY = cy + wave;
-        const segRadius = 6.5 - segProgress * 3.5;
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
 
-        // Shadow under each segment
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      // 8 geschmeidige Jade-Körperscheiben in Sinuswellen
+      const segments = 8;
+      const points = [];
+
+      for (let i = segments - 1; i >= 0; i--) {
+        const segWave = Math.sin(time * speed - i * 0.55);
+        const px = cx + segWave * (12 + (segments - i) * 0.8);
+        const py = cy + 12 - i * 3.5;
+        const rad = 3.5 + (1 - i / segments) * 4;
+
+        points.push({ x: px, y: py, r: rad });
+
+        // Bauchtönung (Creme-Pergament)
+        ctx.fillStyle = '#fef08a';
         ctx.beginPath();
-        ctx.ellipse(segX, segY + 8, segRadius, segRadius * 0.4, 0, 0, Math.PI * 2);
+        ctx.arc(px, py + 1.5, rad * 0.8, 0, Math.PI * 2);
         ctx.fill();
 
-        // Body scales
-        ctx.fillStyle = i % 2 === 0 ? '#15803d' : '#22c55e';
+        // Jadegrüner Rückenschuppen-Körper
+        ctx.fillStyle = i % 2 === 0 ? '#059669' : '#10b981';
         ctx.beginPath();
-        ctx.arc(segX, segY, Math.max(2, segRadius), 0, Math.PI * 2);
+        ctx.arc(px, py, rad, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Feine goldene Zierflecken
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(px, py - rad * 0.3, rad * 0.25, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // Snake Head (Segment 0)
-      const headWave = Math.sin(time * speed) * 6;
-      const headX = cx + 8;
-      const headY = cy + headWave;
+      // Reitender Kodama auf dem letzten Schwanzsegment! (Ghibli-Charm Pur)
+      const tail = points[0];
+      drawKodama(ctx, tail.x, tail.y - 6, Math.sin(time * 3) * 0.3, 0.75);
 
-      // Cobra Hood
-      ctx.fillStyle = '#166534';
+      // Edler Drachen- / Schlangenkopf
+      const head = points[points.length - 1];
+      const headX = isAttacking ? head.x + Math.sin(time * 12) * 5 : head.x;
+      const headY = head.y - 3;
+
+      ctx.fillStyle = '#047857';
       ctx.beginPath();
-      ctx.ellipse(headX - 2, headY, 7, 10, 0, 0, Math.PI * 2);
+      ctx.ellipse(headX, headY, 7.5, 5.5, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Head diamond
-      ctx.fillStyle = '#22c55e';
+      // Rubinrote Glasaugen
+      ctx.fillStyle = '#f43f5e';
       ctx.beginPath();
-      ctx.moveTo(headX + 8, headY);
-      ctx.lineTo(headX - 1, headY - 6);
-      ctx.lineTo(headX - 5, headY);
-      ctx.lineTo(headX - 1, headY + 6);
-      ctx.closePath();
+      ctx.arc(headX - 3.5, headY - 1.5, 2, 0, Math.PI * 2);
+      ctx.arc(headX + 3.5, headY - 1.5, 2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Ruby Eyes
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(headX + 2, headY - 4, 2, 2);
-      ctx.fillRect(headX + 2, headY + 2, 2, 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(headX - 4, headY - 2, 0.8, 0, Math.PI * 2);
+      ctx.arc(headX + 3, headY - 2, 0.8, 0, Math.PI * 2);
+      ctx.fill();
 
-      // Flicking Forked Tongue
-      const tongueOut = (Math.sin(time * 14) > 0.3);
-      if (tongueOut || isAttacking) {
-        ctx.strokeStyle = '#dc2626';
-        ctx.lineWidth = 1.2;
+      // Goldene Fühler / Schnurrhaare
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(headX - 4, headY - 3);
+      ctx.quadraticCurveTo(headX - 8, headY - 8, headX - 6, headY - 11);
+      ctx.moveTo(headX + 4, headY - 3);
+      ctx.quadraticCurveTo(headX + 8, headY - 8, headX + 6, headY - 11);
+      ctx.stroke();
+
+      // Zarte gespaltene Zunge bei Zischen
+      if (Math.sin(time * 6) > 0.4) {
+        ctx.strokeStyle = '#fb7185';
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(headX + 7, headY);
-        ctx.lineTo(headX + 13, headY);
-        ctx.lineTo(headX + 16, headY - 2);
-        ctx.moveTo(headX + 13, headY);
-        ctx.lineTo(headX + 16, headY + 2);
+        ctx.moveTo(headX, headY + 4);
+        ctx.lineTo(headX, headY + 8);
+        ctx.lineTo(headX - 2, headY + 10);
+        ctx.moveTo(headX, headY + 8);
+        ctx.lineTo(headX + 2, headY + 10);
         ctx.stroke();
       }
 
@@ -454,164 +830,177 @@ export const BESTIARY_DATA = [
 
   {
     id: 'dune_maw',
-    name: 'Wüsten-Sandwurm',
-    title: 'Dune Maw',
+    name: 'Dünen-Schlund',
+    title: 'Terracotta Sand Lotus',
     category: 'reptile',
-    categoryName: '🐍 Schlangen',
-    biome: 'Wüsten-Dünen',
+    categoryName: '🐍 Reptilien & Schlangen',
+    biome: 'Wüste & Sanddünen',
     biomeBadge: 'Wüste',
     badgeClass: 'badge-desert',
-    variants: ['Dünensand (Standard)', 'Schlickwurm (Sumpfgrün)', 'Lavawurm (Magmaschwarz)'],
-    stats: { hp: 75, maxHp: 80, atk: 28, spd: 'Mittel', rng: '45px (Hervorbrechen)' },
-    behavior: 'Vergräbt sich im Sandmeer. Bricht explosionsartig unter dem Spieler hervor und schnappt mit seinem Ringzahnschlund zu.',
-    counter: 'Sobald Sandwirbel am Boden erscheinen, sofort wegdashen! Sein Kopf bleibt nach dem Fehlschlag für 1.5s im Boden stecken – Zeit für freie Schläge.',
-    lore: 'Erspürt selbst das leise Trippeln eines Wüstenskorpions über Hunderte Schritte Entfernung.',
+    variants: ['Terrakotta (Standard)', 'Obsidian (Vulkansand)', 'Geisterweiß (Kalköde)'],
+    stats: { hp: 80, maxHp: 80, atk: 30, spd: 'Stationär', rng: '45px (Boden-Verschlingen)' },
+    behavior: 'Bricht wie eine blühende Keramik-Wüstenlotus aus dem Treibsand hervor. Erzeugt wirbelnde Sandtrichter und schnappt mit glatten Perlzähnen zu.',
+    counter: 'Auf die zarten Blütenblätter am Kragen zielen, wenn sich der Schlund öffnet. Bomben direkt in seinen Sandtrichter werfen.',
+    lore: 'Aus antiken Terrakotta-Scherben und goldenen Kintsugi-Adern geformt. Sammelt Tautropfen der Wüstennächte in seinem Blütenkelch.',
     render(ctx, cx, cy, time, state, hitFlash) {
       const isAttacking = state === 'attack';
-      const emergeY = isAttacking ? Math.sin(time * 6) * 6 : 0;
+      const breath = Math.sin(time * 3) * 1.5;
+      const mawOpen = isAttacking ? 6 + Math.sin(time * 12) * 3 : 2 + Math.sin(time * 3) * 1;
 
-      // Sand crater base
-      ctx.fillStyle = '#b45309';
+      // Wirbelnder Sandtrichter am Boden
+      ctx.fillStyle = 'rgba(217, 119, 6, 0.35)';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 16, 20, 8, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 16, 16, 6, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy + 16, 20 + Math.sin(time * 4) * 2, 7, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
 
-      // Segmented Worm Body rising from sand
-      for (let i = 3; i >= 0; i--) {
-        const segY = cy + 12 - i * 8 - emergeY;
-        const width = 18 - i * 2;
-        ctx.fillStyle = i % 2 === 0 ? '#92400e' : '#b45309';
+      // Segmentierter Terrakotta-Hals
+      for (let i = 0; i < 3; i++) {
+        const segY = cy + 12 - i * 6 + breath;
+        ctx.fillStyle = i % 2 === 0 ? '#c2410c' : '#ea580c';
         ctx.beginPath();
-        ctx.ellipse(cx, segY, width, 6, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx, segY, 14 - i * 2, 5, 0, 0, Math.PI * 2);
         ctx.fill();
-        // Spiky chitin ridges
-        ctx.fillStyle = '#fde68a';
-        ctx.fillRect(cx - width + 1, segY - 2, 3, 3);
-        ctx.fillRect(cx + width - 4, segY - 2, 3, 3);
+        // Kintsugi-Goldader
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 6 + i * 2, segY);
+        ctx.lineTo(cx + 4 - i, segY + 2);
+        ctx.stroke();
       }
 
-      // Gaping Round Maw Head
-      const mawY = cy - 18 - emergeY;
-      ctx.fillStyle = '#78350f';
-      ctx.beginPath();
-      ctx.ellipse(cx, mawY, 14, 10, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // Lotus-Blütenblätter (Korallen-Rosa & Gold)
+      const petals = 6;
+      ctx.fillStyle = '#fb7185';
+      for (let p = 0; p < petals; p++) {
+        const angle = (p / petals) * Math.PI * 2;
+        const petX = cx + Math.cos(angle) * (11 + mawOpen);
+        const petY = cy - 2 + Math.sin(angle) * (5 + mawOpen * 0.4) + breath;
+        ctx.beginPath();
+        ctx.ellipse(petX, petY, 4.5, 3, angle, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
-      // Deep Throat Hole
+      // Innerer Schlund (Tiefes Dunkel mit leuchtendem Sonnenkern)
       ctx.fillStyle = '#1c1917';
       ctx.beginPath();
-      ctx.ellipse(cx, mawY, 10, 7, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy - 2 + breath, 10 + mawOpen * 0.5, 6 + mawOpen * 0.3, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Circular Ring of Needle Teeth
+      // Goldener Sonnen-Nektarkern
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 2 + breath, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Kreis glatter weißer Perlzähne
       ctx.fillStyle = '#f8fafc';
-      const numTeeth = 8;
-      for (let t = 0; t < numTeeth; t++) {
-        const angle = (t / numTeeth) * Math.PI * 2 + time * 2;
-        const tx = cx + Math.cos(angle) * 7;
-        const ty = mawY + Math.sin(angle) * 5;
-        ctx.fillRect(tx - 1, ty - 1, 2, 2);
+      for (let t = 0; t < 8; t++) {
+        const tAngle = (t / 8) * Math.PI * 2;
+        const tx = cx + Math.cos(tAngle) * (7 + mawOpen * 0.4);
+        const ty = cy - 2 + Math.sin(tAngle) * (4 + mawOpen * 0.25) + breath;
+        ctx.beginPath();
+        ctx.arc(tx, ty, 1.2, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      // Sand flying particles
-      ctx.fillStyle = '#fde047';
-      ctx.fillRect(cx - 16 + Math.sin(time * 7) * 4, cy + 12, 3, 3);
-      ctx.fillRect(cx + 14 + Math.cos(time * 8) * 4, cy + 11, 2, 2);
+      // Zwei neugierige Bernstein-Augen an den Seiten
+      drawGhibliEyes(ctx, cx - 11, cx + 11, cy - 6 + breath, 2, 0, 0, false, false);
 
       ctx.filter = 'none';
     }
   },
 
   // =========================================================================
-  // 4. MAGIER & ZAUBERWIRKER
+  // 4. MAGIER & KULTISTEN (MAGE)
   // =========================================================================
   {
     id: 'pyromancer',
-    name: 'Flammen-Kultist',
-    title: 'Pyromancer',
+    name: 'Laternen-Pyromant',
+    title: 'Paper Lantern Wraith',
     category: 'mage',
-    categoryName: '🔮 Magier',
-    biome: 'Höhlen & Alte Ruinen',
-    biomeBadge: 'Höhlen',
-    badgeClass: 'badge-caves',
-    variants: ['Feuerrot (Standard)', 'Frostblau (Eismagier)', 'Schatten-Violett (Nekromant)'],
-    stats: { hp: 50, maxHp: 55, atk: 26, spd: 'Mittel', rng: '150px (Zauber)' },
-    behavior: 'Schwebt über dem Boden und kanalisiert zielsuchende Feuerbälle. Teleportiert sich bei Nahkampftreffern in einer Rauchwolke 60px nach hinten.',
-    counter: 'Mit Bogenpfeilen aus der Ferne unterbrechen, oder seinen Teleport-Rauch abpassen und sofort hinterherdashen.',
-    lore: 'Trägt stets eine kleine Teekanne unter der Kutte – so hat er auch in feuchten Höhlen immer kochendes Teewasser parat.',
+    categoryName: '🔮 Magier & Gelehrte',
+    biome: 'Vulkanland & Brandruinen',
+    biomeBadge: 'Vulkan',
+    badgeClass: 'badge-vulcano',
+    variants: ['Feuerrot (Standard)', 'Seelenblau (Geisterflamme)', 'Giftgrün (Hexenfeuer)'],
+    stats: { hp: 40, maxHp: 40, atk: 26, spd: 'Mittel', rng: '140px (Flammenwirbel)' },
+    behavior: 'Schwebender Geistermönch mit einer traditionellen roten Chōchin-Laterne als Kopf. Wird von zwei verspielten Flämmchen-Begleitern (Hi-no-Tama) umtanzt.',
+    counter: 'Feuersäulen kündigen sich durch kleine Funkenwirbel am Boden an. Im Schwebemodus mit Pfeilen aus der Distanz unterbrechen.',
+    lore: 'Sein Laternenkopf lächelt stets sanft, selbst im heißesten Gefecht. Die zwei kleinen Flämmchen bringen ihm getrocknete Teeblätter zum Verglühen.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const floatY = Math.sin(time * 3.5) * 3;
       const isAttacking = state === 'attack';
+      const floatBob = Math.sin(time * 2.5) * 3;
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      drawPaperShadow(ctx, cx, cy + 18, 12, 4);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Flatterndes Indigo-Papiergewand mit Talismanen
+      ctx.fillStyle = '#1e1b4b';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 18, 12, 4, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      // Floating Tattered Robe
-      ctx.fillStyle = '#450a0a';
-      ctx.beginPath();
-      ctx.moveTo(cx - 9, cy + 14 + floatY);
-      ctx.lineTo(cx - 6, cy - 6 + floatY);
-      ctx.lineTo(cx + 6, cy - 6 + floatY);
-      ctx.lineTo(cx + 9, cy + 14 + floatY);
+      ctx.moveTo(cx - 8, cy - 2 + floatBob);
+      ctx.quadraticCurveTo(cx - 12, cy + 14 + floatBob, cx - 6, cy + 17 + floatBob);
+      ctx.quadraticCurveTo(cx, cy + 15 + floatBob, cx + 6, cy + 17 + floatBob);
+      ctx.quadraticCurveTo(cx + 12, cy + 14 + floatBob, cx + 8, cy - 2 + floatBob);
       ctx.closePath();
       ctx.fill();
 
-      // Flame Trim
-      ctx.fillStyle = '#ea580c';
-      ctx.fillRect(cx - 7, cy + 10 + floatY, 14, 3);
+      // Goldene Talisman-Schärfe
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(cx - 2, cy + 2 + floatBob, 4, 10);
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(cx - 1, cy + 4 + floatBob, 2, 2);
+      ctx.fillRect(cx - 1, cy + 8 + floatBob, 2, 2);
 
-      // Deep Hood
-      ctx.fillStyle = '#7f1d1d';
+      // Kopf ist eine leuchtende rote Papierlaterne (Chōchin)
+      drawPaperLantern(ctx, cx, cy - 8 + floatBob, 14, 15, time, '#fef08a');
+
+      // Freundliches Lächel-Gesicht auf der Laterne ausgeschnitten
+      ctx.fillStyle = '#451a03';
       ctx.beginPath();
-      ctx.arc(cx, cy - 8 + floatY, 7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glowing Eyes in Dark Hood
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(cx - 4, cy - 9 + floatY, 8, 4);
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(cx - 3, cy - 8 + floatY, 2, 2);
-      ctx.fillRect(cx + 1, cy - 8 + floatY, 2, 2);
-
-      // Magic Staff with Floating Flame Core
-      const staffX = cx + 12;
-      const staffY = cy + floatY;
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(staffX - 1.5, staffY - 14, 3, 26);
-
-      // Fire Core on staff
-      ctx.fillStyle = '#f97316';
+      ctx.arc(cx - 3, cy - 9 + floatBob, 1.2, 0, Math.PI * 2);
+      ctx.arc(cx + 3, cy - 9 + floatBob, 1.2, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.beginPath();
-      ctx.arc(staffX, staffY - 16, 5 + Math.sin(time * 8) * 1.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(staffX, staffY - 16, 2.5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(cx, cy - 7 + floatBob, 2, 0.1, Math.PI * 0.9);
+      ctx.stroke();
 
-      // Circling Fire Orbs when attacking
-      if (isAttacking) {
-        for (let i = 0; i < 3; i++) {
-          const oAngle = time * 7 + (i * Math.PI * 2 / 3);
-          const ox = cx + Math.cos(oAngle) * 16;
-          const oy = cy - 6 + floatY + Math.sin(oAngle) * 8;
-          ctx.fillStyle = '#ef4444';
-          ctx.beginPath();
-          ctx.arc(ox, oy, 3.5, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
+      // Zwei niedliche tanzende Flämmchen-Geister (Hi-no-Tama / Calcifers)
+      const f1Angle = time * 3;
+      const f2Angle = time * 3 + Math.PI;
+
+      const drawFlameSprite = (fx, fy, scale = 1) => {
+        ctx.save();
+        ctx.translate(fx, fy);
+        ctx.scale(scale, scale);
+        // Flammenkörper
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.arc(0, 2, 4, 0, Math.PI * 2);
+        ctx.moveTo(0, -5);
+        ctx.quadraticCurveTo(4, -1, 3, 3);
+        ctx.quadraticCurveTo(-4, -1, 0, -5);
+        ctx.fill();
+        // Leuchtendes Gelb
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(0, 2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Zwei kleine Pünktchen-Augen
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(-1.2, 1.5, 0.6, 0, Math.PI * 2);
+        ctx.arc(1.2, 1.5, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      };
+
+      const flameRadius = isAttacking ? 18 + Math.sin(time * 10) * 4 : 14;
+      drawFlameSprite(cx + Math.cos(f1Angle) * flameRadius, cy + floatBob + Math.sin(f1Angle) * 6, 0.9);
+      drawFlameSprite(cx + Math.cos(f2Angle) * flameRadius, cy + floatBob + Math.sin(f2Angle) * 6, 0.9);
 
       ctx.filter = 'none';
     }
@@ -620,154 +1009,193 @@ export const BESTIARY_DATA = [
   {
     id: 'star_astromancer',
     name: 'Wolken-Astrologe',
-    title: 'Star Astromancer',
+    title: 'Celestial Owl Sage',
     category: 'mage',
-    categoryName: '🔮 Magier',
-    biome: 'Wolkenreich & Himmelsaltäre',
-    biomeBadge: 'Wolken',
-    badgeClass: 'badge-clouds',
-    variants: ['Sternenblau & Gold (Standard)', 'Dämmerungs-Rosa', 'Nacht-Azur'],
-    stats: { hp: 60, maxHp: 65, atk: 24, spd: 'Mittel', rng: '170px (Lichtstrahl)' },
-    behavior: 'Kanalisiert vertikale Lichtstrahlen aus den Sternen mit kurzem optischen Warnkegel am Boden. Schirmt sich kurz mit einer goldenen Barriere ab.',
-    counter: 'Vor dem Lichtstrahl seitlich aus der Zielmarkierung sprinten und seine Schild-Pausen für Vorstöße nutzen.',
-    lore: 'Behauptet, in den Wolkenformationen die Zukunft zu lesen – meist sieht er aber bloß Regen voraus.',
+    categoryName: '🔮 Magier & Gelehrte',
+    biome: 'Himmelsinseln & Sternwarte',
+    biomeBadge: 'Himmel',
+    badgeClass: 'badge-sky',
+    variants: ['Mitternachtsblau (Standard)', 'Mondsilber (Vollmond)', 'Aurora (Nordlicht)'],
+    stats: { hp: 50, maxHp: 50, atk: 28, spd: 'Mittel', rng: '150px (Sternschnuppen)' },
+    behavior: 'Ein weiser Eulen-Mönch im Sternen-Kimono. Schwebt auf einer zarten rosa Traumwolke und beschwört leuchtende Sternschnuppen-Kaskaden.',
+    counter: 'Seine Sternschnuppen schlagen mit kurzer Verzögerung ein. Nach den Einschlägen ist er kurz geblendet – perfekte Zeit für Kombo-Angriffe.',
+    lore: 'Trägt einen Kegelhut aus Reisstroh mit kleinen Papier-Glücksstreifen (O-Mikuji). Kennt jeden Stern der Geisterwelt beim Vornamen.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const floatY = Math.sin(time * 2.5) * 4;
       const isAttacking = state === 'attack';
+      const cloudBob = Math.sin(time * 2.2) * 2.5;
 
-      // Soft Cloud Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      drawPaperShadow(ctx, cx, cy + 20, 16, 5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Zartrosa fluffige Traumwolke (Pink Spirit Cloud)
+      ctx.fillStyle = '#fbcfe8';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 18, 14, 4, 0, 0, Math.PI * 2);
+      ctx.arc(cx - 8, cy + 12 + cloudBob, 7, 0, Math.PI * 2);
+      ctx.arc(cx, cy + 10 + cloudBob, 9, 0, Math.PI * 2);
+      ctx.arc(cx + 8, cy + 12 + cloudBob, 7, 0, Math.PI * 2);
       ctx.fill();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      // Flowing Celestial Robe
-      ctx.fillStyle = '#1e1b4b';
+      // Kleiner weiser Eulen-Körper im Mitternachts-Kimono
+      ctx.fillStyle = '#1e3a8a';
       ctx.beginPath();
-      ctx.moveTo(cx - 10, cy + 14 + floatY);
-      ctx.lineTo(cx - 6, cy - 6 + floatY);
-      ctx.lineTo(cx + 6, cy - 6 + floatY);
-      ctx.lineTo(cx + 10, cy + 14 + floatY);
+      ctx.ellipse(cx, cy + 1 + cloudBob, 10, 11, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Goldene Sternen-Muster auf dem Kimono
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(cx - 4, cy + 4 + cloudBob, 1, 0, Math.PI * 2);
+      ctx.arc(cx + 3, cy + 6 + cloudBob, 1.2, 0, Math.PI * 2);
+      ctx.arc(cx - 1, cy + 8 + cloudBob, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Flauschige weiße Brustfedern
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2 + cloudBob, 5, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Große, weise goldene Eulenaugen & Schnabel
+      drawGhibliEyes(ctx, cx - 4, cx + 4, cy - 4 + cloudBob, 2.6, 0, 0, false, false);
+
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 2 + cloudBob);
+      ctx.lineTo(cx - 1.5, cy - 0.5 + cloudBob);
+      ctx.lineTo(cx + 1.5, cy - 0.5 + cloudBob);
+      ctx.fill();
+
+      // Kegelhut aus Reisstroh (Kasa) mit O-Mikuji Papierstreifen
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.moveTo(cx - 13, cy - 6 + cloudBob);
+      ctx.lineTo(cx, cy - 14 + cloudBob);
+      ctx.lineTo(cx + 13, cy - 6 + cloudBob);
       ctx.closePath();
       ctx.fill();
 
-      // Golden Starmap Hem
-      ctx.fillStyle = '#fbbf24';
-      ctx.fillRect(cx - 8, cy + 11 + floatY, 16, 2);
+      // Glücks-Papierstreifen am Hutrand
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(cx - 8, cy - 5 + cloudBob, 2, 5);
+      ctx.fillRect(cx + 6, cy - 5 + cloudBob, 2, 5);
 
-      // Astrologer Mask & Hood
-      ctx.fillStyle = '#312e81';
+      // Knorriges Holzstabsystem mit kreisendem Sternkristall
+      const staffX = cx + 12;
+      const staffY = cy + cloudBob;
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
-      ctx.arc(cx, cy - 8 + floatY, 7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Golden Sun Crown Crest
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.moveTo(cx - 5, cy - 14 + floatY);
-      ctx.lineTo(cx, cy - 20 + floatY);
-      ctx.lineTo(cx + 5, cy - 14 + floatY);
-      ctx.fill();
-
-      // Constellation Orb Hand
-      const orbX = cx - 12;
-      const orbY = cy - 4 + floatY;
-      ctx.strokeStyle = '#facc15';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(orbX, orbY, 6, 0, Math.PI * 2);
+      ctx.moveTo(staffX, staffY + 10);
+      ctx.lineTo(staffX, staffY - 10);
       ctx.stroke();
 
-      // Glowing Center Star
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(orbX - 1.5, orbY - 1.5, 3, 3);
-
-      // Star Ray Beacon when attacking
-      if (isAttacking) {
-        ctx.fillStyle = 'rgba(250, 204, 21, 0.35)';
-        ctx.fillRect(cx - 12, cy - 35, 24, 30);
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(cx - 2, cy - 35, 4, 30);
+      // Kreisender 8-zackiger Stern
+      const starRot = time * 3;
+      ctx.save();
+      ctx.translate(staffX, staffY - 14);
+      ctx.rotate(starRot);
+      ctx.fillStyle = isAttacking ? '#facc15' : '#38bdf8';
+      for (let s = 0; s < 4; s++) {
+        ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-1, -4, 2, 8);
       }
+      ctx.restore();
 
       ctx.filter = 'none';
     }
   },
 
   // =========================================================================
-  // 5. BLOBS & SLIMES
+  // 5. BLOBS & SLIMES (BLOB)
   // =========================================================================
   {
     id: 'green_slime',
-    name: 'Wald-Blob (Green Slime)',
-    title: 'Green Slime',
+    name: 'Tau-Tropfen Blob',
+    title: 'Acorn Dewdrop Slime',
     category: 'blob',
-    categoryName: '🟢 Blobs',
-    biome: 'Grasland & Wiesen',
+    categoryName: '🧪 Blobs & Schleime',
+    biome: 'Grasland & Feuchtwiesen',
     biomeBadge: 'Grasland',
     badgeClass: 'badge-grass',
-    variants: ['Giftgrün (Standard)', 'Gletscherblau (Schnee)', 'Sonnengelb (Wüste)'],
-    stats: { hp: 35, maxHp: 40, atk: 15, spd: 'Hüpfend', rng: '25px (Kontakt)' },
-    behavior: 'Hüpft rhythmisch mit federnder Stauch-Physik. Wird er besiegt, teilt er sich in 2 flinke Mini-Blobs mit jeweils halber Lebensenergie!',
-    counter: 'Mit dem Rundum-Wirbelangriff oder einem präzisen Pfeilschuss beide Spaltlinge gleichzeitig ausschalten.',
-    lore: 'Hinterlässt eine Spur, die nach Waldmeister riecht und von Schrein-Mönchen als Buchkleister geschätzt wird.',
+    variants: ['Smaragd-Tau (Standard)', 'Honig-Gelee (Wüste)', 'Frost-Träne (Schnee)'],
+    stats: { hp: 35, maxHp: 35, atk: 12, spd: 'Mittel', rng: '25px (Körper-Platscher)' },
+    behavior: 'Ein herziges, transparentes Tropfen-Wesen mit einem kleinen Eichelkern und Kleeblatt im Bauch. Hüpft fröhlich und teilt sich bei Gefahr kurz in zwei Mini-Tröpfchen.',
+    counter: 'Mit einfachen Schwerthieben schnell besiegbar. Vorsicht beim Zerschlagen: Mini-Blobs hüpfen flink davon!',
+    lore: 'Entsteht aus Morgentautropfen auf uralten Eichenblättern. Kitzelt sanft an den Zehen und liebt sonnige Waldlichtungen.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const hopCycle = Math.abs(Math.sin(time * 4));
-      const hopY = hopCycle * 14;
-      const squashX = (1 - hopCycle) * 4;
-      const squashY = hopCycle * 4;
       const isAttacking = state === 'attack';
+      const isWalking = state === 'walk';
+      const squish = Math.sin(time * 5) * (isWalking ? 3.5 : 1.8);
+      const hop = isWalking ? Math.abs(Math.sin(time * 5)) * 6 : 0;
 
-      // Shadow contracts as blob hops high
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      drawPaperShadow(ctx, cx, cy + 16, 15 + squish, 5 - squish * 0.2);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      const blobY = cy + 4 - hop;
+
+      // Transparenter Smaragd-Gelee-Körper
+      ctx.fillStyle = 'rgba(34, 197, 94, 0.88)';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 14, 12 - hopCycle * 4, 4 - hopCycle * 1.5, 0, 0, Math.PI * 2);
+      ctx.moveTo(cx, blobY - 14 - squish);
+      ctx.bezierCurveTo(cx + 14 + squish, blobY - 10, cx + 16 + squish, blobY + 11, cx, blobY + 12 + squish * 0.5);
+      ctx.bezierCurveTo(cx - 16 - squish, blobY + 11, cx - 14 - squish, blobY - 10, cx, blobY - 14 - squish);
       ctx.fill();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      const blobY = cy + 6 - hopY;
-      const rx = 12 + squashX - squashY * 0.5;
-      const ry = 10 - squashX * 0.5 + squashY;
-
-      // Outer Jelly
-      ctx.fillStyle = '#22c55e';
+      // Eingeschlossene goldene Eichel im Geleebauch (Ghibli-Detail!)
+      ctx.fillStyle = '#b45309';
       ctx.beginPath();
-      ctx.ellipse(cx, blobY, rx, ry, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx - 3, blobY + 2, 3, 4, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.arc(cx - 4, blobY - 1, 2.5, 0, Math.PI);
       ctx.fill();
 
-      // Inner Core Glow
-      ctx.fillStyle = '#86efac';
+      // Glanz-Highlight auf dem Gelee (Papercraft-Glanz)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
       ctx.beginPath();
-      ctx.ellipse(cx, blobY + 1, rx * 0.7, ry * 0.7, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx - 6, blobY - 6, 4, 2, -0.4, 0, Math.PI * 2);
       ctx.fill();
 
-      // Bubble highlights
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      // Wackelndes 4-blättriges Kleeblatt auf dem Kopf
+      const leafSway = Math.sin(time * 4) * 0.3;
+      ctx.save();
+      ctx.translate(cx, blobY - 14 - squish);
+      ctx.rotate(leafSway);
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(-0.8, -4, 1.6, 5);
+      ctx.fillStyle = '#4ade80';
       ctx.beginPath();
-      ctx.arc(cx - rx * 0.4, blobY - ry * 0.4, 2.5, 0, Math.PI * 2);
+      ctx.arc(-2, -5, 2, 0, Math.PI * 2);
+      ctx.arc(2, -5, 2, 0, Math.PI * 2);
+      ctx.arc(0, -7, 2, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
 
-      // Cute Cartoon Eyes
-      ctx.fillStyle = '#0f172a';
+      // Riesen-Kulleraugen & niedlicher Katzenmund
+      drawGhibliEyes(ctx, cx - 5, cx + 5, blobY - 1, 2.8, 0, 0, false, true);
+
+      // Kleiner süßer Mund
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.1;
       ctx.beginPath();
-      ctx.arc(cx - 4, blobY - 1, 2.5, 0, Math.PI * 2);
-      ctx.arc(cx + 4, blobY - 1, 2.5, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.arc(cx - 1.2, blobY + 4, 1.2, 0.2, Math.PI * 0.9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + 1.2, blobY + 4, 1.2, 0.2, Math.PI * 0.9);
+      ctx.stroke();
 
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(cx - 5, blobY - 2, 1.5, 1.5);
-      ctx.fillRect(cx + 3, blobY - 2, 1.5, 1.5);
-
-      // Mini split blobs on attack preview
+      // Bei Angriff: Zwei winzige jubelnde Baby-Tröpfchen hüpfen an den Seiten!
       if (isAttacking) {
         ctx.fillStyle = '#22c55e';
         ctx.beginPath();
-        ctx.arc(cx - 16, cy + 10, 5, 0, Math.PI * 2);
-        ctx.arc(cx + 16, cy + 10, 5, 0, Math.PI * 2);
+        ctx.arc(cx - 16, blobY + 6, 4, 0, Math.PI * 2);
+        ctx.arc(cx + 16, blobY + 6, 4, 0, Math.PI * 2);
         ctx.fill();
+        drawGhibliEyes(ctx, cx - 17, cx - 15, blobY + 5, 1, 0, 0, false, false);
+        drawGhibliEyes(ctx, cx + 15, cx + 17, blobY + 5, 1, 0, 0, false, false);
       }
 
       ctx.filter = 'none';
@@ -776,63 +1204,50 @@ export const BESTIARY_DATA = [
 
   {
     id: 'tar_mire',
-    name: 'Teer-Schlamm (Tar Blob)',
-    title: 'Tar Mire',
+    name: 'Teer-Schlamm',
+    title: 'Susuwatari Soot Overlord',
     category: 'blob',
-    categoryName: '🟢 Blobs',
-    biome: 'Sumpf & Moorböden',
+    categoryName: '🧪 Blobs & Schleime',
+    biome: 'Sumpf & Teergruben',
     biomeBadge: 'Sumpf',
     badgeClass: 'badge-swamp',
-    variants: ['Pechschwarz (Standard)', 'Giftgelb (Schwefelteer)', 'Rostrot'],
-    stats: { hp: 65, maxHp: 70, atk: 18, spd: 'Sehr Langsam', rng: '35px (Kleb-Pfütze)' },
-    behavior: 'Platzt bei Bedrängnis auf und verteilt klebrigen Teer. Spieler in der Teerspur können 2.5s lang nicht dashen und bewegen sich 40% langsamer.',
-    counter: 'Niemals hineintreten! Aus der Entfernung mit Pfeilen erledigen oder per Wirbelangriff aus sicherem Radius bekämpfen.',
-    lore: 'Alte Schätze und Waffen, die er im Laufe der Jahrhunderte verschluckt hat, bleiben in seinem sauerstofffreien Kern makellos erhalten.',
+    variants: ['Tiefschwarz (Standard)', 'Pech-Violett (Abyss)', 'Kupferlack (Erzsumpf)'],
+    stats: { hp: 70, maxHp: 70, atk: 20, spd: 'Sehr Langsam', rng: '40px (Kleb-Pfütze)' },
+    behavior: 'Eine große kuschelige Rußmännchen-Königin (Susuwatari) aus samtigem Tintenflaum. Umgeben von flinken kleinen Rußmännchen, die bunte Zuckerchen tragen.',
+    counter: 'Seine klebrige Hülle verlangsamt Nahkämpfer. Mit Fackeln oder Feuerschwert anzünden, um die Tintenhülle zu verbrennen.',
+    lore: 'Lebt in verlassenen Dachböden und alten Kaminen. Versteckt glitzernde Sternbonbons (Konpeitō) in seinem weichen Tintenbauch.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const bubble = Math.sin(time * 5) * 2;
       const isAttacking = state === 'attack';
+      const breath = Math.sin(time * 3) * 1.5;
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 14, 15, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawPaperShadow(ctx, cx, cy + 18, 18, 5.5);
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
 
-      // Viscous Oozing Mound
-      ctx.fillStyle = '#18181b';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 8, 14, 8, 0, 0, Math.PI * 2);
-      ctx.fill();
+      // Großer flauschiger Ruß-Körper (Susuwatari Queen)
+      drawSootSprite(ctx, cx, cy + 4 + breath, 14, time, false);
 
-      // Tar Drips & Tendrils
-      ctx.fillStyle = '#27272a';
-      ctx.beginPath();
-      ctx.arc(cx - 6, cy + 3 + bubble, 6, 0, Math.PI * 2);
-      ctx.arc(cx + 5, cy + 4 - bubble, 5, 0, Math.PI * 2);
-      ctx.fill();
+      // Große verdutzte Kulleraugen blicken umher
+      const lookX = Math.sin(time * 2) * 1.5;
+      drawGhibliEyes(ctx, cx - 5, cx + 5, cy + 2 + breath, 3.2, lookX, 0, false, false);
 
-      // Trapped Skull inside tar
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(cx - 2, cy + 4, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#09090b';
-      ctx.fillRect(cx - 3, cy + 4, 1.5, 1.5);
-      ctx.fillRect(cx, cy + 4, 1.5, 1.5);
+      // 3 kleine flinke Rußmännchen-Kinder um sie herum!
+      // 1. Rußmännchen links mit Sternzuckerchen (Konpeitō)
+      drawSootSprite(ctx, cx - 18, cy + 14 + Math.sin(time * 6) * 1.5, 4, time, true);
 
-      // Yellow Sludge Gas Bubbles
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.arc(cx + 6, cy + 1 + bubble, 2.5, 0, Math.PI * 2);
-      ctx.fill();
+      // 2. Rußmännchen rechts hüpfend
+      drawSootSprite(ctx, cx + 17, cy + 12 + Math.abs(Math.sin(time * 7)) * -3, 3.5, time, false);
 
-      // Splatter particles when attacking
+      // 3. Rußmännchen vorne neugierig
+      drawSootSprite(ctx, cx + 2, cy + 17, 3, time, false);
+
+      // Bei Angriff: Pustet sich auf und sprüht kleine harmlose Zuckerchen!
       if (isAttacking) {
-        ctx.fillStyle = '#18181b';
-        ctx.fillRect(cx - 16, cy + 6, 4, 4);
-        ctx.fillRect(cx + 14, cy + 8, 3, 3);
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(time * 12) * 14, cy - 10 + Math.sin(time * 12) * 6, 2, 0, Math.PI * 2);
+        ctx.arc(cx - Math.cos(time * 12) * 14, cy - 8 - Math.sin(time * 12) * 6, 2, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       ctx.filter = 'none';
@@ -840,85 +1255,102 @@ export const BESTIARY_DATA = [
   },
 
   // =========================================================================
-  // 6. WILDTIERE
+  // 6. WILDTIERE (BEAST)
   // =========================================================================
   {
     id: 'dire_wolf',
     name: 'Schattenwolf',
-    title: 'Dire Wolf',
+    title: 'Okami Spirit Wolf',
     category: 'beast',
-    categoryName: '🐺 Wildtiere',
-    biome: 'Wald & Schneeregionen',
-    biomeBadge: 'Grasland',
+    categoryName: '🐺 Wilde Bestien',
+    biome: 'Dunkelwald & Taiga',
+    biomeBadge: 'Dunkelwald',
     badgeClass: 'badge-grass',
-    variants: ['Silbergrau (Standard)', 'Schneeweiß (Polrwolf)', 'Nachtschwarz (Alpha)'],
-    stats: { hp: 50, maxHp: 55, atk: 26, spd: 'Sehr Schnell', rng: '40px (Sprungangriff)' },
-    behavior: 'Umkreist den Spieler in sicherem Abstand, duckt sich tief und führt einen plötzlichen, weiten Hechtsprung-Angriff mit kräftigem Biss aus.',
-    counter: 'Genau im Moment des Hechtsprungs den Schild hochreißen: Der Wolf prallt ab und ist für 1.2s benommen.',
-    lore: 'Sein Heulen hallt bei Nacht noch im Nachbarbiom wider und versetzt die kleinen Kodama-Waldgeister in helle Aufregung.',
+    variants: ['Nachtschwarz (Standard)', 'Schneeweiß (Tundra)', 'Blutmond (Karmesin)'],
+    stats: { hp: 60, maxHp: 60, atk: 28, spd: 'Sehr Schnell', rng: '35px (Anspring-Biss)' },
+    behavior: 'Ein majestätischer Geisterwolf, inspiriert vom Wolfsgott aus Prinzessin Mononoke und Okami. Trägt heilige Shimenawa-Seile mit Zickzack-Papier.',
+    counter: 'Reißt beim Anspringen die Deckung auf. Exakt im Moment seines Sprungs zur Seite rollen und von der Flanke attackieren.',
+    lore: 'Beschützt heilige Schreine im tiefen Wald. Heult nur bei Neumond, wenn die Geisterbrücke zur Anderswelt offen steht.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const isWalking = state === 'walk';
       const isAttacking = state === 'attack';
-      const tailWag = Math.sin(time * 6) * 3;
-      const legRun = Math.sin(time * 10) * 3;
+      const isWalking = state === 'walk';
+      const breath = Math.sin(time * 3) * 1.2;
+      const gallop = isWalking ? Math.sin(time * 9) * 3 : 0;
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      drawPaperShadow(ctx, cx, cy + 18, 18, 5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Geschwungener buschiger Geister-Schweif
+      ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 16, 15, 5, 0, 0, Math.PI * 2);
+      ctx.moveTo(cx - 10, cy + 6 + breath);
+      ctx.quadraticCurveTo(cx - 20, cy - 2 + Math.sin(time * 4) * 4, cx - 22, cy - 10);
+      ctx.quadraticCurveTo(cx - 14, cy - 4, cx - 8, cy + 8 + breath);
       ctx.fill();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
+      // Beine
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(cx - 8, cy + 8, 3, 10 + gallop);
+      ctx.fillRect(cx + 6, cy + 8, 3, 10 - gallop);
 
-      // Four Legs
-      ctx.fillStyle = '#334155';
-      ctx.fillRect(cx - 10, cy + 8, 3, 8 + (isWalking ? legRun : 0));
-      ctx.fillRect(cx - 5, cy + 8, 3, 8 - (isWalking ? legRun : 0));
-      ctx.fillRect(cx + 4, cy + 8, 3, 8 + (isWalking ? -legRun : 0));
-      ctx.fillRect(cx + 9, cy + 8, 3, 8 - (isWalking ? -legRun : 0));
-
-      // Wolf Body
-      ctx.fillStyle = '#475569';
+      // Wolfskörper (Elegantes tiefdunkles Pergament mit weißer Brust)
+      ctx.fillStyle = '#0f172a';
       ctx.beginPath();
-      ctx.roundRect(cx - 12, cy - 2, 22, 12, 4);
+      ctx.ellipse(cx, cy + 5 + breath, 13, 8, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Bushy Tail
-      ctx.fillStyle = '#334155';
-      ctx.beginPath();
-      ctx.moveTo(cx - 12, cy);
-      ctx.lineTo(cx - 20, cy - 6 + tailWag);
-      ctx.lineTo(cx - 18, cy + 2 + tailWag);
-      ctx.closePath();
-      ctx.fill();
-
-      // Fur Ruff Neck
-      ctx.fillStyle = '#64748b';
-      ctx.beginPath();
-      ctx.arc(cx + 8, cy - 2, 6, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Snout & Head
-      const headLunge = isAttacking ? 4 : 0;
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(cx + 8 + headLunge, cy - 8, 9, 8);
-      ctx.fillRect(cx + 14 + headLunge, cy - 5, 5, 5); // Snout
-
-      // Pointy Ears
-      ctx.fillStyle = '#334155';
-      ctx.beginPath();
-      ctx.moveTo(cx + 8 + headLunge, cy - 8);
-      ctx.lineTo(cx + 10 + headLunge, cy - 14);
-      ctx.lineTo(cx + 13 + headLunge, cy - 8);
-      ctx.fill();
-
-      // Glowing Amber Eye
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(cx + 11 + headLunge, cy - 7, 2, 2);
-
-      // Fangs
+      // Weiße Brustpartie
       ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(cx + 15 + headLunge, cy - 1, 2, 2.5);
+      ctx.beginPath();
+      ctx.ellipse(cx + 4, cy + 4 + breath, 6, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Heiliges Shimenawa-Seil mit Shide-Papieranhängern um den Hals
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.ellipse(cx + 6, cy + 2 + breath, 5, 6, 0.4, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Weiße Zickzack-Papieranhänger (Shide)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx + 7, cy + 6 + breath, 2, 4);
+      ctx.fillRect(cx + 4, cy + 7 + breath, 2, 3.5);
+
+      // Edler Wolfskopf mit spitzen Ohren
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(cx + 9, cy - 4 + breath, 7, 5.5, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Spitze aufmerksame Ohren
+      ctx.beginPath();
+      ctx.moveTo(cx + 5, cy - 8 + breath);
+      ctx.lineTo(cx + 7, cy - 15 + breath);
+      ctx.lineTo(cx + 10, cy - 7 + breath);
+      ctx.moveTo(cx + 10, cy - 8 + breath);
+      ctx.lineTo(cx + 13, cy - 14 + breath);
+      ctx.lineTo(cx + 14, cy - 6 + breath);
+      ctx.fill();
+
+      // Zinnoberrote Ritual-Kriegsbemalung um die Augen (Mononoke Look)
+      ctx.strokeStyle = '#e11d48';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(cx + 7, cy - 5 + breath);
+      ctx.lineTo(cx + 12, cy - 3 + breath);
+      ctx.stroke();
+
+      // Bernstein-Glanzaugen
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(cx + 10, cy - 4 + breath, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx + 9.5, cy - 4.5 + breath, 0.7, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.filter = 'none';
     }
@@ -927,81 +1359,99 @@ export const BESTIARY_DATA = [
   {
     id: 'emperor_scorpion',
     name: 'Kaiser-Skorpion',
-    title: 'Emperor Scorpion',
+    title: 'Porcelain Jade Scorpion',
     category: 'beast',
-    categoryName: '🐺 Wildtiere',
-    biome: 'Wüstenkanten & Höhlen',
+    categoryName: '🐺 Wilde Bestien',
+    biome: 'Wüste & Felsenschluchten',
     biomeBadge: 'Wüste',
     badgeClass: 'badge-desert',
-    variants: ['Sandocker (Standard)', 'Obsidian-Schwarz (Lavahöhlen)', 'Jade-Grün'],
-    stats: { hp: 70, maxHp: 75, atk: 28, spd: 'Mittel', rng: '42px (Stachel)' },
-    behavior: 'Hält zwei wuchtige Panzerscheren schützend vor sich (frontale Schwerthiebe prallen wirkungslos ab). Sticht überraschend über die Deckung hinweg zu.',
-    counter: 'Mit Dash hinter seinen Rücken springen, um den weichen Chitin-Hinterleib zu treffen, oder mit aufgeladenem Wirbelangriff die Deckung brechen.',
-    lore: 'Sein Rückenpanzer ist so dicht und feuerfest, dass Wüstenwanderer verlassene Hüllen als Kochtöpfe nutzen.',
+    variants: ['Smaragd-Chitin (Standard)', 'Obsidianschwarz (Abyss)', 'Kupfererz (Mine)'],
+    stats: { hp: 75, maxHp: 75, atk: 25, spd: 'Mittel', rng: '45px (Schwanzstachel)' },
+    behavior: 'Ein Tempelwächter-Skorpion aus antiker Seladon-Keramik. Seine Scheren ähneln zarten Lotusknospen; sein Stachelschwanz trägt eine leuchtende Spinnenlilien-Laterne.',
+    counter: 'Blockt frontale Schläge mit den Keramikscheren ab. Umkreisen und den weichen Ansatz des Stachelschwanzes anvisieren.',
+    lore: 'Wurde vor Jahrtausenden von Kaiserlichen Kunsthandwerkern geschaffen, um Juwelenkammern vor Grabräubern zu beschützen.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const tailSway = Math.sin(time * 3) * 3;
-      const clawSnap = state === 'attack' ? Math.sin(time * 12) * 3 : 0;
+      const isAttacking = state === 'attack';
+      const breath = Math.sin(time * 3) * 1.2;
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 14, 16, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawPaperShadow(ctx, cx, cy + 18, 19, 5);
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
 
-      // 6 Spider-like legs
-      ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 1.5;
+      // 6 feine Scherenschreitbeine
+      ctx.strokeStyle = '#065f46';
+      ctx.lineWidth = 1.6;
       for (let i = -1; i <= 1; i++) {
+        const legSway = Math.sin(time * 6 + i * 2) * 2;
         ctx.beginPath();
-        ctx.moveTo(cx + i * 5, cy + 6);
-        ctx.lineTo(cx + i * 7 - 6, cy + 14);
-        ctx.moveTo(cx + i * 5, cy + 6);
-        ctx.lineTo(cx + i * 7 + 6, cy + 14);
+        ctx.moveTo(cx - 6, cy + 4 + i * 4);
+        ctx.lineTo(cx - 15, cy + 8 + legSway);
+        ctx.lineTo(cx - 18, cy + 16);
+        ctx.moveTo(cx + 6, cy + 4 + i * 4);
+        ctx.lineTo(cx + 15, cy + 8 - legSway);
+        ctx.lineTo(cx + 18, cy + 16);
         ctx.stroke();
       }
 
-      // Hard Chitin Carapace
-      ctx.fillStyle = '#451a03';
+      // Seladon-Jade Panzerplatte mit Kintsugi-Linien
+      ctx.fillStyle = '#065f46';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 4, 10, 8, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy + 6 + breath, 11, 8, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Front Pincers (Shielding)
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(cx + 7, cy - 2, 8, 5);
-      ctx.fillRect(cx + 7, cy + 5, 8, 5);
+      ctx.fillStyle = '#0d9488';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 5 + breath, 9, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      // Pincer Claws
-      ctx.fillStyle = '#b45309';
-      ctx.fillRect(cx + 14 + clawSnap, cy - 4, 5, 4);
-      ctx.fillRect(cx + 14 + clawSnap, cy + 7, 5, 4);
+      // Kintsugi Goldriss
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx - 4, cy + 4 + breath);
+      ctx.lineTo(cx + 2, cy + 7 + breath);
+      ctx.stroke();
 
-      // Arched Segmented Tail curving over back
-      ctx.fillStyle = '#78350f';
-      for (let s = 0; s < 5; s++) {
-        const sx = cx - 6 - s * 3 + s * s * 0.4;
-        const sy = cy - s * 4 + tailSway * (s / 5);
+      // Lotus-Scherenarme vorne
+      const drawLotusClaw = (clawX, clawY, angle) => {
+        ctx.save();
+        ctx.translate(clawX, clawY);
+        ctx.rotate(angle);
+        ctx.fillStyle = '#0d9488';
         ctx.beginPath();
-        ctx.arc(sx, sy, 3.5 - s * 0.3, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 6, 4, 0, 0, Math.PI * 2);
         ctx.fill();
-      }
+        ctx.fillStyle = '#fb7185'; // Rosa Lotusspitze
+        ctx.beginPath();
+        ctx.arc(3, -1, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      };
 
-      // Stinger Barb with dripping poison
-      const stingerX = cx - 1;
-      const stingerY = cy - 18 + tailSway;
-      ctx.fillStyle = '#ef4444';
+      const clawClick = Math.sin(time * 5) * 0.2;
+      drawLotusClaw(cx - 12, cy - 2 + breath, -0.4 + clawClick);
+      drawLotusClaw(cx + 12, cy - 2 + breath, 0.4 - clawClick);
+
+      // Geschwungener Skorpionschwanz
+      const tailWhip = isAttacking ? Math.sin(time * 12) * 15 : Math.sin(time * 3) * 4;
+      ctx.strokeStyle = '#047857';
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(stingerX - 3, stingerY);
-      ctx.lineTo(stingerX + 5, stingerY);
-      ctx.lineTo(stingerX + 1, stingerY - 5);
-      ctx.closePath();
+      ctx.moveTo(cx, cy + 10 + breath);
+      ctx.quadraticCurveTo(cx - 8, cy - 6, cx - 4 + tailWhip * 0.3, cy - 14 + breath);
+      ctx.stroke();
+
+      // Spinnenlilien-Laterne an der Stachelspitze (Higanbana Lantern)
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.arc(cx - 4 + tailWhip * 0.3, cy - 15 + breath, 4.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Green venom drop
-      ctx.fillStyle = '#4ade80';
-      ctx.fillRect(stingerX + 2, stingerY - 6, 2, 2);
+      // Glänzender Gift-Tautropfen
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(cx - 4 + tailWhip * 0.3, cy - 17 + breath, 1.8, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.filter = 'none';
     }
@@ -1010,67 +1460,82 @@ export const BESTIARY_DATA = [
   {
     id: 'tusk_boar',
     name: 'Grasland-Wildschwein',
-    title: 'Tusk Boar',
+    title: 'Mossback Forest Boar',
     category: 'beast',
-    categoryName: '🐺 Wildtiere',
-    biome: 'Grasland & Eichenhaine',
+    categoryName: '🐺 Wilde Bestien',
+    biome: 'Grasland & Hügelland',
     biomeBadge: 'Grasland',
     badgeClass: 'badge-grass',
-    variants: ['Borstenbraun (Standard)', 'Frostborste (Schneebiom)', 'Schwarzschwein'],
-    stats: { hp: 65, maxHp: 70, atk: 24, spd: 'Stürmend', rng: '35px (Ansturm)' },
-    behavior: 'Scharrt 1s drohend mit den Vorderhufen und prescht in gerader Linie unaufhaltsam vor. Rammt es gegen Felsen oder Bäume, ist es 2 Sekunden betäubt.',
-    counter: 'Im allerletzten Moment vor dem Einschlag zur Seite springen (Dash) und das betäubte Tier von hinten attackieren.',
-    lore: 'Besitzt eine unbezwingbare Schwäche für rote Waldpilze und pflügt auf der Suche danach ganze Wiesen um.',
+    variants: ['Erdbraun (Standard)', 'Moosrücken (Uralter Wald)', 'Alabaster-Hauer (Schnee)'],
+    stats: { hp: 70, maxHp: 70, atk: 22, spd: 'Mittel (Schneller Ansturm)', rng: '30px (Hauer-Stoß)' },
+    behavior: 'Ein pummeliges Waldhüter-Wildschwein mit Moosdecke und Kirschblüten auf dem Rücken. Schnaubt gemütlich, stürmt bei Bedrohung wie ein Rammbock vor.',
+    counter: 'Beim Ansturm kann es nicht lenken. Rechtzeitig zur Seite springen; prallt es gegen einen Felsen, ist es für 3 Sekunden benommen.',
+    lore: 'Schläft am liebsten unter alten Kastanienbäumen. Kleine Waldvögel baden gerne in den weichen Pfützen seiner Trittspuren.',
     render(ctx, cx, cy, time, state, hitFlash) {
       const isAttacking = state === 'attack';
-      const pawGround = isAttacking ? Math.sin(time * 12) * 2 : 0;
+      const isWalking = state === 'walk';
+      const breath = Math.sin(time * 3.5) * 1.5;
+      const trot = isWalking ? Math.sin(time * 9) * 3 : 0;
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      drawPaperShadow(ctx, cx, cy + 18, 18, 6);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // 4 kurze, stämmige Beinchen
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(cx - 9, cy + 8, 4, 9 + trot);
+      ctx.fillRect(cx + 6, cy + 8, 4, 9 - trot);
+
+      // Runder kuscheliger Wildschweinkörper (Warm Cocoa Brown)
+      ctx.fillStyle = '#78350f';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 16, 16, 5, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy + 4 + breath, 15, 11, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      // Stubby Legs
-      ctx.fillStyle = '#3e2723';
-      ctx.fillRect(cx - 10, cy + 10, 4, 7);
-      ctx.fillRect(cx - 3, cy + 10, 4, 7);
-      ctx.fillRect(cx + 6, cy + 10 + pawGround, 4, 7);
-
-      // Heavy Barrel Body
-      ctx.fillStyle = '#5d4037';
+      // Saftige Moosdecke auf dem Rücken
+      ctx.fillStyle = '#15803d';
       ctx.beginPath();
-      ctx.roundRect(cx - 14, cy - 2, 24, 14, 5);
+      ctx.ellipse(cx - 2, cy - 3 + breath, 12, 5, -0.1, 0, Math.PI * 2);
       ctx.fill();
 
-      // Bristle Ridge
-      ctx.fillStyle = '#3e2723';
-      for (let b = -12; b <= 6; b += 3) {
-        ctx.fillRect(cx + b, cy - 5, 2, 3);
-      }
+      // Eingebettete Sakura-Kirschblütenblätter im Moos
+      drawSakuraPetal(ctx, cx - 6, cy - 5 + breath, 0.3, 0.8);
+      drawSakuraPetal(ctx, cx + 2, cy - 4 + breath, -0.4, 0.7);
 
-      // Snout & Head
-      ctx.fillStyle = '#4e342e';
-      ctx.fillRect(cx + 8, cy - 2, 10, 9);
-      ctx.fillStyle = '#8d6e63';
-      ctx.fillRect(cx + 16, cy, 3, 5); // Pinkish snout disk
+      // Kuschelige Schlappohren
+      ctx.fillStyle = '#542307';
+      ctx.beginPath();
+      ctx.ellipse(cx + 4, cy - 4 + breath, 3, 5, 0.4, 0, Math.PI * 2);
+      ctx.fill();
 
-      // Curved Ivory Tusks
+      // Glänzende schwarze Schnauze mit Nüstern
+      ctx.fillStyle = '#1c1917';
+      ctx.beginPath();
+      ctx.ellipse(cx + 13, cy + 4 + breath, 4.5, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
-      ctx.moveTo(cx + 14, cy + 6);
-      ctx.lineTo(cx + 18, cy - 1);
-      ctx.lineTo(cx + 15, cy + 2);
-      ctx.closePath();
+      ctx.arc(cx + 12.5, cy + 3.5 + breath, 0.8, 0, Math.PI * 2);
+      ctx.arc(cx + 14.5, cy + 3.5 + breath, 0.8, 0, Math.PI * 2);
       ctx.fill();
 
-      // Steam puffs when angry/attacking
-      if (isAttacking) {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.fillRect(cx + 20, cy - 3, 3, 3);
-        ctx.fillRect(cx + 23, cy - 5, 2, 2);
+      // Weiße geschwungene Elfenbeinhauer
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(cx + 11, cy + 6 + breath);
+      ctx.quadraticCurveTo(cx + 16, cy + 8 + breath, cx + 15, cy + 1 + breath);
+      ctx.stroke();
+
+      // Kulleraugen mit Glanz
+      drawGhibliEyes(ctx, cx + 7, cx + 7, cy - 1 + breath, 2, 0, 0, false, false);
+
+      // Dampfwölkchen aus der Schnauze
+      if (Math.sin(time * 3) > 0.5) {
+        ctx.fillStyle = 'rgba(248, 250, 252, 0.6)';
+        ctx.beginPath();
+        ctx.arc(cx + 18, cy + 2 + breath, 2, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       ctx.filter = 'none';
@@ -1080,230 +1545,224 @@ export const BESTIARY_DATA = [
   {
     id: 'cave_weaver',
     name: 'Höhlen-Krallenspinne',
-    title: 'Cave Weaver',
+    title: 'Dew-Drop Silk Weaver',
     category: 'beast',
-    categoryName: '🐺 Wildtiere',
-    biome: 'Dunkle Höhlen & Klüfte',
-    biomeBadge: 'Höhlen',
-    badgeClass: 'badge-caves',
-    variants: ['Schiefergrau (Standard)', 'Kristall-Cyan (Kristallhöhle)', 'Lava-Glimm'],
-    stats: { hp: 45, maxHp: 50, atk: 20, spd: 'Schnell', rng: '60px (Spinnnetz)' },
-    behavior: 'Krabbelt flink über Kanten und Höhlenwände. Schießt klebrige Netzkugeln, die das Bewegungstempo des Spielers für 2s einfrieren.',
-    counter: 'Mit dem Schild das Netz abfangen oder ausweichen; im Nahkampf ist ihr Pelzkörper sehr verwundbar.',
-    lore: 'Ihre Spinnenseide schimmert im Dunkeln schwach blau und wird von Höhlenforschern als Orientierungsfaden genutzt.',
+    categoryName: '🐺 Wilde Bestien',
+    biome: 'Höhlensysteme & Grotten',
+    biomeBadge: 'Höhle',
+    badgeClass: 'badge-cave',
+    variants: ['Tiefsteinschwarz (Standard)', 'Kristallblau (Eishöhle)', 'Glühwurm-Gelb (Biolumineszenz)'],
+    stats: { hp: 45, maxHp: 45, atk: 18, spd: 'Schnell (Kletternd)', rng: '100px (Spinnennetz-Schuss)' },
+    behavior: 'Ein zuckersüßes flauschiges Ruß-Spinnchen mit bunten Ringelsöckchen an den Beinen. Schwingt an einem elastischen Silberfaden und verwebt glitzernde Tautropfen.',
+    counter: 'Feuer entzündet ihre Seidennetze sofort. Wenn sie sich am Faden herablässt, mit dem Schild abfangen und mit dem Schwert kontern.',
+    lore: 'Ihre Netze klingen wie feine Harfensaiten, wenn der Höhlenwind hindurchweht. Höhlenforscher lauschen oft stundenlang ihrer Musik.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const legCycle = Math.sin(time * 8) * 3;
       const isAttacking = state === 'attack';
+      const bungeeBob = Math.sin(time * 4) * (isAttacking ? 6 : 2.5);
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      drawPaperShadow(ctx, cx, cy + 22, 14, 4);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Glänzender silberner Seidenfaden nach oben
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 14, 14, 4, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(cx, cy - 22);
+      ctx.lineTo(cx, cy - 4 + bungeeBob);
+      ctx.stroke();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      // 8 Jointed Legs
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 1.5;
-      for (let i = 0; i < 4; i++) {
-        const lOffset = (i % 2 === 0 ? legCycle : -legCycle);
-        // Left legs
+      // 6 spindeldürre Beinchen mit gestreiften Ringelsöckchen
+      for (let i = -1; i <= 1; i++) {
+        const legWave = Math.sin(time * 5 + i * 2) * 3;
+        // Links
+        ctx.strokeStyle = '#09090b';
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.moveTo(cx - 2, cy + 2);
-        ctx.lineTo(cx - 10, cy - 2 + i * 4 + lOffset);
-        ctx.lineTo(cx - 18, cy + 12 + i * 2);
+        ctx.moveTo(cx - 5, cy + bungeeBob + i * 3);
+        ctx.lineTo(cx - 14, cy - 3 + bungeeBob + legWave);
+        ctx.lineTo(cx - 18, cy + 12 + bungeeBob);
         ctx.stroke();
+        // Ringelsöckchen rot-weiß
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(cx - 19, cy + 10 + bungeeBob, 2.5, 2.5);
 
-        // Right legs
+        // Rechts
         ctx.beginPath();
-        ctx.moveTo(cx + 2, cy + 2);
-        ctx.lineTo(cx + 10, cy - 2 + i * 4 - lOffset);
-        ctx.lineTo(cx + 18, cy + 12 + i * 2);
+        ctx.moveTo(cx + 5, cy + bungeeBob + i * 3);
+        ctx.lineTo(cx + 14, cy - 3 + bungeeBob - legWave);
+        ctx.lineTo(cx + 18, cy + 12 + bungeeBob);
         ctx.stroke();
+        // Ringelsöckchen rot-weiß
+        ctx.fillRect(cx + 16.5, cy + 10 + bungeeBob, 2.5, 2.5);
       }
 
-      // Abdomen
-      ctx.fillStyle = '#334155';
+      // Flauschiger runder Pom-Pom Spinnenkörper
+      drawSootSprite(ctx, cx, cy + bungeeBob, 9, time, false);
+
+      // Große, neugierige Anime-Augen & 4 winzige Stirn-Pünktchen
+      drawGhibliEyes(ctx, cx - 3.5, cx + 3.5, cy - 1 + bungeeBob, 2.2, 0, 0, false, true);
+
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.ellipse(cx - 6, cy + 2, 8, 6, 0, 0, Math.PI * 2);
+      ctx.arc(cx - 4, cy - 5 + bungeeBob, 0.8, 0, Math.PI * 2);
+      ctx.arc(cx - 1.5, cy - 6 + bungeeBob, 0.8, 0, Math.PI * 2);
+      ctx.arc(cx + 1.5, cy - 6 + bungeeBob, 0.8, 0, Math.PI * 2);
+      ctx.arc(cx + 4, cy - 5 + bungeeBob, 0.8, 0, Math.PI * 2);
       ctx.fill();
-
-      // Cephalothorax (Head)
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(cx + 4, cy + 2, 5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Multiple Glowing Red Spider Eyes
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(cx + 6, cy, 2, 2);
-      ctx.fillRect(cx + 8, cy + 1, 1.5, 1.5);
-      ctx.fillRect(cx + 6, cy + 3, 2, 2);
-      ctx.fillRect(cx + 4, cy - 1, 1.5, 1.5);
-
-      // Web projectile if attacking
-      if (isAttacking) {
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(cx + 14, cy, 8, 8);
-      }
 
       ctx.filter = 'none';
     }
   },
 
   // =========================================================================
-  // 7. FIESE KREATUREN DER LEERENWELT (VOID)
+  // 7. LEEREN-WESEN & GEISTER (VOID)
   // =========================================================================
   {
     id: 'void_reaper',
     name: 'Leeren-Verschlinger',
-    title: 'Void Reaper',
+    title: 'Kaonashi Shadow Reaper',
     category: 'void',
-    categoryName: '🌌 Leerenwelt',
-    biome: 'Leeren-Abgründe & Void-Seen',
-    biomeBadge: 'Void',
+    categoryName: '🌑 Leeren-Wesen & Geister',
+    biome: 'Leerenwelt & Risszonen',
+    biomeBadge: 'Leere',
     badgeClass: 'badge-void',
-    variants: ['Albtraum-Violett (Standard)', 'Astral-Schwarz', 'Blutrot (Blutmond)'],
-    stats: { hp: 85, maxHp: 90, atk: 38, spd: 'Teleportierend', rng: '45px (Doppelschnitt)' },
-    behavior: 'Löst sich in schwarzen Rauch auf und materialisiert sich 0.4s später blitzschnell DIREKT IM RÜCKEN des Spielers für einen vernichtenden Doppelsensen-Schlag!',
-    counter: 'Sobald er verpufft, sofort vorwärts dashen, um seinem Rückenschlag zu entgehen, und sich mit einem Wirbelangriff umdrehen.',
-    lore: 'Entsteht aus verlorenen Gedanken derjenigen Abenteurer, die zu lange in den ewigen Sternenabgrund geblickt haben.',
+    variants: ['Obsidian-Violett (Standard)', 'Blut-Astral (Karmesin-Nebel)', 'Sternenstaub (Kosmisch)'],
+    stats: { hp: 95, maxHp: 95, atk: 34, spd: 'Mittel', rng: '60px (Doppelklingen-Wirbel)' },
+    behavior: 'Direkt inspiriert von Ohngesicht (Kaonashi). Eine geheimnisvolle Schattengestalt mit weißer Porzellanmaske und violetten Tränen. Führt zwei ätherische Sternenkatanas.',
+    counter: 'Seine Klingenwirbel haben eine rhythmische Pause. Genau nach dem zweiten Schwung öffnet sich seine Schattengestalt für Gegentreffer.',
+    lore: 'Sucht in der Leere nach vergessenen Kindheitserinnerungen. Bietet Reisenden schweigend glitzernde Sternsteine auf seiner Handfläche an.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const floatY = Math.sin(time * 3) * 4;
       const isAttacking = state === 'attack';
+      const floatBob = Math.sin(time * 2.2) * 3;
 
-      // Dark Void Rift Shadow
-      ctx.fillStyle = 'rgba(147, 51, 234, 0.3)';
+      drawPaperShadow(ctx, cx, cy + 20, 15, 4.5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Elegantes Kaonashi Schatten-Gewand (Deep Violet-Black Silhouette)
+      ctx.fillStyle = '#09090b';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 20, 16, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      // Tattered Shroud of Nothingness
-      ctx.fillStyle = '#0f051d';
-      ctx.beginPath();
-      ctx.moveTo(cx - 10, cy + 16 + floatY);
-      ctx.lineTo(cx - 8, cy - 8 + floatY);
-      ctx.lineTo(cx + 8, cy - 8 + floatY);
-      ctx.lineTo(cx + 10, cy + 16 + floatY);
-      ctx.lineTo(cx + 4, cy + 12 + floatY);
-      ctx.lineTo(cx, cy + 18 + floatY);
-      ctx.lineTo(cx - 5, cy + 11 + floatY);
+      ctx.moveTo(cx - 9, cy - 10 + floatBob);
+      ctx.quadraticCurveTo(cx - 16, cy + 12 + floatBob, cx - 11, cy + 19 + floatBob);
+      ctx.quadraticCurveTo(cx, cy + 16 + floatBob, cx + 11, cy + 19 + floatBob);
+      ctx.quadraticCurveTo(cx + 16, cy + 12 + floatBob, cx + 9, cy - 10 + floatBob);
       ctx.closePath();
       ctx.fill();
 
-      // Cosmic Violet Aura Ribbons
-      ctx.strokeStyle = '#c084fc';
-      ctx.lineWidth = 1.5;
+      // Schwebende Tintenrauch-Fransen am Saum
+      ctx.fillStyle = '#3b0764';
+      for (let i = -2; i <= 2; i++) {
+        const wispY = Math.sin(time * 4 + i) * 2;
+        ctx.beginPath();
+        ctx.arc(cx + i * 4.5, cy + 17 + floatBob + wispY, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Ovale Porzellanmaske mit violetten Kaonashi-Tränen
+      drawPorcelainMask(ctx, cx, cy - 6 + floatBob, 12, 14, 'noh');
+
+      // Ätherische Sternen-Katana-Klingen (Translucent Violet Light)
+      const bladeGlow = isAttacking ? '#c084fc' : '#818cf8';
+      const bladeSwing = isAttacking ? Math.sin(time * 12) * 25 : 0;
+
+      ctx.save();
+      ctx.translate(cx + 12, cy + 2 + floatBob);
+      ctx.rotate((25 + bladeSwing) * Math.PI / 180);
+      ctx.strokeStyle = bladeGlow;
+      ctx.lineWidth = 2.2;
       ctx.beginPath();
-      ctx.arc(cx, cy + floatY, 14, -Math.PI * 0.7, Math.PI * 0.3);
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(3, -12, 1, -22);
       ctx.stroke();
+      ctx.restore();
 
-      // Empty Abyss Hood
-      ctx.fillStyle = '#1e0836';
+      ctx.save();
+      ctx.translate(cx - 12, cy + 2 + floatBob);
+      ctx.rotate((-25 - bladeSwing) * Math.PI / 180);
+      ctx.strokeStyle = bladeGlow;
+      ctx.lineWidth = 2.2;
       ctx.beginPath();
-      ctx.arc(cx, cy - 10 + floatY, 8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Piercing Cyan Stare in darkness
-      ctx.fillStyle = '#22d3ee';
-      ctx.fillRect(cx - 4, cy - 11 + floatY, 2, 3);
-      ctx.fillRect(cx + 2, cy - 11 + floatY, 2, 3);
-
-      // Scythe Blade Arms
-      const scytheAngle = isAttacking ? Math.sin(time * 10) * 0.8 : 0;
-      ctx.fillStyle = '#a855f7';
-      // Left Scythe
-      ctx.beginPath();
-      ctx.moveTo(cx - 8, cy - 4 + floatY);
-      ctx.quadraticCurveTo(cx - 20, cy - 18 + scytheAngle * 10, cx - 14, cy + 10);
-      ctx.fill();
-      // Right Scythe
-      ctx.beginPath();
-      ctx.moveTo(cx + 8, cy - 4 + floatY);
-      ctx.quadraticCurveTo(cx + 20, cy - 18 - scytheAngle * 10, cx + 14, cy + 10);
-      ctx.fill();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-3, -12, -1, -22);
+      ctx.stroke();
+      ctx.restore();
 
       ctx.filter = 'none';
     }
   },
 
   {
-    id: 'gazer_void',
+    id: 'gazer_of_the_void',
     name: 'Auge des Abgrunds',
-    title: 'Gazer of the Void',
+    title: 'Celestial Moon-Jelly',
     category: 'void',
-    categoryName: '🌌 Leerenwelt',
-    biome: 'Leeren-Inseln & Kosmische Risse',
-    biomeBadge: 'Void',
+    categoryName: '🌑 Leeren-Wesen & Geister',
+    biome: 'Leerenwelt & Risszonen',
+    biomeBadge: 'Leere',
     badgeClass: 'badge-void',
-    variants: ['Abyss-Lila (Standard)', 'Blutauge (Rot)', 'Smaragd-Seher (Grün)'],
-    stats: { hp: 65, maxHp: 70, atk: 32, spd: 'Schwebend', rng: '200px (Todesstrahl)' },
-    behavior: 'Schwebt lautlos über dem Abgrund. Visiert den Spieler an und feuert nach 1.2s Aufladezeit einen kontinuierlichen, alles durchdringenden Todesstrahl.',
-    counter: 'Während des Ladevorgangs um ihn herumkreisen (der Strahl dreht sich nur träge mit) und Pfeile direkt in die ungeschützte Pupille schießen.',
-    lore: 'Blinzelt niemals freiwillig. Wer ihm zu tief ins Auge blickt, hört das Flüstern vergessener Götter.',
+    variants: ['Galaxie-Iris (Standard)', 'Supernova (Gold-Orange)', 'Polarlicht (Smaragdgrün)'],
+    stats: { hp: 65, maxHp: 65, atk: 26, spd: 'Schwebend Schnell', rng: '160px (Kosmischer Strahl)' },
+    behavior: 'Eine ätherische Himmels-Mondqualle mit einer gläsernen Sternenglocke. In ihrem Zentrum ruht ein wohlwollendes kosmisches Auge, das Starlight-Strahlen bündelt.',
+    counter: 'Vor dem Strahl schließt sich seine Glocke für eine Sekunde. Hinter eine Felsbarriere stellen und danach seine weichen Quallententakel treffen.',
+    lore: 'Fiel in einer Neumondnacht aus dem Sternenmeer herab. Summt eine Melodie, die an uralte Spieluhren erinnert.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const floatY = Math.sin(time * 2.8) * 3;
       const isAttacking = state === 'attack';
+      const pulse = Math.sin(time * 2.5) * 2;
+      const floatY = cy - 2 + Math.sin(time * 2) * 3;
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 18, 12, 4, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawPaperShadow(ctx, cx, cy + 20, 14, 4);
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
 
-      // 4 Writhing Nerve Tentacles
-      ctx.strokeStyle = '#581c87';
-      ctx.lineWidth = 2;
-      for (let t = 0; t < 4; t++) {
-        const tWave = Math.sin(time * 5 + t) * 4;
+      // 5 wallende Seidententakel mit Sternenstaub
+      ctx.strokeStyle = 'rgba(192, 132, 252, 0.7)';
+      ctx.lineWidth = 1.6;
+      for (let i = -2; i <= 2; i++) {
+        const wave = Math.sin(time * 4 - i * 0.8) * 4;
         ctx.beginPath();
-        ctx.moveTo(cx - 6 + t * 4, cy + 8 + floatY);
-        ctx.lineTo(cx - 10 + t * 6 + tWave, cy + 16 + floatY);
+        ctx.moveTo(cx + i * 4, floatY + 6);
+        ctx.quadraticCurveTo(cx + i * 5 + wave, floatY + 14, cx + i * 3 - wave, floatY + 22);
         ctx.stroke();
       }
 
-      // Giant Fleshy Eyeball
-      ctx.fillStyle = '#f1f5f9';
+      // Transparente gläserne Quallenglocke (Glass Dome)
+      ctx.fillStyle = 'rgba(139, 92, 246, 0.35)';
       ctx.beginPath();
-      ctx.arc(cx, cy + floatY, 13, 0, Math.PI * 2);
+      ctx.arc(cx, floatY - 2, 14 + pulse * 0.4, Math.PI, 0);
+      ctx.quadraticCurveTo(cx + 12, floatY + 6, cx, floatY + 7);
+      ctx.quadraticCurveTo(cx - 12, floatY + 6, cx - 14 - pulse * 0.4, floatY - 2);
       ctx.fill();
 
-      // Bloodshot Veins
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 1;
+      // Kosmisches Großauge im Inneren
+      ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.moveTo(cx - 11, cy - 4 + floatY);
-      ctx.lineTo(cx - 5, cy + floatY);
-      ctx.moveTo(cx + 11, cy + 4 + floatY);
-      ctx.lineTo(cx + 6, cy + floatY);
+      ctx.ellipse(cx, floatY - 2, 9, 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Galaxie-Iris (Irisierend Violett & Gold)
+      ctx.fillStyle = '#7c3aed';
+      ctx.beginPath();
+      ctx.arc(cx, floatY - 2, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(cx, floatY - 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glanzpunkte
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx - 1.5, floatY - 3.5, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Zarter Mondsichel-Anhänger auf dem Scheitel
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(cx, floatY - 17, 3, 0.5, Math.PI * 1.5);
       ctx.stroke();
-
-      // Iris (Violet)
-      ctx.fillStyle = '#9333ea';
-      ctx.beginPath();
-      ctx.arc(cx + Math.sin(time) * 2, cy + floatY, 7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Slit Pupil
-      const pupilExpand = isAttacking ? 2 : 0;
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.ellipse(cx + Math.sin(time) * 2, cy + floatY, 2 + pupilExpand, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Death Ray Laser when attacking
-      if (isAttacking) {
-        ctx.fillStyle = 'rgba(192, 132, 252, 0.65)';
-        ctx.fillRect(cx + 6, cy - 3 + floatY, 35, 6);
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(cx + 6, cy - 1 + floatY, 35, 2);
-      }
 
       ctx.filter = 'none';
     }
@@ -1312,57 +1771,72 @@ export const BESTIARY_DATA = [
   {
     id: 'abyss_tentacle',
     name: 'Schatten-Tentakel',
-    title: 'Abyss Tentacle',
+    title: 'Bell-Spirit Vine',
     category: 'void',
-    categoryName: '🌌 Leerenwelt',
-    biome: 'Leeren-Risse & Sumpflöcher',
-    biomeBadge: 'Void',
+    categoryName: '🌑 Leeren-Wesen & Geister',
+    biome: 'Leerenwelt & Risszonen',
+    biomeBadge: 'Leere',
     badgeClass: 'badge-void',
-    variants: ['Abyss-Violett (Standard)', 'Sumpf-Grün', 'Lava-Glimm'],
-    stats: { hp: 55, maxHp: 60, atk: 26, spd: 'Stationär', rng: '50px (Peitschenhieb)' },
-    behavior: 'Bricht überraschend aus Bodenrissen hervor. Peitscht im weiten 180°-Radius über das Spielfeld und zieht den Spieler bei Kontakt an den Riss heran.',
-    counter: 'Den Peitschenschwung per Dash überspringen und die Basis des Tentakels mit schnellen Schwerthieben abtrennen.',
-    lore: 'Niemand weiß, wie gigantisch die Kreatur im Kern der Welt ist, zu der all diese Tentakel gehören.',
+    variants: ['Tiefsee-Schwarz (Standard)', 'Giftmorast (Smaragdgrün)', 'Glutasche (Rubinrot)'],
+    stats: { hp: 55, maxHp: 50, atk: 22, spd: 'Stationär', rng: '50px (Peitschenhieb)' },
+    behavior: 'Bricht aus einem moosbewachsenen Steinbrunnen hervor. An seiner gewundenen Spitze baumelt eine antike bronzene Shinto-Tempelglocke (Suzu), die bei Hieben silbern läutet.',
+    counter: 'Wenn sich die Ranke spiralig zusammenzieht, bereitet sie den Peitschenhieb vor. Sofort zurückweichen und nach dem Aufprall die Glocke attackieren.',
+    lore: 'Entspringt den Wurzeln eines versunkenen Glockenturms. Ihr Läuten klingt wie Regentropfen auf Tempeldächern.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const whip = Math.sin(time * 4) * 8;
       const isAttacking = state === 'attack';
-      const attackWhip = isAttacking ? Math.sin(time * 12) * 14 : whip;
+      const coilSpeed = isAttacking ? 8 : 3.5;
+      const coil = Math.sin(time * coilSpeed) * 6;
 
-      // Dark Ground Rift Hole
-      ctx.fillStyle = '#2e1065';
+      // Steinbrunnen / Rissportal am Boden
+      ctx.fillStyle = '#334155';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 16, 16, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#0f051d';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 16, 11, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy + 16, 14, 5.5, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 15, 11, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-      // Curved Muscular Tentacle
-      ctx.strokeStyle = '#7e22ce';
-      ctx.lineWidth = 9;
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Elegante, gewundene Tintenranke
+      ctx.strokeStyle = '#2e1065';
+      ctx.lineWidth = 5.5;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(cx, cy + 14);
-      ctx.quadraticCurveTo(cx + attackWhip * 0.6, cy, cx + attackWhip, cy - 18);
+      ctx.moveTo(cx, cy + 15);
+      ctx.quadraticCurveTo(cx - 10 + coil, cy + 3, cx + 4 - coil, cy - 6);
+      ctx.quadraticCurveTo(cx + 12 - coil, cy - 14, cx - 2 + coil * 0.5, cy - 18);
       ctx.stroke();
 
-      // Inner Highlight
-      ctx.strokeStyle = '#c084fc';
-      ctx.lineWidth = 4;
+      // Zarte lumineszierende Pflaumenblüten-Saugnäpfe (Plum Blossoms)
+      ctx.fillStyle = '#e879f9';
       ctx.beginPath();
-      ctx.moveTo(cx, cy + 14);
-      ctx.quadraticCurveTo(cx + attackWhip * 0.6, cy, cx + attackWhip, cy - 18);
-      ctx.stroke();
+      ctx.arc(cx - 6 + coil * 0.7, cy + 5, 2.2, 0, Math.PI * 2);
+      ctx.arc(cx + 4 - coil * 0.5, cy - 4, 2, 0, Math.PI * 2);
+      ctx.arc(cx + 8 - coil, cy - 12, 1.8, 0, Math.PI * 2);
+      ctx.fill();
 
-      // Glowing Neon Suction Cups
-      ctx.fillStyle = '#f0abfc';
-      for (let s = 0; s < 4; s++) {
-        const sx = cx + attackWhip * (s / 4) + 4;
-        const sy = cy + 10 - s * 8;
-        ctx.fillRect(sx, sy, 3, 3);
+      // Antike bronzene Tempelglocke (Suzu) an der Spitze
+      const bellX = cx - 2 + coil * 0.5;
+      const bellY = cy - 18;
+
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(bellX, bellY, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rotes Seidenband & Schallwellen
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(bellX - 1, bellY + 3, 2, 4);
+
+      if (Math.sin(time * 5) > 0.6) {
+        ctx.strokeStyle = 'rgba(253, 224, 71, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(bellX, bellY, 7, -0.5, Math.PI * 0.8);
+        ctx.stroke();
       }
 
       ctx.filter = 'none';
@@ -1370,77 +1844,103 @@ export const BESTIARY_DATA = [
   },
 
   // =========================================================================
-  // 8. ELITE, HIMMEL & ELEMENTARE
+  // 8. ELITE & ELEMENTARE (ELITE)
   // =========================================================================
   {
-    id: 'paper_knight',
-    name: 'Dunkler Pergament-Ritter',
-    title: 'Cursed Paper Knight',
+    id: 'cursed_knight',
+    name: 'Origami-Krieger',
+    title: 'Cursed Paper Samurai',
     category: 'elite',
     categoryName: '⚔️ Elite & Elementare',
-    biome: 'Alte Schreine & Tempelhallen',
-    biomeBadge: 'Höhlen',
-    badgeClass: 'badge-caves',
-    variants: ['Karton-Schwarz (Standard)', 'Rost-Rot', 'Kaiser-Gold'],
-    stats: { hp: 95, maxHp: 100, atk: 32, spd: 'Mittel', rng: '45px (Katana)' },
-    behavior: 'Meisterlicher Fechter. Blockiert normale Spielerschläge mit seinem Falzschild unter hellem Funkenregen und kontert sofort mit einem Ausfallstich.',
-    counter: 'Seine Haltung kann nur durch einen voll aufgeladenen Wirbelangriff oder wiederholte Pfeiltreffer aus der Distanz durchbrochen werden.',
-    lore: 'Wurde vor Jahrtausenden gefaltet, um die uralten Schreine zu bewachen, und hat seitdem keinen Millimeter nachgegeben.',
+    biome: 'Antike Tempel & Burgruinen',
+    biomeBadge: 'Tempel',
+    badgeClass: 'badge-mountain',
+    variants: ['Karmesin-Gold (Standard)', 'Schatten-Obsidian (Nacht)', 'Kaiser-Jade (Grün)'],
+    stats: { hp: 100, maxHp: 100, atk: 36, spd: 'Mittel-Schnell', rng: '55px (Kalligraphie-Hieb)' },
+    behavior: 'Ein lebendiges Origami-Kunstwerk aus gefaltetem Washi-Papier. Trägt einen imposanten Kabuto-Helm mit goldener Mondsichel und führt ein federleichtes Odachi-Schwert.',
+    counter: 'Seine Iaijutsu-Schläge durchdringen leichte Schilde. Genau im Moment seines Ziehens parieren, um seine Papierrüstung zu destabilisieren.',
+    lore: 'Wurde vor Jahrhunderten gefaltet, um den Tempel der Kirschblüten zu bewachen. Jeder seiner Schwerthiebe hinterlässt flüchtige schwarze Tuschezeichen in der Luft.',
     render(ctx, cx, cy, time, state, hitFlash) {
       const isAttacking = state === 'attack';
-      const breathe = Math.sin(time * 3) * 1.5;
+      const breath = Math.sin(time * 3) * 1.2;
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 18, 14, 5, 0, 0, Math.PI * 2);
-      ctx.fill();
+      drawPaperShadow(ctx, cx, cy + 19, 16, 5);
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
 
-      // Greaves / Legs
+      // Gefaltete Papier-Rüstungsbeine
       ctx.fillStyle = '#18181b';
-      ctx.fillRect(cx - 7, cy + 8, 5, 10);
-      ctx.fillRect(cx + 2, cy + 8, 5, 10);
+      ctx.fillRect(cx - 6, cy + 9, 4, 9);
+      ctx.fillRect(cx + 2, cy + 9, 4, 9);
 
-      // Folded Plate Armor
-      ctx.fillStyle = '#27272a';
+      // Karmesinrote Washi-Brustpanzerung mit Goldkante
+      ctx.fillStyle = '#7f1d1d';
       ctx.beginPath();
-      ctx.roundRect(cx - 10, cy - 6 + breathe, 20, 16, 3);
-      ctx.fill();
-
-      // Red Sash
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(cx - 9, cy + 5 + breathe, 18, 2.5);
-
-      // Kabuto Helmet
-      ctx.fillStyle = '#09090b';
-      ctx.fillRect(cx - 7, cy - 16 + breathe, 14, 11);
-
-      // Golden Horn Crest
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 16 + breathe);
-      ctx.lineTo(cx - 8, cy - 23 + breathe);
-      ctx.lineTo(cx, cy - 19 + breathe);
-      ctx.lineTo(cx + 8, cy - 23 + breathe);
+      ctx.moveTo(cx - 9, cy - 2 + breath);
+      ctx.lineTo(cx - 11, cy + 10 + breath);
+      ctx.lineTo(cx + 11, cy + 10 + breath);
+      ctx.lineTo(cx + 9, cy - 2 + breath);
       ctx.closePath();
       ctx.fill();
 
-      // Katana Blade
-      const slashAngle = isAttacking ? Math.sin(time * 12) * 25 : -10;
-      ctx.strokeStyle = '#e4e4e7';
-      ctx.lineWidth = 2.5;
+      // Goldene Faltleisten
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.moveTo(cx + 10, cy + breathe);
-      ctx.lineTo(cx + 22, cy - 14 + slashAngle + breathe);
+      ctx.moveTo(cx - 9, cy + 3 + breath);
+      ctx.lineTo(cx + 9, cy + 3 + breath);
+      ctx.moveTo(cx - 10, cy + 7 + breath);
+      ctx.lineTo(cx + 10, cy + 7 + breath);
       ctx.stroke();
 
-      // Shield on left arm
-      ctx.fillStyle = '#71717a';
-      ctx.fillRect(cx - 14, cy - 4 + breathe, 6, 14);
-      ctx.fillStyle = '#facc15';
-      ctx.fillRect(cx - 13, cy + 1 + breathe, 4, 4); // Crest
+      // Schulterplatten (Sode)
+      ctx.fillStyle = '#991b1b';
+      ctx.beginPath();
+      ctx.roundRect(cx - 14, cy - 1 + breath, 5, 8, 1);
+      ctx.roundRect(cx + 9, cy - 1 + breath, 5, 8, 1);
+      ctx.fill();
+
+      // Kabuto-Helm mit stolzer goldener Mondsichel (Date Masamune Look)
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 6 + breath, 7, Math.PI, 0);
+      ctx.fill();
+
+      // Goldene Mondsichel auf der Stirn
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(cx, cy - 13 + breath, 8, 0.4, Math.PI * 0.8);
+      ctx.stroke();
+
+      // Kitsune-Halbmaske unter dem Helm
+      drawPorcelainMask(ctx, cx, cy - 4 + breath, 9, 7, 'fox');
+
+      // Geschwungenes Odachi-Papierschwert mit Tusche-Schweif
+      const swordSwing = isAttacking ? Math.sin(time * 12) * 45 : 0;
+      ctx.save();
+      ctx.translate(cx + 11, cy + 4 + breath);
+      ctx.rotate((-20 + swordSwing) * Math.PI / 180);
+      // Griff
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-1.5, 0, 3, 7);
+      // Klinge
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(4, -14, 2, -26);
+      ctx.stroke();
+
+      // Schwarzer Kalligraphie-Tuschestreif bei Hieb
+      if (isAttacking) {
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, -12, 16, -Math.PI * 0.8, -Math.PI * 0.2);
+        ctx.stroke();
+      }
+      ctx.restore();
 
       ctx.filter = 'none';
     }
@@ -1449,69 +1949,93 @@ export const BESTIARY_DATA = [
   {
     id: 'sky_harpy',
     name: 'Wolken-Harpyie',
-    title: 'Sky Harpy',
+    title: 'Tengu Feather Maiden',
     category: 'elite',
     categoryName: '⚔️ Elite & Elementare',
-    biome: 'Wolkenreich & Himmelsbrücken',
-    biomeBadge: 'Wolken',
-    badgeClass: 'badge-clouds',
-    variants: ['Himmelsblau (Standard)', 'Sonnen-Gold', 'Gewitter-Grau'],
-    stats: { hp: 55, maxHp: 60, atk: 25, spd: 'Fliegend', rng: '45px (Sturzflug)' },
-    behavior: 'Fliegt ungehindert über Wolkenabgründe. Erzeugt mit heftigen Flügelschlägen Windböen, die den Spieler von Plattformen wegpusten können, gefolgt von einem Sturzflug mit Krallen.',
-    counter: 'Gegen den Wind anlaufen und den Sturzflug mit einem gut getimten Schwerthieb im Flug abfangen.',
-    lore: 'Sammelt alles Glänzende. In ihren Nestern auf den höchsten Kumulus-Wolken findet man oft goldene Pfeile.',
+    biome: 'Himmelsinseln & Bergpass',
+    biomeBadge: 'Himmel',
+    badgeClass: 'badge-sky',
+    variants: ['Himmelsblau (Standard)', 'Sonnenuntergang (Rosa-Gold)', 'Gewittersturm (Stahlgrau)'],
+    stats: { hp: 80, maxHp: 80, atk: 30, spd: 'Sehr Schnell (Fliegend)', rng: '110px (Windklingen-Fächer)' },
+    behavior: 'Eine anmutige Wind-Tengu-Maid mit gefalteten Papierkranich-Flügeln. Schwingt einen heiligen Federfächer (Hauchiwa) und entfesselt wirbelnde Kirschblüten-Stürme.',
+    counter: 'Ihre Windwirbel stoßen Helden zurück. Mit dem Schild blocken und sie im Landemoment mit Wirbelattacken zu Boden zwingen.',
+    lore: 'Webt den Morgennebel über den Tälern. Wenn sie mit ihrem Federfächer winkt, fallen die ersten Kirschblüten des Frühlings.',
     render(ctx, cx, cy, time, state, hitFlash) {
-      const wingFlap = Math.sin(time * 7) * 8;
-      const floatY = Math.cos(time * 3) * 4;
       const isAttacking = state === 'attack';
+      const wingFlap = Math.sin(time * 6) * 7;
+      const floatBob = Math.sin(time * 3) * 3;
 
-      // Cloud Shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+      drawPaperShadow(ctx, cx, cy + 20, 15, 4);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Majestätische Papierkranich-Flügel (Origami Wing Feathers)
+      ctx.fillStyle = '#e0f2fe';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1;
+      // Linker Flügel
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 20, 14, 4, 0, 0, Math.PI * 2);
+      ctx.moveTo(cx - 6, cy + floatBob);
+      ctx.lineTo(cx - 24, cy - 10 + floatBob + wingFlap);
+      ctx.lineTo(cx - 18, cy + 4 + floatBob + wingFlap * 0.5);
+      ctx.lineTo(cx - 12, cy + 8 + floatBob);
+      ctx.closePath();
       ctx.fill();
+      ctx.stroke();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      // Feathered Wings (Flapping)
-      ctx.fillStyle = '#bae6fd';
-      // Left wing
+      // Rechter Flügel
       ctx.beginPath();
-      ctx.moveTo(cx - 5, cy + floatY);
-      ctx.lineTo(cx - 24, cy - 14 + wingFlap + floatY);
-      ctx.lineTo(cx - 12, cy + 6 + floatY);
+      ctx.moveTo(cx + 6, cy + floatBob);
+      ctx.lineTo(cx + 24, cy - 10 + floatBob + wingFlap);
+      ctx.lineTo(cx + 18, cy + 4 + floatBob + wingFlap * 0.5);
+      ctx.lineTo(cx + 12, cy + 8 + floatBob);
+      ctx.closePath();
       ctx.fill();
-      // Right wing
-      ctx.beginPath();
-      ctx.moveTo(cx + 5, cy + floatY);
-      ctx.lineTo(cx + 24, cy - 14 - wingFlap + floatY);
-      ctx.lineTo(cx + 12, cy + 6 + floatY);
-      ctx.fill();
+      ctx.stroke();
 
-      // Harpy Body
-      ctx.fillStyle = '#0284c7';
-      ctx.beginPath();
-      ctx.roundRect(cx - 6, cy - 4 + floatY, 12, 14, 4);
-      ctx.fill();
-
-      // Fierce Head & Wild Hair
+      // Zartes Feder-Kimono-Kleidchen
       ctx.fillStyle = '#f8fafc';
       ctx.beginPath();
-      ctx.arc(cx, cy - 10 + floatY, 6, 0, Math.PI * 2);
+      ctx.moveTo(cx - 6, cy - 2 + floatBob);
+      ctx.lineTo(cx - 8, cy + 14 + floatBob);
+      ctx.lineTo(cx + 8, cy + 14 + floatBob);
+      ctx.lineTo(cx + 6, cy - 2 + floatBob);
+      ctx.closePath();
       ctx.fill();
-      // Hair plumage
-      ctx.fillStyle = '#38bdf8';
-      ctx.fillRect(cx - 8, cy - 16 + floatY, 16, 5);
 
-      // Beak / Talons
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(cx - 1.5, cy - 9 + floatY, 3, 3);
+      // Rosa Kirschblüten-Schärfe
+      ctx.fillStyle = '#f472b6';
+      ctx.fillRect(cx - 6, cy + 3 + floatBob, 12, 2.5);
 
-      // Claws
-      const diveTalon = isAttacking ? 4 : 0;
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(cx - 4, cy + 10 + floatY + diveTalon, 2, 4);
-      ctx.fillRect(cx + 2, cy + 10 + floatY + diveTalon, 2, 4);
+      // Sanftes Anime-Gesicht mit wehendem schwarzen Haar
+      drawGhibliEyes(ctx, cx - 3.5, cx + 3.5, cy - 6 + floatBob, 2.2, 0, 0, false, true);
+
+      // Zarte Vogelmaske schräg auf der Stirn (Tengu-Mask)
+      ctx.fillStyle = '#fdfbf7';
+      ctx.beginPath();
+      ctx.ellipse(cx + 4, cy - 11 + floatBob, 4, 3, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.moveTo(cx + 7, cy - 11 + floatBob);
+      ctx.lineTo(cx + 11, cy - 10 + floatBob);
+      ctx.lineTo(cx + 7, cy - 9 + floatBob);
+      ctx.fill();
+
+      // Heiliger Federfächer (Hauchiwa)
+      const fanX = cx - 11;
+      const fanY = cy + 2 + floatBob;
+      ctx.fillStyle = '#fbcfe8';
+      ctx.beginPath();
+      ctx.arc(fanX, fanY, 7, Math.PI * 0.8, Math.PI * 1.8);
+      ctx.lineTo(fanX, fanY);
+      ctx.fill();
+
+      // Umherwirbelnde Kirschblüten bei Windangriff
+      if (isAttacking) {
+        drawSakuraPetal(ctx, cx + 14, cy - 6 + floatBob, time * 4, 1);
+        drawSakuraPetal(ctx, cx - 14, cy + 8 + floatBob, -time * 3, 0.8);
+      }
 
       ctx.filter = 'none';
     }
@@ -1519,63 +2043,103 @@ export const BESTIARY_DATA = [
 
   {
     id: 'lava_core',
-    name: 'Magma-Kernling',
-    title: 'Lava Core',
+    name: 'Magma-Funke',
+    title: 'Calcifer Flame Sprite',
     category: 'elite',
     categoryName: '⚔️ Elite & Elementare',
-    biome: 'Vulkangebiete & Tiefe Magmahöhlen',
-    biomeBadge: 'Höhlen',
-    badgeClass: 'badge-caves',
-    variants: ['Glut-Orange (Standard)', 'Höllen-Blau', 'Obsidian-Dunkel'],
-    stats: { hp: 60, maxHp: 65, atk: 30, spd: 'Rollend', rng: '45px (Todes-Explosion)' },
-    behavior: 'Rollender Feuerball mit rotierenden Obsidianplatten. Bei 0 HP explodiert er nach 1.2s Warn-Blinken in einer verheerenden radialen Hitzewelle!',
-    counter: 'Den tödlichen Schlag ausführen und SOFORT per Dash das Weite suchen, bevor die Detonation einsetzt.',
-    lore: 'Kühlt fernab von Lavaseen über Tage langsam ab und erstarrt schließlich zu porösem Bimsstein.',
+    biome: 'Vulkan & Magmakammern',
+    biomeBadge: 'Vulkan',
+    badgeClass: 'badge-vulcano',
+    variants: ['Feuer-Orange (Standard)', 'Blau-Plasma (Gleißend)', 'Smaragd-Flamme (Giftvulkan)'],
+    stats: { hp: 75, maxHp: 75, atk: 32, spd: 'Schnell (Pulsierend)', rng: '120px (Funken-Feuerwerk)' },
+    behavior: 'Eine direkte liebevolle Hommage an Calcifer aus Das wandelnde Schloss! Ein warmes, übermütiges Flämmchen mit Kulleraugen, umringt von schwebenden Obsidian-Kieseln.',
+    counter: 'Wasser- und Eiszauber kühlen seinen Glutkern sofort ab. Im abgekühlten Zustand kann er 4 Sekunden lang keine Funken spucken.',
+    lore: 'Schläft am liebsten auf alten Speckpfannen und beschwert sich lautstark über schlechtes Brennholz. Knistert vor Freude, wenn man ihn lobt.',
     render(ctx, cx, cy, time, state, hitFlash) {
       const isAttacking = state === 'attack';
-      const corePulse = Math.sin(time * 6) * 2;
-      const rotAngle = time * 3;
+      const flameDance = Math.sin(time * 9) * 2;
+      const breath = Math.sin(time * 4) * 1.5;
 
-      // Fiery Shadow
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.3)';
+      drawPaperShadow(ctx, cx, cy + 18, 14, 4);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Äußere lodernde Flammenkrone (Karmesinrot)
+      ctx.fillStyle = '#dc2626';
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 16, 16, 5, 0, 0, Math.PI * 2);
+      ctx.arc(cx, cy + 4, 13 + breath, 0, Math.PI);
+      ctx.quadraticCurveTo(cx - 14, cy - 10 + flameDance, cx - 4, cy - 16);
+      ctx.quadraticCurveTo(cx, cy - 10, cx + 4, cy - 18 + flameDance);
+      ctx.quadraticCurveTo(cx + 14, cy - 10, cx + 13 + breath, cy + 4);
       ctx.fill();
 
-      if (hitFlash > 0) ctx.filter = 'brightness(2.5) saturate(0.2)';
-
-      // Molten Core (Orange & Yellow glow)
-      ctx.fillStyle = '#ea580c';
-      ctx.beginPath();
-      ctx.arc(cx, cy + 2, 11 + corePulse, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(cx, cy + 2, 6 + corePulse * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 4 Orbiting Obsidian Armor Plates
-      ctx.fillStyle = '#1c1917';
-      for (let p = 0; p < 4; p++) {
-        const pAngle = rotAngle + (p * Math.PI * 2 / 4);
-        const px = cx + Math.cos(pAngle) * (14 + (isAttacking ? 6 : 0));
-        const py = cy + 2 + Math.sin(pAngle) * (10 + (isAttacking ? 4 : 0));
-        ctx.fillRect(px - 3, py - 3, 6, 6);
-      }
-
-      // Floating Embers
+      // Warmer oranger Herzkörper (Calcifer Orange)
       ctx.fillStyle = '#f97316';
-      ctx.fillRect(cx - 10 + Math.sin(time * 5) * 3, cy - 12, 2, 2);
-      ctx.fillRect(cx + 8 + Math.cos(time * 7) * 3, cy - 10, 2, 2);
+      ctx.beginPath();
+      ctx.arc(cx, cy + 4, 10 + breath * 0.8, 0, Math.PI);
+      ctx.quadraticCurveTo(cx - 10, cy - 7 + flameDance, cx - 2, cy - 13);
+      ctx.quadraticCurveTo(cx + 10, cy - 7, cx + 10 + breath * 0.8, cy + 4);
+      ctx.fill();
 
-      // Warning Flash before explosion if attacking
-      if (isAttacking) {
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 1.5;
+      // Heller sonnengelber Glutkern
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(cx, cy + 5, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Expressives, fröhliches Calcifer-Gesicht!
+      // Große Kulleraugen blicken aufgeregt nach oben
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(cx - 4.5, cy - 1, 3.2, 4.2, -0.1, 0, Math.PI * 2);
+      ctx.ellipse(cx + 4.5, cy - 1, 3.2, 4.2, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(cx - 4.5, cy - 2, 1.8, 0, Math.PI * 2);
+      ctx.arc(cx + 4.5, cy - 2, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx - 5.2, cy - 2.8, 0.8, 0, Math.PI * 2);
+      ctx.arc(cx + 3.8, cy - 2.8, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Breites herzliches Grinsen mit zwei winzigen süßen Zähnchen!
+      ctx.fillStyle = '#451a03';
+      ctx.beginPath();
+      ctx.arc(cx, cy + 4, 4.2, 0.1, Math.PI * 0.9);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx - 2, cy + 4, 1.5, 1.5);
+      ctx.fillRect(cx + 0.5, cy + 4, 1.5, 1.5);
+
+      // Kleine gestikulierende Flämmchen-Ärmchen
+      ctx.fillStyle = '#f97316';
+      ctx.beginPath();
+      ctx.arc(cx - 10, cy + 3 + flameDance, 2.5, 0, Math.PI * 2);
+      ctx.arc(cx + 10, cy + 3 - flameDance, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 4 schwebende Obsidian-Kieselsteine in 3D-Umlaufbahn
+      const numStones = 4;
+      for (let s = 0; s < numStones; s++) {
+        const stoneAngle = time * 3 + (s / numStones) * Math.PI * 2;
+        const sx = cx + Math.cos(stoneAngle) * (18 + (isAttacking ? 6 : 0));
+        const sy = cy + 4 + Math.sin(stoneAngle) * 7;
+
+        ctx.fillStyle = '#1e293b';
         ctx.beginPath();
-        ctx.arc(cx, cy + 2, 22 + Math.sin(time * 15) * 4, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.arc(sx, sy, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 0.8, 0, Math.PI * 2);
+        ctx.fill();
       }
 
       ctx.filter = 'none';
@@ -1583,38 +2147,40 @@ export const BESTIARY_DATA = [
   }
 ];
 
+// =============================================================================
+// BESTIARY UI MANAGER
+// =============================================================================
+
 export class BestiaryManager {
-  constructor(containerElement) {
-    this.container = containerElement;
-    this.currentFilter = 'all';
-    this.enemyStates = {}; // id -> { state: 'idle'|'walk'|'attack', hitTimer: 0, animTime: 0 }
-
-    BESTIARY_DATA.forEach(e => {
-      this.enemyStates[e.id] = { state: 'idle', hitTimer: 0, animTime: Math.random() * 10 };
-    });
-
+  constructor(containerId = 'bestiary-grid') {
+    this.container = document.getElementById(containerId);
+    this.currentCategory = 'all';
+    this.enemyStates = {};
     this.canvases = {};
-    this.init();
+
+    BESTIARY_DATA.forEach(enemy => {
+      this.enemyStates[enemy.id] = {
+        animTime: Math.random() * 5,
+        state: 'idle', // 'idle' | 'walk' | 'attack'
+        hitTimer: 0
+      };
+    });
   }
 
   init() {
-    this.renderCards();
-    this.setupFilters();
-  }
-
-  setFilter(category) {
-    this.currentFilter = category;
-    document.querySelectorAll('.bestiary-filter-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.getAttribute('data-category') === category);
-    });
+    if (!this.container) return;
+    this.wireFilterPills();
     this.renderCards();
   }
 
-  setupFilters() {
-    document.querySelectorAll('.bestiary-filter-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const cat = btn.getAttribute('data-category');
-        this.setFilter(cat);
+  wireFilterPills() {
+    const pills = document.querySelectorAll('.filter-pill');
+    pills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        pills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        this.currentCategory = pill.dataset.filter || 'all';
+        this.renderCards();
       });
     });
   }
@@ -1622,79 +2188,81 @@ export class BestiaryManager {
   renderCards() {
     if (!this.container) return;
     this.container.innerHTML = '';
-    this.canvases = {};
 
-    const filtered = this.currentFilter === 'all' 
-      ? BESTIARY_DATA 
-      : BESTIARY_DATA.filter(e => e.category === this.currentFilter);
+    const filtered = this.currentCategory === 'all'
+      ? BESTIARY_DATA
+      : BESTIARY_DATA.filter(e => e.category === this.currentCategory);
 
     filtered.forEach(enemy => {
+      const st = this.enemyStates[enemy.id];
       const card = document.createElement('div');
       card.className = 'enemy-card';
-      card.setAttribute('data-id', enemy.id);
-
-      const st = this.enemyStates[enemy.id];
+      card.dataset.id = enemy.id;
 
       card.innerHTML = `
         <div class="enemy-card-header">
-          <div class="enemy-title-group">
+          <div class="enemy-names">
             <h3 class="enemy-name">${enemy.name}</h3>
-            <span class="enemy-eng-title">${enemy.title}</span>
+            <span class="enemy-title">${enemy.title}</span>
           </div>
-          <div class="enemy-badges-group">
-            <span class="enemy-badge badge-role">${enemy.categoryName}</span>
-            <span class="enemy-badge ${enemy.badgeClass}">${enemy.biomeBadge}</span>
-          </div>
+          <span class="enemy-biome-badge ${enemy.badgeClass}">${enemy.biomeBadge}</span>
         </div>
 
         <div class="enemy-preview-stage">
           <canvas id="enemy-canvas-${enemy.id}" class="enemy-canvas" width="80" height="80"></canvas>
-          <div class="enemy-stage-controls">
-            <button class="stage-btn btn-anim-toggle" title="Animation umschalten (Idle / Walk / Attack)">
-              <span>▶ Modus: </span><b class="anim-state-label">${st.state.toUpperCase()}</b>
+          <div id="dmg-float-${enemy.id}" class="dmg-float hidden"></div>
+          
+          <div class="enemy-preview-controls">
+            <button class="btn-preview-ctrl btn-anim-toggle" title="Animation umschalten">
+              <span class="anim-icon">▶</span> <span class="anim-state-label">${st.state.toUpperCase()}</span>
             </button>
-            <button class="stage-btn btn-hit-test" title="Treffer-Reaktion testen">
-              <span>💥 Treffer</span>
+            <button class="btn-preview-ctrl btn-hit-test" title="Treffer testen (Hit Flash)">
+              💥 Hit
             </button>
           </div>
-          <div id="dmg-float-${enemy.id}" class="dmg-float hidden">-24!</div>
         </div>
 
-        <div class="enemy-stats-panel">
-          <div class="stat-bar-row">
-            <span class="stat-label">❤️ HP</span>
-            <div class="stat-track"><div class="stat-fill fill-hp" style="width: ${Math.min(100, (enemy.stats.hp / 120) * 100)}%;"></div></div>
-            <span class="stat-num">${enemy.stats.hp}</span>
+        <div class="enemy-info-body">
+          <div class="enemy-stats-row">
+            <div class="stat-pill" title="Lebenspunkte">
+              <span class="stat-label">HP</span>
+              <span class="stat-val">${enemy.stats.hp}</span>
+            </div>
+            <div class="stat-pill" title="Angriffskraft">
+              <span class="stat-label">ATK</span>
+              <span class="stat-val">${enemy.stats.atk}</span>
+            </div>
+            <div class="stat-pill" title="Lauftempo">
+              <span class="stat-label">SPD</span>
+              <span class="stat-val">${enemy.stats.spd}</span>
+            </div>
+            <div class="stat-pill" title="Angriffsreichweite">
+              <span class="stat-label">RNG</span>
+              <span class="stat-val">${enemy.stats.rng.split(' ')[0]}</span>
+            </div>
           </div>
-          <div class="stat-bar-row">
-            <span class="stat-label">⚔️ ATK</span>
-            <div class="stat-track"><div class="stat-fill fill-atk" style="width: ${Math.min(100, (enemy.stats.atk / 40) * 100)}%;"></div></div>
-            <span class="stat-num">${enemy.stats.atk}</span>
-          </div>
-          <div class="stat-chips-row">
-            <span class="stat-chip">⚡ Tempo: <b>${enemy.stats.spd}</b></span>
-            <span class="stat-chip">🎯 Reichweite: <b>${enemy.stats.rng}</b></span>
-          </div>
-        </div>
 
-        <div class="enemy-tactics-box">
-          <div class="tactic-item">
-            <span class="tactic-icon">⚡</span>
-            <div><strong>Verhalten & Stärken:</strong> ${enemy.behavior}</div>
+          <div class="enemy-section">
+            <div class="enemy-section-title">⚔️ Verhalten & Taktik</div>
+            <p class="enemy-text">${enemy.behavior}</p>
           </div>
-          <div class="tactic-item counter-item">
-            <span class="tactic-icon">🛡️</span>
-            <div><strong>Schwäche & Konter:</strong> ${enemy.counter}</div>
+
+          <div class="enemy-section">
+            <div class="enemy-section-title">🛡️ Schwäche & Konter</div>
+            <p class="enemy-text enemy-counter">${enemy.counter}</p>
           </div>
-        </div>
 
-        <div class="enemy-variants-row">
-          <span class="variants-title">🎨 Farbvarianten:</span>
-          ${enemy.variants.map(v => `<span class="variant-pill">${v}</span>`).join('')}
-        </div>
+          <div class="enemy-section">
+            <div class="enemy-section-title">📜 Geisterwald-Überlieferung</div>
+            <p class="enemy-lore">${enemy.lore}</p>
+          </div>
 
-        <div class="enemy-lore-quote">
-          <span>„${enemy.lore}“</span>
+          <div class="enemy-variants-section">
+            <div class="enemy-section-title">🎨 Biom-Farbvarianten</div>
+            <div class="variants-pills">
+              ${enemy.variants.map(v => `<span class="variant-pill">${v}</span>`).join('')}
+            </div>
+          </div>
         </div>
       `;
 
@@ -1745,7 +2313,8 @@ export class BestiaryManager {
       const canvas = this.canvases[enemy.id];
       if (canvas) {
         const ctx = canvas.getContext('2d');
-        ctx.imageSmoothingEnabled = false;
+        // Smooth paper rendering for curved Ghibli vector aesthetics
+        ctx.imageSmoothingEnabled = true;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         // Render enemy centered in 80x80 canvas (center at 40, 42)
