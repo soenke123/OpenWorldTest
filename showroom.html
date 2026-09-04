@@ -25,6 +25,9 @@
       <button id="btn-mode-playground" class="mode-btn">
         <span>🎮 Playground (Begehbar)</span>
       </button>
+      <button id="btn-mode-bestiary" class="mode-btn">
+        <span>👾 Bestiarium (20 Gegner)</span>
+      </button>
     </div>
 
     <!-- Quick Style Switcher (Available in Playground Mode) -->
@@ -556,8 +559,35 @@
       </div>
     </div>
   </section>
-
-  <!-- Script: Showroom Engine & Style Renderers -->
-  <script src="showroom.js"></script>
-</body>
-</html>
+ 
+   <!-- =======================================================
+        VIEW 3: BESTIARY VIEW (20 Interactive Animated Enemies)
+        ======================================================= -->
+   <section id="bestiary-view" class="hidden">
+     <div class="bestiary-hero">
+       <div class="bestiary-hero-badge">⚔️ Ocarina of Brawls • Monster-Kompendium</div>
+       <h1>👾 Das Bestiarium: 20 Gegner-Archetypen</h1>
+       <p>Entwickelt nach dem Prinzip <strong>Klasse statt Masse</strong>. Jeder Gegner besitzt eine eigene Silhouette, telegraphierte Angriffe, klare Schwächen, Farbvarianten über alle Biome und ein taktisches Konter-Verhalten.</p>
+ 
+       <!-- Category Filter Pills -->
+       <div id="bestiary-filters" class="filter-pills-row">
+         <button class="bestiary-filter-btn active" data-category="all">Alle (20)</button>
+         <button class="bestiary-filter-btn" data-category="range">🏹 Fernkampf (Range)</button>
+         <button class="bestiary-filter-btn" data-category="boss">👹 Trolle & Tanks</button>
+         <button class="bestiary-filter-btn" data-category="reptile">🐍 Schlangen & Würmer</button>
+         <button class="bestiary-filter-btn" data-category="mage">🔮 Magier</button>
+         <button class="bestiary-filter-btn" data-category="blob">🟢 Blobs & Slimes</button>
+         <button class="bestiary-filter-btn" data-category="beast">🐺 Wildtiere</button>
+         <button class="bestiary-filter-btn" data-category="void">🌌 Fiese Void-Wesen</button>
+         <button class="bestiary-filter-btn" data-category="elite">⚔️ Elite & Elementare</button>
+       </div>
+     </div>
+ 
+     <!-- 20 Enemies Grid -->
+     <div id="bestiary-grid" class="bestiary-grid"></div>
+   </section>
+ 
+   <!-- Script: Showroom Engine & Style Renderers -->
+   <script type="module" src="showroom.js"></script>
+ </body>
+ </html>

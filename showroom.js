@@ -1,3 +1,5 @@
+import { BestiaryManager } from './bestiary.js';
+
 /**
  * Welt-Design Showroom Engine
  * 5 distinct visual styles & render pipelines for the world.
@@ -2208,12 +2210,17 @@ class ShowroomApp {
     // DOM Elements
     this.galleryView = document.getElementById('gallery-view');
     this.playgroundView = document.getElementById('playground-view');
+    this.bestiaryView = document.getElementById('bestiary-view');
     this.btnModeGallery = document.getElementById('btn-mode-gallery');
     this.btnModePlayground = document.getElementById('btn-mode-playground');
+    this.btnModeBestiary = document.getElementById('btn-mode-bestiary');
     this.headerStyleSwitcher = document.getElementById('header-style-switcher');
     this.playgroundCanvas = document.getElementById('playground-canvas');
     this.playgroundCtx = this.playgroundCanvas.getContext('2d');
     this.crtOverlay = document.getElementById('crt-overlay');
+
+    this.bestiaryGrid = document.getElementById('bestiary-grid');
+    this.bestiaryManager = this.bestiaryGrid ? new BestiaryManager(this.bestiaryGrid) : null;
 
     // Mini preview canvases in Gallery
     this.previewCanvases = {
@@ -2242,6 +2249,9 @@ class ShowroomApp {
     // Navigation buttons
     this.btnModeGallery.addEventListener('click', () => this.setMode('gallery'));
     this.btnModePlayground.addEventListener('click', () => this.setMode('playground'));
+    if (this.btnModeBestiary) {
+      this.btnModeBestiary.addEventListener('click', () => this.setMode('bestiary'));
+    }
 
     // Quick style pill buttons in header
     document.querySelectorAll('.style-pill').forEach(btn => {
@@ -2290,16 +2300,28 @@ class ShowroomApp {
     if (mode === 'gallery') {
       this.galleryView.classList.remove('hidden');
       this.playgroundView.classList.add('hidden');
+      if (this.bestiaryView) this.bestiaryView.classList.add('hidden');
       this.headerStyleSwitcher.classList.add('hidden');
       this.btnModeGallery.classList.add('active');
       this.btnModePlayground.classList.remove('active');
-    } else {
+      if (this.btnModeBestiary) this.btnModeBestiary.classList.remove('active');
+    } else if (mode === 'playground') {
       this.galleryView.classList.add('hidden');
       this.playgroundView.classList.remove('hidden');
+      if (this.bestiaryView) this.bestiaryView.classList.add('hidden');
       this.headerStyleSwitcher.classList.remove('hidden');
       this.btnModeGallery.classList.remove('active');
       this.btnModePlayground.classList.add('active');
+      if (this.btnModeBestiary) this.btnModeBestiary.classList.remove('active');
       this.resize();
+    } else if (mode === 'bestiary') {
+      this.galleryView.classList.add('hidden');
+      this.playgroundView.classList.add('hidden');
+      if (this.bestiaryView) this.bestiaryView.classList.remove('hidden');
+      this.headerStyleSwitcher.classList.add('hidden');
+      this.btnModeGallery.classList.remove('active');
+      this.btnModePlayground.classList.remove('active');
+      if (this.btnModeBestiary) this.btnModeBestiary.classList.add('active');
     }
   }
 
@@ -2390,6 +2412,11 @@ class ShowroomApp {
 
   update(dt) {
     this.animTime += dt;
+
+    if (this.currentMode === 'bestiary') {
+      if (this.bestiaryManager) this.bestiaryManager.update(dt);
+      return;
+    }
 
     if (this.currentMode === 'playground') {
       let dx = 0;
