@@ -24,6 +24,36 @@
             <button id="btn-reset-player" class="dev-action-btn dev-reset-btn" title="Spieler respawnen und zurücksetzen (R)">
               🔄 Reset / Respawn
             </button>
+            <button id="btn-toggle-enemy-ai" class="dev-action-btn" title="Monster-KI umschalten (Aktiv / Friedlich)" style="color: #4ade80;">
+              👾 Monster-KI: Aktiv
+            </button>
+            <button id="btn-respawn-enemies" class="dev-action-btn" title="Alle 20 Monster neu spawnen">
+              🔄 Monster Respawnen
+            </button>
+            <div class="dev-teleport-control">
+              <select id="teleport-select" class="dev-teleport-select" title="Schnellreise zu Monster-Biomen">
+                <option value="">🚀 Schnellreise zu Monstern...</option>
+                <option value="38,46,overworld">Tau-Blobs (Grasland)</option>
+                <option value="22,38,overworld">Wald-Wildschweine (Wald)</option>
+                <option value="17,28,overworld">Waldläufer-Schützen (Wald)</option>
+                <option value="24,15,overworld">Schattenwölfe (Dunkelwald)</option>
+                <option value="25,68,overworld">Dünen-Schlund (Wüste)</option>
+                <option value="16,74,overworld">Kaiser-Skorpione (Wüste)</option>
+                <option value="88,16,overworld">Yeti-Wächter (Schnee)</option>
+                <option value="68,62,overworld">Sporen-Spucker (Sumpf)</option>
+                <option value="82,60,overworld">Smaragd-Natter (Sumpf)</option>
+                <option value="95,75,overworld">Teer-Schlamm (Sumpf)</option>
+                <option value="56,28,overworld">Moos-Koloss (Felsgebirge)</option>
+                <option value="70,35,overworld">Origami-Krieger (Bergwache)</option>
+                <option value="85,36,overworld">Laternen-Pyromant (Vulkan)</option>
+                <option value="108,45,overworld">Leeren-Verschlinger (Leere)</option>
+                <option value="115,55,overworld">Auge des Abgrunds (Leere)</option>
+                <option value="118,38,overworld">Schatten-Tentakel (Leere)</option>
+                <option value="32,26,main_complex">Höhlen-Spinnen (Höhlen)</option>
+                <option value="45,20,clouds">Wolken-Astrologe (Wolken)</option>
+                <option value="65,32,clouds">Wolken-Harpyien (Wolken)</option>
+              </select>
+            </div>
             <div class="dev-zoom-control">
               <span class="zoom-label">🔍 Zoom:</span>
               <button id="btn-zoom-out" class="zoom-step-btn" title="Herauszoomen">−</button>
@@ -53,6 +83,10 @@
           </div>
 
           <div class="hud-panel" id="status-panel">
+            <div class="status-row">
+              <span>❤️ Leben:</span>
+              <span id="hp-stat" class="hud-value" style="color: #4ade80;">100 / 100</span>
+            </div>
             <div class="status-row">
               <span>Geschwindigkeit:</span>
               <span id="speed-stat" class="hud-value">100%</span>

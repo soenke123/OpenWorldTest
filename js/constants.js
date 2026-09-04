@@ -193,6 +193,7 @@ export const PLAYER_CONFIG = {
   BASE_SPEED: 135,
   SPRINT_MULTIPLIER: 1.5,
   RADIUS: 5.5,
+  MAX_HP: 100,
   CANOPY_REVEAL_RADIUS: 52 // Exakter, scharfer Sichtkreis
 };
 
@@ -231,4 +232,21 @@ export const COMBAT_CONFIG = {
   ARROW_CHARGED_RANGE: 270,
   ARROW_CHARGE_TIME: 0.55,
   ARROW_PICKUP_RADIUS: 16
+};
+
+// Enemy AI & Gameplay Settings
+export const ENEMY_CONFIG = {
+  DETECTION_RADIUS_DEFAULT: 135,
+  DETECTION_RADIUS_SCOUT: 180,
+  DEAGGRO_RADIUS: 240,
+  WANDER_RADIUS: 42,
+  PACK_CALL_RADIUS: 110,
+  ATTACK_TELEGRAPH_TIME: 0.45,
+  ATTACK_RECOVERY_TIME: 0.65
+};
+
+export const LOOT_TYPES = {
+  HEART: 'heart',
+  ARROW: 'arrow',
+  SPIRIT_GEM: 'spirit_gem'
 };

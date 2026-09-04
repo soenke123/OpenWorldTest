@@ -8,6 +8,7 @@ import { Camera } from './camera.js';
 import { Minimap } from './minimap.js';
 import { TouchControls } from './touchControls.js';
 import { CombatManager } from './combat.js';
+import { EnemyManager } from './enemies.js';
 
 class Game {
   constructor() {
@@ -25,6 +26,7 @@ class Game {
 
     this.touchControls = new TouchControls(this.input, (action, isDown) => this.handleTouchButton(action, isDown));
     this.combat = new CombatManager(this);
+    this.enemyManager = new EnemyManager(this);
 
     // Multi-Dimension Maps & Core Systems
     this.overworldMap = new WorldMap();
@@ -55,6 +57,7 @@ class Game {
     this.initAmbientParticles();
 
     // HUD Elements
+    this.hpStatEl = document.getElementById('hp-stat');
     this.biomeNameEl = document.getElementById('biome-name');
     this.speedStatEl = document.getElementById('speed-stat');
     this.deathStatEl = document.getElementById('death-stat');
@@ -286,6 +289,53 @@ class Game {
       });
     }
 
+    // 2b. Monster AI Toggle Button
+    const btnToggleAI = document.getElementById('btn-toggle-enemy-ai');
+    if (btnToggleAI) {
+      btnToggleAI.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.enemyManager) {
+          this.enemyManager.aiActive = !this.enemyManager.aiActive;
+          btnToggleAI.textContent = this.enemyManager.aiActive ? '👾 Monster-KI: Aktiv' : '💤 Monster-KI: Friedlich';
+          btnToggleAI.style.color = this.enemyManager.aiActive ? '#4ade80' : '#94a3b8';
+          this.showToast(this.enemyManager.aiActive ? '👾 Monster-KI aktiviert!' : '💤 Monster sind nun friedlich!');
+        }
+      });
+    }
+
+    // 2c. Respawn All Enemies Button
+    const btnRespawnEnemies = document.getElementById('btn-respawn-enemies');
+    if (btnRespawnEnemies) {
+      btnRespawnEnemies.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.enemyManager) {
+          this.enemyManager.initSpawns();
+          this.showToast('✨ Alle 20 Monster-Gruppen neu gespawnt!');
+        }
+      });
+    }
+
+    // 2d. Biome / Monster Quick Teleport Dropdown
+    const teleportSelect = document.getElementById('teleport-select');
+    if (teleportSelect) {
+      teleportSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (!val) return;
+        const [tx, ty, dim] = val.split(',');
+        const targetX = parseInt(tx, 10) * TILE_SIZE + 8;
+        const targetY = parseInt(ty, 10) * TILE_SIZE + 8;
+        if (dim !== this.currentDimension) {
+          this.switchDimension(dim, targetX, targetY);
+        } else {
+          this.player.x = targetX;
+          this.player.y = targetY;
+          this.camera.follow(targetX, targetY);
+        }
+        this.showToast(`🚀 Schnellreise zu (${tx}, ${ty})!`);
+        e.target.value = '';
+      });
+    }
+
     // 3. Zoom Controls (Herauszoomen / Heranzoomen)
     const btnZoomOut = document.getElementById('btn-zoom-out');
     const btnZoomIn = document.getElementById('btn-zoom-in');
@@ -490,6 +540,7 @@ class Game {
 
     this.spriteManager.update(dt);
     this.player.update(dt, this.input);
+    if (this.enemyManager) this.enemyManager.update(dt, this.player, this.map, this.combat);
     if (this.combat) this.combat.update(dt);
     this.camera.follow(this.player.x, this.player.y);
     this.camera.update(dt);
@@ -685,6 +736,15 @@ class Game {
           shieldStatEl.style.color = pct < 30 ? '#ef4444' : '#38bdf8';
         }
       }
+    }
+
+    // 3. Update Player HP display
+    if (this.hpStatEl && this.player) {
+      const curHp = Math.max(0, Math.round(this.player.hp));
+      const maxHp = this.player.maxHp || 100;
+      this.hpStatEl.textContent = `${curHp} / ${maxHp}`;
+      const hpPct = curHp / maxHp;
+      this.hpStatEl.style.color = hpPct > 0.5 ? '#4ade80' : (hpPct > 0.25 ? '#facc15' : '#ef4444');
     }
   }
 
@@ -1663,6 +1723,26 @@ class Game {
       });
     }
 
+    // Active Enemies (Overworld)
+    if (this.enemyManager) {
+      const activeEnemies = this.enemyManager.getActiveEnemies();
+      for (const enemy of activeEnemies) {
+        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
+            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+          const eElev = enemy.elevation || 0;
+          const eSortY = enemy.y - eElev * ELEVATION_PIXEL_OFFSET;
+          renderList.push({
+            sortY: eSortY,
+            isPlayer: false,
+            isTree: false,
+            isKodama: false,
+            isEnemy: true,
+            enemy
+          });
+        }
+      }
+    }
+
     // Sort back-to-front by visual screen Y
     renderList.sort((a, b) => a.sortY - b.sortY);
 
@@ -1673,7 +1753,14 @@ class Game {
         this.renderPaperTree(item.tree, t, night, item.treeElev);
       } else if (item.isKodama) {
         this.renderKodamaSpirit(item.kodama, t, night, item.kElev);
+      } else if (item.isEnemy) {
+        item.enemy.render(this.ctx, t, night);
       }
+    }
+
+    // Render Collectible Loot Drops
+    if (this.enemyManager) {
+      this.enemyManager.renderLoot(this.ctx, t);
     }
   }
 
@@ -2089,7 +2176,18 @@ class Game {
       }
     }
 
-    // PASS 3: Player
+    // PASS 3: Cloud Enemies & Player
+    if (this.enemyManager) {
+      const cloudEnemies = this.enemyManager.getActiveEnemies();
+      for (const enemy of cloudEnemies) {
+        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
+            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+          enemy.render(this.ctx, t, 0.4);
+        }
+      }
+      this.enemyManager.renderLoot(this.ctx, t);
+    }
+
     this.player.render(this.ctx, this.spriteManager, t, 0.4);
 
     // Combat layer: flying arrows, slashes, hit effects, floating texts
@@ -2508,7 +2606,18 @@ class Game {
       }
     }
 
-    // PASS 3: Player
+    // PASS 3: Cave Enemies & Player
+    if (this.enemyManager) {
+      const caveEnemies = this.enemyManager.getActiveEnemies();
+      for (const enemy of caveEnemies) {
+        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
+            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+          enemy.render(this.ctx, t, 1.0);
+        }
+      }
+      this.enemyManager.renderLoot(this.ctx, t);
+    }
+
     this.player.render(this.ctx, this.spriteManager, t, 1.0);
 
     // Combat layer: flying arrows, slashes, hit effects, floating texts

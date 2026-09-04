@@ -132,6 +132,46 @@ canvas#gameCanvas {
   border-color: #3d4a68;
 }
 
+.dev-action-btn {
+  background: rgba(30, 41, 59, 0.85);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+.dev-action-btn:hover {
+  background: rgba(51, 65, 85, 0.95);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.dev-teleport-control {
+  width: 100%;
+}
+.dev-teleport-select {
+  width: 100%;
+  background: #1e293b;
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+}
+.dev-teleport-select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
 .dev-action-btn.dev-reset-btn {
   background: linear-gradient(135deg, #ef4444, #b91c1c);
   color: #fff;

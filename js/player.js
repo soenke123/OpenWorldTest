@@ -25,6 +25,14 @@ export class Player {
     this.deathTimer = 0;
     this.deathCount = 0;
 
+    // Health & Damage States
+    this.maxHp = PLAYER_CONFIG.MAX_HP || 100;
+    this.hp = this.maxHp;
+    this.hitFlash = 0;
+    this.invulnTimer = 0;
+    this.speedSlowTimer = 0;
+    this.speedSlowFactor = 1.0;
+
     this.particles = [];
 
     // Combat & Ability State (Dash, Melee, Shield, Ranged)
@@ -77,6 +85,11 @@ export class Player {
     this.lastTransitionTile = null;
     this.isDead = false;
     this.deathTimer = 0;
+    this.hp = this.maxHp;
+    this.hitFlash = 0;
+    this.invulnTimer = 0;
+    this.speedSlowTimer = 0;
+    this.speedSlowFactor = 1.0;
 
     // Reset combat states
     this.dash.active = false;
@@ -522,6 +535,16 @@ export class Player {
       this.respawn();
     }
 
+    // Health & Status Timers
+    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt);
+    if (this.invulnTimer > 0) this.invulnTimer = Math.max(0, this.invulnTimer - dt);
+    if (this.speedSlowTimer > 0) {
+      this.speedSlowTimer = Math.max(0, this.speedSlowTimer - dt);
+      if (this.speedSlowTimer <= 0) {
+        this.speedSlowFactor = 1.0;
+      }
+    }
+
     // 1. Dash timers & ghost fading
     if (this.dash.cooldown > 0) this.dash.cooldown -= dt;
     if (this.dash.active) {
@@ -709,6 +732,9 @@ export class Player {
       }
       if (this.melee.isSpinning) {
         speed *= 0.45;
+      }
+      if (this.speedSlowTimer > 0) {
+        speed *= this.speedSlowFactor;
       }
       this.currentSpeed = speed;
 
@@ -1007,6 +1033,74 @@ export class Player {
     }
   }
 
+  takeDamage(amount, dir = null) {
+    if (this.isDead || this.invulnTimer > 0 || this.transition) return false;
+
+    // 1. Dash-Ausweich-Unverwundbarkeit (I-Frames)
+    if (this.dash && this.dash.active) {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('💨 AUSGEWICHEN!', this.x, this.y - 18, '#67e8f9');
+      }
+      return 'dodged';
+    }
+
+    // 2. Schild-Block
+    if (this.shield && this.shield.active && this.shield.energy > 0) {
+      this.shield.energy = Math.max(0, this.shield.energy - amount * 0.85);
+      this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
+      if (this.game && this.game.combat) {
+        this.game.combat.addHitSparks(this.x, this.y, '#38bdf8', 14);
+        this.game.combat.addFloatingText('🛡️ GEBLOCKT!', this.x, this.y - 18, '#38bdf8');
+      }
+      if (this.shield.energy <= 0) {
+        this.shield.broken = true;
+        this.shield.stunTimer = COMBAT_CONFIG.SHIELD_BREAK_STUN || 1.2;
+        this.shield.active = false;
+        if (this.game && this.game.combat) {
+          this.game.combat.addFloatingText('💥 SCHILD ZERBROCHEN!', this.x, this.y - 26, '#ef4444');
+        }
+      }
+      return 'blocked';
+    }
+
+    // 3. Voller Treffer
+    this.hp = Math.max(0, this.hp - amount);
+    this.hitFlash = 0.3;
+    this.invulnTimer = 0.45;
+
+    // Knockback
+    if (dir) {
+      const kx = dir.x || 0;
+      const ky = dir.y || 0;
+      const dist = Math.hypot(kx, ky) || 1;
+      this.x += (kx / dist) * 14;
+      this.y += (ky / dist) * 14;
+    }
+
+    if (this.game && this.game.combat) {
+      this.game.combat.addHitSparks(this.x, this.y - 8, '#ef4444', 16);
+      this.game.combat.addFloatingText(`-${Math.round(amount)} HP`, this.x, this.y - 22, '#ef4444');
+    }
+
+    if (this.game && this.game.camera) {
+      this.game.camera.shake(6, 0.22);
+    }
+
+    if (this.hp <= 0) {
+      this.die('enemy');
+    }
+
+    return 'hit';
+  }
+
+  applySlow(factor = 0.45, duration = 2.0) {
+    this.speedSlowFactor = factor;
+    this.speedSlowTimer = duration;
+    if (this.game && this.game.combat) {
+      this.game.combat.addFloatingText('❄️ VERLANGSAMT', this.x, this.y - 22, '#38bdf8');
+    }
+  }
+
   die(cause = 'void') {
     if (this.isDead) return;
     this.isDead = true;
@@ -1285,6 +1379,19 @@ export class Player {
         ctx.fillRect(eyeBaseX - 2, eyeBaseY - 1, 1.5, 2);
         ctx.fillRect(eyeBaseX + 0.8, eyeBaseY - 1, 1.5, 2);
       }
+    }
+
+    // Hit Flash Tint on Player Body
+    if (this.hitFlash > 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.65)';
+      ctx.beginPath();
+      ctx.moveTo(px, py - 21 + bob);
+      ctx.lineTo(px + 8, py - 3 + bob);
+      ctx.lineTo(px - 8, py - 3 + bob);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
 
     // 3. Handheld Paper Lantern on Bamboo Pole (Held during Dusk & Night AND always Underground in Caves)
