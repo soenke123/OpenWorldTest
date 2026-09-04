@@ -10,69 +10,112 @@
   <div id="game-container">
     <canvas id="gameCanvas"></canvas>
 
-    <!-- HUD Overlay -->
-    <div id="hud">
-      <div class="hud-panel" id="biome-panel">
-        <span class="hud-label">Aktuelles Biom:</span>
-        <span id="biome-name" class="hud-value">Grasland</span>
+    <!-- Top Navigation & Controls Bar -->
+    <div id="top-bar">
+      <!-- Dev Tools Wrapper (Collapsible) -->
+      <div id="dev-tools-wrapper">
+        <button id="dev-tools-toggle" class="top-nav-btn dev-toggle-btn" title="Dev Tools ein-/ausklappen">
+          <span>⚙️ Dev Tools</span>
+          <span id="dev-toggle-icon" class="toggle-arrow">▼</span>
+        </button>
+
+        <div id="hud" class="dev-tools-dropdown">
+          <div class="hud-panel dev-quick-actions">
+            <button id="btn-reset-player" class="dev-action-btn dev-reset-btn" title="Spieler respawnen und zurücksetzen (R)">
+              🔄 Reset / Respawn
+            </button>
+            <div class="dev-zoom-control">
+              <span class="zoom-label">🔍 Zoom:</span>
+              <button id="btn-zoom-out" class="zoom-step-btn" title="Herauszoomen">−</button>
+              <span id="zoom-val-text">1.85x</span>
+              <button id="btn-zoom-in" class="zoom-step-btn" title="Heranzoomen">+</button>
+            </div>
+          </div>
+
+          <div class="hud-panel" id="biome-panel">
+            <span class="hud-label">Aktuelles Biom:</span>
+            <span id="biome-name" class="hud-value">Grasland</span>
+          </div>
+
+          <!-- Tag / Nacht & Lampion-Status -->
+          <div class="hud-panel" id="time-panel" style="pointer-events: auto; cursor: pointer;" title="Klicken oder 'T' drücken zum Umschalten (Tag / Dämmerung / Nacht)">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+              <span class="hud-label">Tageszeit:</span>
+              <span id="time-display" class="hud-value" style="color: #f59e0b;">18:30 🏮 Dämmerung</span>
+            </div>
+            <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; margin-top: 6px; overflow: hidden;">
+              <div id="time-bar-fill" style="width: 75%; height: 100%; background: linear-gradient(90deg, #38bdf8, #f59e0b, #ec4899, #6366f1); transition: width 0.3s;"></div>
+            </div>
+            <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px; display: flex; justify-content: space-between;">
+              <span>Taste <code>T</code> zum Wechseln</span>
+              <span id="lantern-status-hint" style="color: #fbbf24;">Lampions an</span>
+            </div>
+          </div>
+
+          <div class="hud-panel" id="status-panel">
+            <div class="status-row">
+              <span>Geschwindigkeit:</span>
+              <span id="speed-stat" class="hud-value">100%</span>
+            </div>
+            <div class="status-row">
+              <span>🛡️ Schild:</span>
+              <span id="shield-stat" class="hud-value" style="color: #38bdf8;">100%</span>
+            </div>
+            <div class="status-row">
+              <span>🏹 Pfeile:</span>
+              <span id="ammo-stat" class="hud-value" style="color: #38bdf8;">30 / 30</span>
+            </div>
+            <div class="status-row">
+              <span>Tode (Leere):</span>
+              <span id="death-stat" class="hud-value">0</span>
+            </div>
+            <div class="status-row">
+              <span>Position:</span>
+              <span id="pos-stat" class="hud-value">X: 0, Y: 0</span>
+            </div>
+          </div>
+
+          <a href="showroom.html" class="dev-showroom-link">
+            🎨 Zum Design Showroom
+          </a>
+        </div>
       </div>
 
-      <!-- Tag / Nacht & Lampion-Status -->
-      <div class="hud-panel" id="time-panel" style="pointer-events: auto; cursor: pointer;" title="Klicken oder 'T' drücken zum Umschalten (Tag / Dämmerung / Nacht)">
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-          <span class="hud-label">Tageszeit:</span>
-          <span id="time-display" class="hud-value" style="color: #f59e0b;">18:30 🏮 Dämmerung</span>
-        </div>
-        <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; margin-top: 6px; overflow: hidden;">
-          <div id="time-bar-fill" style="width: 75%; height: 100%; background: linear-gradient(90deg, #38bdf8, #f59e0b, #ec4899, #6366f1); transition: width 0.3s;"></div>
-        </div>
-        <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px; display: flex; justify-content: space-between;">
-          <span>Taste <code>T</code> zum Wechseln</span>
-          <span id="lantern-status-hint" style="color: #fbbf24;">Lampions an</span>
-        </div>
+      <!-- Center Controls: Vollbild & Showroom -->
+      <div id="top-center-controls">
+        <button id="fullscreen-btn" class="top-nav-btn fs-btn" title="Vollbildmodus aktivieren/beenden">
+          <span id="fs-icon">⛶</span> <span id="fs-text">Vollbild</span>
+        </button>
+        <a href="showroom.html" id="showroom-btn" class="top-nav-btn showroom-nav-btn">
+          <span>🎨 Showroom</span>
+        </a>
       </div>
 
-      <div class="hud-panel" id="status-panel">
-        <div class="status-row">
-          <span>Geschwindigkeit:</span>
-          <span id="speed-stat" class="hud-value">100%</span>
-        </div>
-        <div class="status-row">
-          <span>🛡️ Schild:</span>
-          <span id="shield-stat" class="hud-value" style="color: #38bdf8;">100%</span>
-        </div>
-        <div class="status-row">
-          <span>🏹 Pfeile:</span>
-          <span id="ammo-stat" class="hud-value" style="color: #38bdf8;">30 / 30</span>
-        </div>
-        <div class="status-row">
-          <span>Tode (Leere):</span>
-          <span id="death-stat" class="hud-value">0</span>
-        </div>
-        <div class="status-row">
-          <span>Position:</span>
-          <span id="pos-stat" class="hud-value">X: 0, Y: 0</span>
+      <!-- Minimap Container & Toggle Button -->
+      <div id="minimap-wrapper">
+        <button id="minimap-pill-btn" class="top-nav-btn minimap-pill-btn hidden" title="Minimap aufklappen">
+          <span>🗺️ Karte</span>
+        </button>
+
+        <div id="minimap-container">
+          <div class="minimap-header" id="minimap-header">
+            <span id="minimap-title">MINIMAP</span>
+            <button id="minimap-toggle-btn" class="minimap-close-btn" title="Minimap minimieren">✕</button>
+          </div>
+          <canvas id="minimapCanvas" width="200" height="150"></canvas>
+          <div class="minimap-legend" id="minimap-legend">
+            <span class="legend-item"><i class="dot grass"></i> Gras</span>
+            <span class="legend-item"><i class="dot desert"></i> Wüste</span>
+            <span class="legend-item"><i class="dot snow"></i> Schnee</span>
+            <span class="legend-item"><i class="dot swamp"></i> Sumpf</span>
+            <span class="legend-item"><i class="dot void"></i> Leere</span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Showroom Navigation Button -->
-    <a href="showroom.html" id="showroom-btn" style="position: absolute; top: 16px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #0d9488, #2563eb); color: white; text-decoration: none; padding: 8px 18px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; box-shadow: 0 4px 16px rgba(13, 148, 136, 0.45); display: flex; align-items: center; gap: 8px; z-index: 100; border: 1px solid rgba(255,255,255,0.25); transition: transform 0.2s, box-shadow 0.2s;">
-      <span>🎨 Design Showroom (8 Varianten)</span>
-    </a>
-
-    <!-- Minimap Container -->
-    <div id="minimap-container">
-      <div class="minimap-header" id="minimap-header">MINIMAP</div>
-      <canvas id="minimapCanvas" width="200" height="150"></canvas>
-      <div class="minimap-legend" id="minimap-legend">
-        <span class="legend-item"><i class="dot grass"></i> Gras</span>
-        <span class="legend-item"><i class="dot desert"></i> Wüste</span>
-        <span class="legend-item"><i class="dot snow"></i> Schnee</span>
-        <span class="legend-item"><i class="dot swamp"></i> Sumpf</span>
-        <span class="legend-item"><i class="dot void"></i> Leere</span>
-      </div>
-    </div>
+    <!-- Toast Notification for In-Game Feedback -->
+    <div id="game-toast" class="toast-hidden">🔄 Spieler zurückgesetzt!</div>
 
     <!-- Steuerung & Hilfetext -->
     <div id="controls-hint">

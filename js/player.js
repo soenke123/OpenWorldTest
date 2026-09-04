@@ -92,6 +92,7 @@ export class Player {
     this.shield.rechargeDelay = 0;
     this.shield.energy = COMBAT_CONFIG.SHIELD_MAX;
     this.ranged.charging = false;
+    this.ranged.ammo = COMBAT_CONFIG.MAX_AMMO;
 
     if (this.game && this.game.currentDimension !== 'overworld') {
       this.game.switchDimension('overworld', this.spawnX, this.spawnY);

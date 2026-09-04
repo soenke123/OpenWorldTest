@@ -34,22 +34,289 @@ canvas#gameCanvas {
   image-rendering: crisp-edges;
 }
 
-/* --- HUD Elements --- */
-#hud {
+/* --- Top Navigation & Controls Bar --- */
+#top-bar {
   position: absolute;
-  top: 16px;
-  left: 16px;
+  top: 10px;
+  left: 10px;
+  right: 10px;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: flex-start;
   pointer-events: none;
+  z-index: 120;
 }
 
+.top-nav-btn {
+  background: rgba(18, 22, 34, 0.88);
+  color: #f1f5f9;
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  transition: all 0.2s ease;
+  user-select: none;
+  text-decoration: none;
+}
+
+.top-nav-btn:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(56, 189, 248, 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+}
+
+.top-nav-btn:active {
+  transform: translateY(1px);
+}
+
+/* Dev Tools Toggle Button */
+.dev-toggle-btn {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.96));
+  border-color: rgba(56, 189, 248, 0.35);
+}
+.dev-toggle-btn.active {
+  border-color: #38bdf8;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
+}
+.toggle-arrow {
+  font-size: 0.65rem;
+  transition: transform 0.25s ease;
+  color: #94a3b8;
+}
+.dev-toggle-btn.active .toggle-arrow {
+  transform: rotate(180deg);
+  color: #38bdf8;
+}
+
+/* Dev Tools Dropdown Container */
+#dev-tools-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  pointer-events: auto;
+}
+
+#hud.dev-tools-dropdown {
+  position: static;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: opacity 0.25s ease, transform 0.25s ease, max-height 0.3s ease;
+  max-height: 80vh;
+  overflow-y: auto;
+  pointer-events: auto;
+}
+
+#hud.dev-tools-dropdown.collapsed {
+  display: none !important;
+}
+
+/* Dev Quick Actions (Reset & Zoom) */
+.dev-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(24, 28, 42, 0.94);
+  border-color: #3d4a68;
+}
+
+.dev-action-btn.dev-reset-btn {
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.45);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.dev-action-btn.dev-reset-btn:hover {
+  background: linear-gradient(135deg, #f87171, #dc2626);
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.6);
+  transform: translateY(-1px);
+}
+.dev-action-btn.dev-reset-btn:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.dev-zoom-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.7);
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.82rem;
+}
+.zoom-label {
+  color: #94a3b8;
+  font-weight: 600;
+}
+.zoom-step-btn {
+  background: rgba(51, 65, 85, 0.9);
+  color: #f8fafc;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  width: 28px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.zoom-step-btn:hover {
+  background: #0284c7;
+}
+.zoom-step-btn:active {
+  transform: scale(0.92);
+}
+#zoom-val-text {
+  font-weight: 700;
+  color: #38bdf8;
+  min-width: 48px;
+  text-align: center;
+  font-size: 0.88rem;
+}
+
+.dev-showroom-link {
+  color: #38bdf8;
+  text-decoration: none;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(30, 41, 59, 0.75);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  text-align: center;
+  transition: all 0.2s;
+}
+.dev-showroom-link:hover {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+}
+
+/* Center Controls */
+#top-center-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+.fs-btn {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.88), rgba(79, 70, 229, 0.88));
+  border-color: rgba(147, 197, 253, 0.45);
+}
+.fs-btn:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(99, 102, 241, 0.95));
+}
+.showroom-nav-btn {
+  background: linear-gradient(135deg, #0d9488, #2563eb);
+}
+
+/* Minimap Wrapper & Container */
+#minimap-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  pointer-events: auto;
+}
+
+#minimap-container {
+  position: static;
+  background: rgba(18, 20, 29, 0.92);
+  border: 2px solid #3d4663;
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#minimap-container.minimized {
+  display: none !important;
+}
+
+.minimap-close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #cbd5e1;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.minimap-close-btn:hover {
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+}
+
+.minimap-pill-btn {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.96));
+  border-color: rgba(56, 189, 248, 0.4);
+}
+.minimap-pill-btn.hidden {
+  display: none !important;
+}
+
+/* Toast Notification */
+#game-toast {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.94);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.6);
+  padding: 8px 18px;
+  border-radius: 20px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  z-index: 200;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+#game-toast.toast-hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
+}
+
+/* --- HUD Panel Standard Styles --- */
 .hud-panel {
-  background: rgba(18, 20, 29, 0.85);
+  background: rgba(18, 20, 29, 0.88);
   border: 2px solid #2f364a;
   border-radius: 8px;
-  padding: 10px 16px;
+  padding: 8px 14px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
 }
@@ -58,7 +325,7 @@ canvas#gameCanvas {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
 }
 
 #time-panel {
@@ -71,7 +338,7 @@ canvas#gameCanvas {
 
 .hud-label {
   color: #9aa4be;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -85,9 +352,9 @@ canvas#gameCanvas {
 .status-row {
   display: flex;
   justify-content: space-between;
-  gap: 20px;
-  font-size: 0.85rem;
-  margin-bottom: 4px;
+  gap: 16px;
+  font-size: 0.82rem;
+  margin-bottom: 3px;
 }
 .status-row:last-child {
   margin-bottom: 0;
@@ -96,26 +363,16 @@ canvas#gameCanvas {
   color: #9aa4be;
 }
 
-/* --- Minimap --- */
-#minimap-container {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background: rgba(18, 20, 29, 0.9);
-  border: 2px solid #3d4663;
-  border-radius: 8px;
-  padding: 8px;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
-  pointer-events: none;
-}
-
 .minimap-header {
   font-size: 0.75rem;
   letter-spacing: 1.5px;
   color: #9aa4be;
   font-weight: bold;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 6px;
+  gap: 8px;
 }
 
 #minimapCanvas {
@@ -528,19 +785,31 @@ canvas#gameCanvas {
 
 /* --- Responsive Adaptations for Mobile & Tablet Landscape --- */
 @media (max-width: 860px) and (orientation: landscape) {
-  #hud {
-    transform: scale(0.82);
+  #top-bar {
+    top: 6px;
+    left: 8px;
+    right: 8px;
+  }
+
+  .top-nav-btn {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+  }
+
+  #hud.dev-tools-dropdown {
+    transform: scale(0.85);
     transform-origin: top left;
-    gap: 6px;
+    max-height: 72vh;
+    gap: 5px;
   }
 
   #minimap-container {
-    transform: scale(0.78);
+    transform: scale(0.8);
     transform-origin: top right;
   }
 
   #showroom-btn {
-    display: none !important; /* Hide showroom button on smaller mobile screens to avoid overlap */
+    display: none !important; /* Im Top-Bar ausgeblendet, bleibt aber in Dev-Tools erreichbar */
   }
 
   #controls-hint {

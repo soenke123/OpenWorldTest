@@ -27,9 +27,9 @@ export class Minimap {
     this.updateHUD();
     this.renderStaticBackground();
   }
-
   updateHUD() {
-    const header = document.getElementById('minimap-header');
+    const titleEl = document.getElementById('minimap-title');
+    const header = titleEl || document.getElementById('minimap-header');
     const legend = document.getElementById('minimap-legend');
     if (!header || !legend) return;
 

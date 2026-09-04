@@ -3915,6 +3915,7 @@ class Player {
     this.shield.rechargeDelay = 0;
     this.shield.energy = COMBAT_CONFIG.SHIELD_MAX;
     this.ranged.charging = false;
+    this.ranged.ammo = COMBAT_CONFIG.MAX_AMMO;
 
     if (this.game && this.game.currentDimension !== 'overworld') {
       this.game.switchDimension('overworld', this.spawnX, this.spawnY);
@@ -5395,12 +5396,35 @@ class Camera {
     this.y = 0;
     this.viewportWidth = viewportWidth;
     this.viewportHeight = viewportHeight;
-    this.zoom = 3.0; // 3x zoom for crisp 16px pixel art
+    this.userZoom = null;
+    this.zoom = this.calculateDefaultZoom(viewportWidth, viewportHeight);
 
     this.mapWidth = MAP_WIDTH;
     this.mapHeight = MAP_HEIGHT;
     this.worldWidth = MAP_WIDTH * TILE_SIZE;
     this.worldHeight = MAP_HEIGHT * TILE_SIZE;
+  }
+
+  calculateDefaultZoom(width, height) {
+    if (typeof window !== 'undefined') {
+      const isTouch = (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches) ||
+                      (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+      const isSmallScreen = Math.min(width || window.innerWidth, height || window.innerHeight) <= 560;
+      if (isTouch || isSmallScreen) {
+        return 1.85; // Weitwinkel-Zoom für Smartphones & Touchscreens
+      }
+    }
+    return 3.0; // Klassischer 3x Pixel-Zoom auf Desktop-Monitoren
+  }
+
+  setZoom(val) {
+    this.zoom = Math.max(1.0, Math.min(4.0, Math.round(val * 100) / 100));
+    this.userZoom = this.zoom;
+    return this.zoom;
+  }
+
+  adjustZoom(delta) {
+    return this.setZoom(this.zoom + delta);
   }
 
   setWorldBounds(widthInTiles, heightInTiles) {
@@ -5413,6 +5437,9 @@ class Camera {
   resize(width, height) {
     this.viewportWidth = width;
     this.viewportHeight = height;
+    if (this.userZoom === null) {
+      this.zoom = this.calculateDefaultZoom(width, height);
+    }
   }
 
   follow(targetX, targetY) {
@@ -5505,9 +5532,9 @@ class Minimap {
     this.updateHUD();
     this.renderStaticBackground();
   }
-
   updateHUD() {
-    const header = document.getElementById('minimap-header');
+    const titleEl = document.getElementById('minimap-title');
+    const header = titleEl || document.getElementById('minimap-header');
     const legend = document.getElementById('minimap-legend');
     if (!header || !legend) return;
 
@@ -6901,6 +6928,159 @@ class Game {
     if (this.timePanelEl) {
       this.timePanelEl.addEventListener('click', () => this.cycleTime());
     }
+
+    // 1. Dev Tools Toggle (starts collapsed on mobile/touch screens)
+    const devToolsToggleBtn = document.getElementById('dev-tools-toggle');
+    const hudDropdown = document.getElementById('hud');
+    const isMobile = (typeof window !== 'undefined' && (
+      (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) ||
+      (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
+      Math.min(window.innerWidth, window.innerHeight) <= 600
+    ));
+
+    if (hudDropdown) {
+      if (isMobile) {
+        hudDropdown.classList.add('collapsed');
+        if (devToolsToggleBtn) devToolsToggleBtn.classList.remove('active');
+      } else {
+        if (devToolsToggleBtn) devToolsToggleBtn.classList.add('active');
+      }
+    }
+
+    if (devToolsToggleBtn && hudDropdown) {
+      devToolsToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isCollapsed = hudDropdown.classList.toggle('collapsed');
+        devToolsToggleBtn.classList.toggle('active', !isCollapsed);
+      });
+    }
+
+    // 2. Reset / Respawn Button in Dev Tools
+    const btnReset = document.getElementById('btn-reset-player');
+    if (btnReset) {
+      btnReset.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.player.respawn();
+        this.updateHUD();
+        this.showToast('🔄 Spieler zurückgesetzt & respawnt!');
+      });
+    }
+
+    // 3. Zoom Controls (Herauszoomen / Heranzoomen)
+    const btnZoomOut = document.getElementById('btn-zoom-out');
+    const btnZoomIn = document.getElementById('btn-zoom-in');
+    this.updateZoomDisplay();
+
+    if (btnZoomOut) {
+      btnZoomOut.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.camera.adjustZoom(-0.25);
+        this.updateZoomDisplay();
+      });
+    }
+    if (btnZoomIn) {
+      btnZoomIn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.camera.adjustZoom(+0.25);
+        this.updateZoomDisplay();
+      });
+    }
+
+    if (this.canvas) {
+      // Mouse wheel zoom
+      this.canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 0.2 : -0.2;
+        this.camera.adjustZoom(delta);
+        this.updateZoomDisplay();
+      }, { passive: false });
+    }
+
+    // 4. Minimap Collapse & Expand
+    const minimapContainer = document.getElementById('minimap-container');
+    const minimapToggleBtn = document.getElementById('minimap-toggle-btn');
+    const minimapPillBtn = document.getElementById('minimap-pill-btn');
+
+    if (minimapToggleBtn && minimapContainer && minimapPillBtn) {
+      minimapToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        minimapContainer.classList.add('minimized');
+        minimapPillBtn.classList.remove('hidden');
+      });
+
+      minimapPillBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        minimapContainer.classList.remove('minimized');
+        minimapPillBtn.classList.add('hidden');
+      });
+    }
+
+    // 5. Fullscreen Toggle (Vollbild)
+    const fsBtn = document.getElementById('fullscreen-btn');
+    const fsIcon = document.getElementById('fs-icon');
+    const fsText = document.getElementById('fs-text');
+
+    const updateFsUI = () => {
+      const isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+      if (fsIcon) fsIcon.textContent = isFs ? '🗗' : '⛶';
+      if (fsText) fsText.textContent = isFs ? 'Beenden' : 'Vollbild';
+    };
+
+    const toggleFs = () => {
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        const docEl = document.documentElement;
+        if (docEl.requestFullscreen) {
+          docEl.requestFullscreen().catch(() => {
+            this.showToast('Vollbild vom Browser eingeschränkt');
+          });
+        } else if (docEl.webkitRequestFullscreen) {
+          docEl.webkitRequestFullscreen();
+        } else if (docEl.mozRequestFullScreen) {
+          docEl.mozRequestFullScreen();
+        } else if (docEl.msRequestFullscreen) {
+          docEl.msRequestFullscreen();
+        } else {
+          this.showToast('Tipp: Auf iOS "Zum Home-Bildschirm" für Vollbild');
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+          document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+          document.msExitFullscreen();
+        }
+      }
+    };
+
+    if (fsBtn) {
+      fsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFs();
+      });
+    }
+    document.addEventListener('fullscreenchange', updateFsUI);
+    document.addEventListener('webkitfullscreenchange', updateFsUI);
+  }
+
+  updateZoomDisplay() {
+    const zoomValEl = document.getElementById('zoom-val-text');
+    if (zoomValEl && this.camera) {
+      zoomValEl.textContent = this.camera.zoom.toFixed(2) + 'x';
+    }
+  }
+
+  showToast(msg, duration = 2200) {
+    const toast = document.getElementById('game-toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.remove('toast-hidden');
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+    this.toastTimeout = setTimeout(() => {
+      toast.classList.add('toast-hidden');
+    }, duration);
   }
 
   handleTouchButton(action, isDown) {
@@ -6929,6 +7109,7 @@ class Game {
     this.canvas.height = window.innerHeight;
     this.ctx.imageSmoothingEnabled = false;
     this.camera.resize(this.canvas.width, this.canvas.height);
+    this.updateZoomDisplay();
 
     if (!this.canopyCanvas) {
       this.canopyCanvas = document.createElement('canvas');

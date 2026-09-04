@@ -6,12 +6,35 @@ export class Camera {
     this.y = 0;
     this.viewportWidth = viewportWidth;
     this.viewportHeight = viewportHeight;
-    this.zoom = 3.0; // 3x zoom for crisp 16px pixel art
+    this.userZoom = null;
+    this.zoom = this.calculateDefaultZoom(viewportWidth, viewportHeight);
 
     this.mapWidth = MAP_WIDTH;
     this.mapHeight = MAP_HEIGHT;
     this.worldWidth = MAP_WIDTH * TILE_SIZE;
     this.worldHeight = MAP_HEIGHT * TILE_SIZE;
+  }
+
+  calculateDefaultZoom(width, height) {
+    if (typeof window !== 'undefined') {
+      const isTouch = (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches) ||
+                      (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0);
+      const isSmallScreen = Math.min(width || window.innerWidth, height || window.innerHeight) <= 560;
+      if (isTouch || isSmallScreen) {
+        return 1.85; // Weitwinkel-Zoom für Smartphones & Touchscreens
+      }
+    }
+    return 3.0; // Klassischer 3x Pixel-Zoom auf Desktop-Monitoren
+  }
+
+  setZoom(val) {
+    this.zoom = Math.max(1.0, Math.min(4.0, Math.round(val * 100) / 100));
+    this.userZoom = this.zoom;
+    return this.zoom;
+  }
+
+  adjustZoom(delta) {
+    return this.setZoom(this.zoom + delta);
   }
 
   setWorldBounds(widthInTiles, heightInTiles) {
@@ -24,6 +47,9 @@ export class Camera {
   resize(width, height) {
     this.viewportWidth = width;
     this.viewportHeight = height;
+    if (this.userZoom === null) {
+      this.zoom = this.calculateDefaultZoom(width, height);
+    }
   }
 
   follow(targetX, targetY) {
