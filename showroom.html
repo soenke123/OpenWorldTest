@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welt-Design Showroom • 8 Grafik-Varianten (inkl. Dark Ghibli 2.5D Paper Look)</title>
+  <link rel="stylesheet" href="showroom.css">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header id="showroom-header">
+    <div class="brand-section">
+      <div class="brand-title">
+        <span>🎨 Welt-Design Showroom</span>
+        <span class="brand-tag">8 Varianten</span>
+      </div>
+    </div>
+
+    <!-- Mode Toggle: Gallery vs Interactive Playground -->
+    <div class="mode-toggle">
+      <button id="btn-mode-gallery" class="mode-btn active">
+        <span>🔲 Galerie (Übersicht)</span>
+      </button>
+      <button id="btn-mode-playground" class="mode-btn">
+        <span>🎮 Playground (Begehbar)</span>
+      </button>
+    </div>
+
+    <!-- Quick Style Switcher (Available in Playground Mode) -->
+    <div id="header-style-switcher" class="style-switcher hidden">
+      <button class="style-pill active" data-style="retro">
+        <span>🌿 16-Bit Retro</span>
+        <kbd>1</kbd>
+      </button>
+      <button class="style-pill" data-style="grimdark">
+        <span>⚔️ Grimdark</span>
+        <kbd>2</kbd>
+      </button>
+      <button class="style-pill" data-style="cyber">
+        <span>⚡ Cyber-Void</span>
+        <kbd>3</kbd>
+      </button>
+      <button class="style-pill" data-style="ghibli">
+        <span>🌸 Cozy Ghibli</span>
+        <kbd>4</kbd>
+      </button>
+      <button class="style-pill" data-style="isometric">
+        <span>📐 Isometrisch 2.5D</span>
+        <kbd>5</kbd>
+      </button>
+      <button class="style-pill" data-style="paper_mononoke">
+        <span>📜 Geisterwald</span>
+        <kbd>6</kbd>
+      </button>
+      <button class="style-pill" data-style="paper_spores">
+        <span>🍄 Sporen-Dschungel</span>
+        <kbd>7</kbd>
+      </button>
+      <button class="style-pill" data-style="paper_lantern">
+        <span>🏮 Lampion-Zauber</span>
+        <kbd>8</kbd>
+      </button>
+    </div>
+
+    <!-- Back to Game Link -->
+    <div class="nav-actions">
+      <a href="index.html" class="back-link">
+        <span>⬅ Zum Hauptspiel</span>
+      </a>
+    </div>
+  </header>
+
+  <!-- =======================================================
+       VIEW 1: GALLERY VIEW (Comparison of all 5 styles)
+       ======================================================= -->
+  <main id="gallery-view">
+    <div class="gallery-hero">
+      <h1>8 Visuelle Richtungen für das Spiel</h1>
+      <p>Vergleiche 8 völlig unterschiedliche Rendering- und Kunststile für die Spielwelt – inklusive der neuen <strong>Dark Ghibli 2.5D Paper Look Kollektion</strong>. Klicke auf eine Vorschau oder den Button, um den jeweiligen Stil sofort interaktiv zu steuern!</p>
+    </div>
+
+    <!-- Dark Ghibli 2.5D Paper Collection Banner -->
+    <div class="paper-collection-banner">
+      <div class="paper-banner-content">
+        <h2><span>✂️ Dark Ghibli • 2.5D Paper Look Kollektion</span> <span class="paper-badge-pill">3 Neue Varianten</span></h2>
+        <p>Atmosphärischer 2.5D-Papierschnitt-Look (Papercraft & Scherenschnitt mit mehrstufigen Papierebenen, Schattentiefe und Falzkanten) – kombiniert mit der poetisch-mystischen Dämmerungsstimmung von Studio Ghibli.</p>
+      </div>
+    </div>
+
+    <div class="cards-grid">
+      <!-- Card 6: Mononoke Geisterwald (2.5D Paper) -->
+      <div class="showroom-card" data-style="paper_mononoke">
+        <div class="card-header-bar">
+          <div class="card-title-group">
+            <span class="card-icon">📜</span>
+            <span class="card-name">Dark Ghibli: Mononoke Geisterwald</span>
+          </div>
+          <span class="card-badge badge-paper-mononoke">2.5D Papercraft</span>
+        </div>
+        <div class="card-canvas-wrap" onclick="showroom.openPlayground('paper_mononoke')">
+          <canvas id="canvas-preview-paper_mononoke" width="400" height="220"></canvas>
+          <span class="card-canvas-hint">Klicken zum Spielen</span>
+        </div>
+        <div class="card-body">
+          <p class="card-description">
+            Mystischer Dämmerungswald im 2.5D-Papierschnitt-Look. Ausgestanzter Karton mit weichen Papierschatten, schwebende weiße Kodama-Waldgeister, uralte Moosbäume und geisterhafter Cyan-Nebel.
+          </p>
+          <div class="card-palette-row">
+            <span class="card-palette-label">Palette:</span>
+            <div class="color-swatch" style="background: #1a1f36" title="Nacht-Indigo (#1a1f36)"></div>
+            <div class="color-swatch" style="background: #2d5a43" title="Jade-Moos (#2d5a43)"></div>
+            <div class="color-swatch" style="background: #475b52" title="Karton-Schiefer (#475b52)"></div>
+            <div class="color-swatch" style="background: #5eead4" title="Kodama-Cyan (#5eead4)"></div>
+            <div class="color-swatch" style="background: #f8fafc" title="Geister-Weiß (#f8fafc)"></div>
+          </div>
+          <div class="card-features">
+            <span class="feature-tag">2.5D Scherenschnitt</span>
+            <span class="feature-tag">Karton-Schattenwurf</span>
+            <span class="feature-tag">Kodama-Geister</span>
+            <span class="feature-tag">Dämmerungs-Aura</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn-play-style" onclick="showroom.openPlayground('paper_mononoke')">
+              <span>🎮 Diesen Stil spielen</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 7: Biolumineszenter Sporen-Dschungel (2.5D Paper) -->
+      <div class="showroom-card" data-style="paper_spores">
+        <div class="card-header-bar">
+          <div class="card-title-group">
+            <span class="card-icon">🍄</span>
+            <span class="card-name">Dark Ghibli: Sporen-Dschungel</span>
+          </div>
+          <span class="card-badge badge-paper-spores">Biolumineszenz</span>
+        </div>
+        <div class="card-canvas-wrap" onclick="showroom.openPlayground('paper_spores')">
+          <canvas id="canvas-preview-paper_spores" width="400" height="220"></canvas>
+          <span class="card-canvas-hint">Klicken zum Spielen</span>
+        </div>
+        <div class="card-body">
+          <p class="card-description">
+            Inspiriert von <em>Nausicaä aus dem Tal der Winde</em>. Geschichtete Papierscheiben mit leuchtenden biolumineszenten Schnittkanten, riesige papierene Pilze und sanft rotierende Glüh-Sporen.
+          </p>
+          <div class="card-palette-row">
+            <span class="card-palette-label">Palette:</span>
+            <div class="color-swatch" style="background: #160f26" title="Tiefviolett (#160f26)"></div>
+            <div class="color-swatch" style="background: #0f2830" title="Petrol-Karton (#0f2830)"></div>
+            <div class="color-swatch" style="background: #22d3ee" title="Sporen-Türkis (#22d3ee)"></div>
+            <div class="color-swatch" style="background: #f472b6" title="Leucht-Magenta (#f472b6)"></div>
+            <div class="color-swatch" style="background: #fbbf24" title="Bernstein-Glut (#fbbf24)"></div>
+          </div>
+          <div class="card-features">
+            <span class="feature-tag">Glow-Cutout-Edges</span>
+            <span class="feature-tag">Leuchtende Sporen</span>
+            <span class="feature-tag">Nausicaä-Vibe</span>
+            <span class="feature-tag">Pilz-Cardstock</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn-play-style" onclick="showroom.openPlayground('paper_spores')">
+              <span>🎮 Diesen Stil spielen</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 8: Chihiro Lampion-Dämmerung (2.5D Paper) -->
+      <div class="showroom-card" data-style="paper_lantern">
+        <div class="card-header-bar">
+          <div class="card-title-group">
+            <span class="card-icon">🏮</span>
+            <span class="card-name">Dark Ghibli: Lampion-Dämmerung</span>
+          </div>
+          <span class="card-badge badge-paper-lantern">Kiri-e & Shadowbox</span>
+        </div>
+        <div class="card-canvas-wrap" onclick="showroom.openPlayground('paper_lantern')">
+          <canvas id="canvas-preview-paper_lantern" width="400" height="220"></canvas>
+          <span class="card-canvas-hint">Klicken zum Spielen</span>
+        </div>
+        <div class="card-body">
+          <p class="card-description">
+            Inspiriert von <em>Chihiros Reise ins Zauberland</em>. Ein pop-up-artiger japanischer Scherenschnitt (Kiri-e) bei Einbruch der Nacht. Schaukelnde rote Papierlampions werfen warmes Licht auf dunkle Papierebenen und schwebende Talismane.
+          </p>
+          <div class="card-palette-row">
+            <span class="card-palette-label">Palette:</span>
+            <div class="color-swatch" style="background: #1c1527" title="Abend-Indigo (#1c1527)"></div>
+            <div class="color-swatch" style="background: #120c1a" title="Schatten-Schwarz (#120c1a)"></div>
+            <div class="color-swatch" style="background: #ea580c" title="Lampion-Rot (#ea580c)"></div>
+            <div class="color-swatch" style="background: #fbbf24" title="Pergament-Licht (#fbbf24)"></div>
+            <div class="color-swatch" style="background: #f8fafc" title="Ofuda-Talisman (#f8fafc)"></div>
+          </div>
+          <div class="card-features">
+            <span class="feature-tag">Warmer Lampionschein</span>
+            <span class="feature-tag">Shadowbox-Tiefe</span>
+            <span class="feature-tag">Origami & Kiri-e</span>
+            <span class="feature-tag">Ofuda-Zettel</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn-play-style" onclick="showroom.openPlayground('paper_lantern')">
+              <span>🎮 Diesen Stil spielen</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 1: 16-Bit Retro Nostalgia -->
+      <div class="showroom-card" data-style="retro">
+        <div class="card-header-bar">
+          <div class="card-title-group">
+            <span class="card-icon">🌿</span>
+            <span class="card-name">16-Bit Retro Nostalgie</span>
+          </div>
+          <span class="card-badge badge-retro">Classic Pixel</span>
+        </div>
+        <div class="card-canvas-wrap" onclick="showroom.openPlayground('retro')">
+          <canvas id="canvas-preview-retro" width="400" height="220"></canvas>
+          <span class="card-canvas-hint">Klicken zum Spielen</span>
+        </div>
+        <div class="card-body">
+          <p class="card-description">
+            Klassischer Handheld- & SNES-Look im Stil von <em>Zelda: The Minish Cap</em> und <em>Golden Sun</em>. Satte, warme Farben, klare 1px Outlines, verspielte Blumen, glitzerndes Schaumwasser und lebendige Baumkronen.
+          </p>
+          <div class="card-palette-row">
+            <span class="card-palette-label">Palette:</span>
+            <div class="color-swatch" style="background: #489c3e" title="Smaragdgras (#489c3e)"></div>
+            <div class="color-swatch" style="background: #2578d4" title="Saphirwasser (#2578d4)"></div>
+            <div class="color-swatch" style="background: #dfb867" title="Wüstengold (#dfb867)"></div>
+            <div class="color-swatch" style="background: #e24949" title="Klassik-Rot (#e24949)"></div>
+            <div class="color-swatch" style="background: #8b3ab8" title="Magie-Lila (#8b3ab8)"></div>
+          </div>
+          <div class="card-features">
+            <span class="feature-tag">16x16 Pixelart</span>
+            <span class="feature-tag">Dunkle Outlines</span>
+            <span class="feature-tag">Warme Farbpalette</span>
+            <span class="feature-tag">Chibi-Charakter</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn-play-style" onclick="showroom.openPlayground('retro')">
+              <span>🎮 Diesen Stil spielen</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Grimdark Gothic / Souls-like -->
+      <div class="showroom-card" data-style="grimdark">
+        <div class="card-header-bar">
+          <div class="card-title-group">
+            <span class="card-icon">⚔️</span>
+            <span class="card-name">Grimdark Gothic</span>
+          </div>
+          <span class="card-badge badge-grimdark">Dark Souls / Diablo</span>
+        </div>
+        <div class="card-canvas-wrap" onclick="showroom.openPlayground('grimdark')">
+          <canvas id="canvas-preview-grimdark" width="400" height="220"></canvas>
+          <span class="card-canvas-hint">Klicken zum Spielen</span>
+        </div>
+        <div class="card-body">
+          <p class="card-description">
+            Düster, bedrohlich und rau. Entsättigte Töne, verwitterte Steine und ein <strong>dynamischer Fackelschein</strong> des Wanderers mit harter Dunkelheit und Vignette. Knorrige Dornenbäume und aufsteigende Asche-Glutfunken.
+          </p>
+          <div class="card-palette-row">
+            <span class="card-palette-label">Palette:</span>
+            <div class="color-swatch" style="background: #141416" title="Pechschwarz (#141416)"></div>
+            <div class="color-swatch" style="background: #3e4438" title="Moosgrau (#3e4438)"></div>
+            <div class="color-swatch" style="background: #713828" title="Rostbraun (#713828)"></div>
+            <div class="color-swatch" style="background: #ff7722" title="Fackellicht (#ff7722)"></div>
+            <div class="color-swatch" style="background: #8b1c2b" title="Blutrot (#8b1c2b)"></div>
+          </div>
+          <div class="card-features">
+            <span class="feature-tag">Dynamisches Licht</span>
+            <span class="feature-tag">Radial-Vignette</span>
+            <span class="feature-tag">Glut & Nebel</span>
+            <span class="feature-tag">Chiaroscuro-Kontrast</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn-play-style" onclick="showroom.openPlayground('grimdark')">
+              <span>🎮 Diesen Stil spielen</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Cyber-Void Synthwave -->
+      <div class="showroom-card" data-style="cyber">
+        <div class="card-header-bar">
+          <div class="card-title-group">
+            <span class="card-icon">⚡</span>
+            <span class="card-name">Cyber-Void Synthwave</span>
+          </div>
+          <span class="card-badge badge-cyber">Neon Sci-Fi</span>
+        </div>
+        <div class="card-canvas-wrap" onclick="showroom.openPlayground('cyber')">
+          <canvas id="canvas-preview-cyber" width="400" height="220"></canvas>
+          <span class="card-canvas-hint">Klicken zum Spielen</span>
+        </div>
+        <div class="card-body">
+          <p class="card-description">
+            Tiefschwarze Void-Hintergründe mit leuchtenden Neon-Vektorgittern im Stil von <em>Hyper Light Drifter</em> und <em>Tron</em>. Neon-Cyan, Laser-Magenta und leuchtende Kristall-Bäume mit pulsierenden Schaltkreisen und Bewegungs-Trails.
+          </p>
+          <div class="card-palette-row">
+            <span class="card-palette-label">Palette:</span>
+            <div class="color-swatch" style="background: #05050d" title="Deep Void (#05050d)"></div>
+            <div class="color-swatch" style="background: #00f0ff" title="Neon Cyan (#00f0ff)"></div>
+            <div class="color-swatch" style="background: #ff0077" title="Laser Magenta (#ff0077)"></div>
+            <div class="color-swatch" style="background: #39ff14" title="Bio Acid (#39ff14)"></div>
+            <div class="color-swatch" style="background: #a855f7" title="Matrix Violet (#a855f7)"></div>
+          </div>
+          <div class="card-features">
+            <span class="feature-tag">Neon-Glow Shader</span>
+            <span class="feature-tag">Vektorgitter-Boden</span>
+            <span class="feature-tag">Afterimage Trails</span>
+            <span class="feature-tag">CRT-Scanlines (Opt.)</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn-play-style" onclick="showroom.openPlayground('cyber')">
+              <span>🎮 Diesen Stil spielen</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4: Cozy Ghibli Watercolor -->
+      <div class="showroom-card" data-style="ghibli">
+        <div class="card-header-bar">
+          <div class="card-title-group">
+            <span class="card-icon">🌸</span>
+            <span class="card-name">Cozy Ghibli Aquarell</span>
+          </div>
+          <span class="card-badge badge-ghibli">Painterly Pastel</span>
+        </div>
+        <div class="card-canvas-wrap" onclick="showroom.openPlayground('ghibli')">
+          <canvas id="canvas-preview-ghibli" width="400" height="220"></canvas>
+          <span class="card-canvas-hint">Klicken zum Spielen</span>
+        </div>
+        <div class="card-body">
+          <p class="card-description">
+            Sanfte, malerische Pastellfarben auf Pergamentpapier ohne harte Pixelränder – inspiriert von <em>Studio Ghibli</em> und <em>Townscaper</em>. Schwebende Kirschblüten, sanft ziehende Wolkenschatten und ein friedlicher Wanderer mit Strohhut.
+          </p>
+          <div class="card-palette-row">
+            <span class="card-palette-label">Palette:</span>
+            <div class="color-swatch" style="background: #fbf7ee" title="Cremepapier (#fbf7ee)"></div>
+            <div class="color-swatch" style="background: #6ebd85" title="Salbeigrün (#6ebd85)"></div>
+            <div class="color-swatch" style="background: #f7bb97" title="Pfirsichdüne (#f7bb97)"></div>
+            <div class="color-swatch" style="background: #6baed6" title="Himmelwasser (#6baed6)"></div>
+            <div class="color-swatch" style="background: #f472b6" title="Sakura-Rosa (#f472b6)"></div>
+          </div>
+          <div class="card-features">
+            <span class="feature-tag">Ohne schwarze Ränder</span>
+            <span class="feature-tag">Aquarell-Wäsche</span>
+            <span class="feature-tag">Wolkenschatten</span>
+            <span class="feature-tag">Sakura-Blütenpartikel</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn-play-style" onclick="showroom.openPlayground('ghibli')">
+              <span>🎮 Diesen Stil spielen</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 5: Isometrisches 2.5D Diorama -->
+      <div class="showroom-card" data-style="isometric">
+        <div class="card-header-bar">
+          <div class="card-title-group">
+            <span class="card-icon">📐</span>
+            <span class="card-name">Isometrisches 2.5D Diorama</span>
+          </div>
+          <span class="card-badge badge-isometric">Tactical Voxel</span>
+        </div>
+        <div class="card-canvas-wrap" onclick="showroom.openPlayground('isometric')">
+          <canvas id="canvas-preview-isometric" width="400" height="220"></canvas>
+          <span class="card-canvas-hint">Klicken zum Spielen</span>
+        </div>
+        <div class="card-body">
+          <p class="card-description">
+            Perspektivenwechsel in echte <strong>2.5D-Isometrie</strong> (30° Diamant-Raster) mit sichtbaren Höhenstufen und Klippen! Sauber beleuchtete 3D-Bodenblöcke mit schattierten Seiten, prismatischen Bäumen und taktischer Raumtiefe.
+          </p>
+          <div class="card-palette-row">
+            <span class="card-palette-label">Palette:</span>
+            <div class="color-swatch" style="background: #50b04a" title="Isometrisches Gras (#50b04a)"></div>
+            <div class="color-swatch" style="background: #398834" title="Schattierte Klippe (#398834)"></div>
+            <div class="color-swatch" style="background: #2b7bc4" title="Tiefes Flussbett (#2b7bc4)"></div>
+            <div class="color-swatch" style="background: #e2c070" title="Plateau-Sand (#e2c070)"></div>
+            <div class="color-swatch" style="background: #7c3aed" title="Leeren-Monolith (#7c3aed)"></div>
+          </div>
+          <div class="card-features">
+            <span class="feature-tag">Echte 2.5D Isometrie</span>
+            <span class="feature-tag">Klippen-Höhenstufen</span>
+            <span class="feature-tag">Diagonalschatten</span>
+            <span class="feature-tag">Diorama-Ästhetik</span>
+          </div>
+          <div class="card-actions">
+            <button class="btn-play-style" onclick="showroom.openPlayground('isometric')">
+              <span>🎮 Diesen Stil spielen</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparison Matrix Table -->
+    <section class="comparison-section">
+      <h2 class="comparison-title">Stil-Vergleich & Design-Entscheidungshilfe</h2>
+      <p class="comparison-subtitle">Welcher Stil passt zu welchem Spieldesign und welcher Atmosphäre?</p>
+      
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Stil-Richtung</th>
+            <th>Vibe & Atmosphäre</th>
+            <th>Grafischer Schwerpunkt</th>
+            <th>Asset-Produktion</th>
+            <th>Bestes Genre</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>🌿 16-Bit Retro</strong></td>
+            <td>Nostalgisch, lebendig, abenteuerlich</td>
+            <td>Detaillierte Sprites mit klaren Outlines</td>
+            <td>Mittel (etablierte Pixelart-Workflows)</td>
+            <td>Klassisches Action-RPG, Adventure</td>
+          </tr>
+          <tr>
+            <td><strong>⚔️ Grimdark Gothic</strong></td>
+            <td>Düster, klaustrophobisch, herausfordernd</td>
+            <td>Dynamisches Fackellicht & Schattenspiel</td>
+            <td>Mittel bis hoch (Beleuchtungslogik & Texturen)</td>
+            <td>Survival-RPG, Roguelike, Dark Fantasy</td>
+          </tr>
+          <tr>
+            <td><strong>⚡ Cyber Synthwave</strong></td>
+            <td>Futuristisch, energetisch, modern</td>
+            <td>Glow-Shader, Vektoren & Partikel-Trails</td>
+            <td>Niedrig bis mittel (sehr algorithmisch machbar)</td>
+            <td>Fast-Paced Action, Bullet Hell, Sci-Fi Mystery</td>
+          </tr>
+          <tr>
+            <td><strong>🌸 Cozy Ghibli</strong></td>
+            <td>Entspannend, poetisch, warmherzig</td>
+            <td>Lineless Aquarell-Wäsche, Wolkenschatten</td>
+            <td>Mittel (organische weiche Shapes)</td>
+            <td>Erkundung, Farming, Story-Driven Exploration</td>
+          </tr>
+          <tr>
+            <td><strong>📐 Isometrisch 2.5D</strong></td>
+            <td>Strukturiert, übersichtlich, räumlich</td>
+            <td>Höhenstufen, Klippen & 3D-Block-Projektion</td>
+            <td>Höher (mehr Winkel/Kollisions-Tiefe)</td>
+            <td>Tactical RPG, Base-Builder, Rätselspiel</td>
+          </tr>
+          <tr>
+            <td><strong>📜 Dark Ghibli: Mononoke</strong></td>
+            <td>Mystisch, ehrfürchtig, verzauberte Nacht</td>
+            <td>2.5D-Papierschnitt mit Schatten & Kodama-Geistern</td>
+            <td>Mittel (organische Vektor-/Papierebenen)</td>
+            <td>Mystery-Adventure, Erkundungs-RPG</td>
+          </tr>
+          <tr>
+            <td><strong>🍄 Dark Ghibli: Sporen</strong></td>
+            <td>Fremdartig, giftig-schön, leuchtend</td>
+            <td>Biolumineszente Schnittkanten & Sporenauren</td>
+            <td>Mittel (Leuchteffekte auf Kartonagen)</td>
+            <td>Survival-Erkundung, Sci-Fi-Fantasy</td>
+          </tr>
+          <tr>
+            <td><strong>🏮 Dark Ghibli: Lampion</strong></td>
+            <td>Nostalgisch, warm-schaurig, lebendig</td>
+            <td>Warmer Lampionschein auf Kiri-e Scherenschnitt</td>
+            <td>Mittel (Lichtgradienten & Papierschatten)</td>
+            <td>Story-Adventure, Folkloristisches RPG</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- =======================================================
+       VIEW 2: PLAYGROUND VIEW (Full Interactive Playable Mode)
+       ======================================================= -->
+  <section id="playground-view" class="hidden">
+    <canvas id="playground-canvas"></canvas>
+    <div id="crt-overlay"></div>
+
+    <!-- Biome Quick-Travel Bar (Top Center) -->
+    <div id="biome-bar">
+      <button class="biome-btn active" data-biome="grass" onclick="showroom.teleportTo('grass')">
+        <span>🌿 Grasland</span>
+      </button>
+      <button class="biome-btn" data-biome="desert" onclick="showroom.teleportTo('desert')">
+        <span>🏜️ Wüste</span>
+      </button>
+      <button class="biome-btn" data-biome="snow" onclick="showroom.teleportTo('snow')">
+        <span>❄️ Schnee</span>
+      </button>
+      <button class="biome-btn" data-biome="swamp" onclick="showroom.teleportTo('swamp')">
+        <span>🌲 Sumpf</span>
+      </button>
+      <button class="biome-btn" data-biome="void" onclick="showroom.teleportTo('void')">
+        <span>🌌 Void</span>
+      </button>
+    </div>
+
+    <!-- Atmosphere / Settings Panel (Top Right) -->
+    <div id="tweak-panel">
+      <div class="tweak-title">Atmosphäre & Ansicht</div>
+
+      <div class="tweak-row">
+        <span>Tageszeit:</span>
+        <select id="select-time" class="tweak-select" onchange="showroom.setTimeOfDay(this.value)">
+          <option value="day">Sonnig (Tag)</option>
+          <option value="sunset">Abendrot (Dämmerung)</option>
+          <option value="night">Nacht (Mondlicht)</option>
+        </select>
+      </div>
+
+      <div class="tweak-row">
+        <span>Kamera Zoom:</span>
+        <select id="select-zoom" class="tweak-select" onchange="showroom.setZoom(parseFloat(this.value))">
+          <option value="1.0">1.0x (Normal)</option>
+          <option value="1.5" selected>1.5x (Detail)</option>
+          <option value="2.0">2.0x (Nahaufnahme)</option>
+        </select>
+      </div>
+
+      <div class="tweak-row">
+        <span>Scanlines / CRT:</span>
+        <input type="checkbox" id="check-crt" class="tweak-toggle" onchange="showroom.toggleCRT(this.checked)">
+      </div>
+
+      <div class="tweak-row">
+        <span>Partikel-Effekte:</span>
+        <input type="checkbox" id="check-particles" class="tweak-toggle" checked onchange="showroom.toggleParticles(this.checked)">
+      </div>
+    </div>
+
+    <!-- Active Style Floating Card (Bottom Left) -->
+    <div id="active-style-card">
+      <div class="active-style-title">
+        <span id="active-style-name" class="active-style-name">16-Bit Retro</span>
+        <span id="active-style-badge" class="card-badge badge-retro">Retro</span>
+      </div>
+      <p id="active-style-desc" class="active-style-desc">
+        Klassische pixelgenaue Handheld-Grafik mit satten Farben und Umrandungen.
+      </p>
+
+      <div id="active-style-palette" class="style-palette-row"></div>
+
+      <div class="controls-hint-box">
+        <div><strong>Steuerung:</strong> <code>WASD</code> / <code>Pfeiltasten</code> | <code>Shift</code> Sprinten</div>
+        <div><strong>Stil-Wechsel:</strong> Tasten <code>1</code>, <code>2</code>, <code>3</code>, <code>4</code>, <code>5</code></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Script: Showroom Engine & Style Renderers -->
+  <script src="showroom.js"></script>
+</body>
+</html>

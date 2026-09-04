@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Ocarina of Brawls</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD Overlay -->
+    <div id="hud">
+      <div class="hud-panel" id="biome-panel">
+        <span class="hud-label">Aktuelles Biom:</span>
+        <span id="biome-name" class="hud-value">Grasland</span>
+      </div>
+
+      <!-- Tag / Nacht & Lampion-Status -->
+      <div class="hud-panel" id="time-panel" style="pointer-events: auto; cursor: pointer;" title="Klicken oder 'T' drücken zum Umschalten (Tag / Dämmerung / Nacht)">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+          <span class="hud-label">Tageszeit:</span>
+          <span id="time-display" class="hud-value" style="color: #f59e0b;">18:30 🏮 Dämmerung</span>
+        </div>
+        <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px; margin-top: 6px; overflow: hidden;">
+          <div id="time-bar-fill" style="width: 75%; height: 100%; background: linear-gradient(90deg, #38bdf8, #f59e0b, #ec4899, #6366f1); transition: width 0.3s;"></div>
+        </div>
+        <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 4px; display: flex; justify-content: space-between;">
+          <span>Taste <code>T</code> zum Wechseln</span>
+          <span id="lantern-status-hint" style="color: #fbbf24;">Lampions an</span>
+        </div>
+      </div>
+
+      <div class="hud-panel" id="status-panel">
+        <div class="status-row">
+          <span>Geschwindigkeit:</span>
+          <span id="speed-stat" class="hud-value">100%</span>
+        </div>
+        <div class="status-row">
+          <span>🛡️ Schild:</span>
+          <span id="shield-stat" class="hud-value" style="color: #38bdf8;">100%</span>
+        </div>
+        <div class="status-row">
+          <span>🏹 Pfeile:</span>
+          <span id="ammo-stat" class="hud-value" style="color: #38bdf8;">30 / 30</span>
+        </div>
+        <div class="status-row">
+          <span>Tode (Leere):</span>
+          <span id="death-stat" class="hud-value">0</span>
+        </div>
+        <div class="status-row">
+          <span>Position:</span>
+          <span id="pos-stat" class="hud-value">X: 0, Y: 0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Showroom Navigation Button -->
+    <a href="showroom.html" id="showroom-btn" style="position: absolute; top: 16px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #0d9488, #2563eb); color: white; text-decoration: none; padding: 8px 18px; border-radius: 20px; font-weight: 600; font-size: 0.85rem; box-shadow: 0 4px 16px rgba(13, 148, 136, 0.45); display: flex; align-items: center; gap: 8px; z-index: 100; border: 1px solid rgba(255,255,255,0.25); transition: transform 0.2s, box-shadow 0.2s;">
+      <span>🎨 Design Showroom (8 Varianten)</span>
+    </a>
+
+    <!-- Minimap Container -->
+    <div id="minimap-container">
+      <div class="minimap-header" id="minimap-header">MINIMAP</div>
+      <canvas id="minimapCanvas" width="200" height="150"></canvas>
+      <div class="minimap-legend" id="minimap-legend">
+        <span class="legend-item"><i class="dot grass"></i> Gras</span>
+        <span class="legend-item"><i class="dot desert"></i> Wüste</span>
+        <span class="legend-item"><i class="dot snow"></i> Schnee</span>
+        <span class="legend-item"><i class="dot swamp"></i> Sumpf</span>
+        <span class="legend-item"><i class="dot void"></i> Leere</span>
+      </div>
+    </div>
+
+    <!-- Steuerung & Hilfetext -->
+    <div id="controls-hint">
+      <strong>Steuerung:</strong> <code>WASD</code> | <code>Leertaste</code> = Dash | <code>J / Klick</code> = Schwert | <code>K / Rechtsklick</code> = Schild | <code>L / F</code> = Bogen | <code>T</code> = Zeit | <code>R</code> = Respawn
+    </div>
+
+    <!-- Mobile & Tablet Touch Steuerung (Querformat) -->
+    <div id="touch-controls" class="hidden">
+      <!-- Virtueller Joystick (unten links) -->
+      <div id="touch-joystick-zone">
+        <div id="touch-joystick-base">
+          <div id="touch-joystick-knob"></div>
+        </div>
+      </div>
+
+      <!-- 4 Action Buttons (unten rechts) -->
+      <div id="touch-buttons-zone">
+        <button class="touch-btn btn-y" data-action="Y" aria-label="Button Y Schild">
+          <span class="btn-letter">Y</span>
+          <span class="btn-sub">🛡️ Schild</span>
+          <div class="btn-meter-bar"><div id="shield-meter-fill"></div></div>
+        </button>
+        <button class="touch-btn btn-x" data-action="X" aria-label="Button X Bogen">
+          <span class="btn-letter">X</span>
+          <span class="btn-sub">🏹 Bogen</span>
+          <span id="ammo-count" class="btn-badge">30</span>
+        </button>
+        <button class="touch-btn btn-b" data-action="B" aria-label="Button B Schwert">
+          <span class="btn-letter">B</span>
+          <span class="btn-sub">⚔️ Schwert</span>
+        </button>
+        <button class="touch-btn btn-a" data-action="A" aria-label="Button A Dash">
+          <span class="btn-letter">A</span>
+          <span class="btn-sub">💨 Dash</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Rotate Device Overlay für Hochformat -->
+    <div id="rotate-device-overlay" class="hidden">
+      <div class="rotate-box">
+        <div class="rotate-icon">📱↻</div>
+        <h3>Querformat empfohlen</h3>
+        <p>Bitte drehe dein Smartphone oder Tablet ins Querformat (Landscape) für das beste Spielerlebnis.</p>
+      </div>
+    </div>
+
+    <!-- Death Screen Overlay -->
+    <div id="death-overlay" class="hidden">
+      <div class="death-box">
+        <h2>IN DIE LEERE GESTÜRZT!</h2>
+        <p>Der Abgrund hat dich verschlungen...</p>
+        <span class="respawn-timer">Respawn wird ausgeführt...</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="bundle.js"></script>
+</body>
+</html>

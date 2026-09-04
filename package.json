@@ -1,0 +1,10 @@
+{
+  "name": "ocarina-of-brawls",
+  "version": "1.0.0",
+  "description": "Ocarina of Brawls - 2D Top-Down Pixel Art Action Brawler",
+  "type": "module",
+  "scripts": {
+    "build": "node build.js",
+    "start": "node server.js"
+  }
+}

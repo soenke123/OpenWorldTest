@@ -1,0 +1,9498 @@
+(function() {
+
+// --- constants.js ---
+// 16x16 Tile Size for fine, detailed pixel-art and organic shapes
+const TILE_SIZE = 16;
+
+// World Dimensions in Tiles (130 x 90 = 2080 x 1440 px)
+const MAP_WIDTH = 130;
+const MAP_HEIGHT = 90;
+
+// Dimensions / Worlds
+const DIMENSIONS = {
+  OVERWORLD: 'overworld',
+  CAVES: 'caves',
+  CLOUDS: 'clouds'
+};
+
+// Biome Names
+const BIOMES = {
+  GRASSLAND: 'Grasland & Wald',
+  DESERT: 'Wüste & Treibsand',
+  SNOW: 'Schnee & Eislande',
+  SWAMP: 'Düsterer Sumpf',
+  VOID: 'Die Leere (Void)',
+  CAVES_MAIN: 'Tiefenhöhlen & Unterirdischer See',
+  CAVES_SUB: 'Kristall-Unterhöhle',
+  CAVES_GROTTO: 'Versteckte Grotte',
+  CLOUDS: 'Rosa Wolkenreich'
+};
+
+// Ground Tiles (Base Terrain)
+const TILES = {
+  GRASS: 1,
+  DIRT: 2,
+  SAND: 3,
+  SNOW: 4,
+  SWAMP_GROUND: 5,
+  VOID_GROUND: 6,
+  WATER: 10,
+  SWAMP_WATER: 11,
+  QUICKSAND: 12,
+  VOID_LAKE: 13,
+  BRIDGE_H: 14,
+  BRIDGE_V: 15,
+
+  // Cloud World (Rosa Wolken & Regenbogen)
+  CLOUD_PINK: 20,
+  RAINBOW_BRIDGE_H: 21,
+  RAINBOW_BRIDGE_V: 22,
+  SKY_ABYSS: 23, // Freier Himmel (beim Betreten fällt man auf die Oberwelt zurück)
+
+  // Cave System (Unterirdische Höhlen & Seen)
+  CAVE_FLOOR: 30,
+  CAVE_WALL: 31,
+  CAVE_WATER: 32, // Unterirdischer See
+  CAVE_HOLE_EXIT: 33, // Lichtschacht / Aufstieg zur Oberwelt
+  CAVE_LADDER_DOWN: 34, // Abgang zur Unterhöhle
+  CAVE_LADDER_UP: 35 // Aufgang aus Unterhöhle
+};
+
+// Objects & Decorations (Sit on top of ground with TRANSPARENT background)
+const OBJECTS = {
+  NONE: 0,
+  ROCK_STONE: 1,
+  ROCK_ICE: 2,
+  ROCK_VOID: 3,
+  BUSH: 4,
+  CACTUS: 5,
+  MUSHROOM: 6,
+  TREE_TRUNK: 7,
+  FERN: 8,
+  FALLEN_LOG: 9,
+  FOREST_FLOWERS: 10,
+  MUSHROOM_BROWN: 11,
+  STONE_TORO: 12,
+  TORII_GATE: 13,
+  TRAMPOLINE: 14,
+  SHRINE: 15,
+  CAVE_ENTRANCE: 16,
+  STALAGMITE: 17,
+  GLOW_CRYSTAL: 18,
+  CAVE_MUSHROOM_GLOW: 19,
+  TORCH: 20,
+  TRAINING_DUMMY: 21
+};
+
+// Tree species & types for organic diverse forests
+const TREES = {
+  OAK: 1,
+  PINE: 2,
+  BIRCH: 3,
+  BLOSSOM: 4,
+  AUTUMN: 5,
+  SNOWY_PINE: 6,
+  SWAMP_WILLOW: 7,
+  PALM: 8,
+  SAPLING: 9,
+  DEADWOOD: 10
+};
+
+// Terrain layer hierarchy for organic edge transitions (higher overlaps lower)
+const TILE_LAYER_ORDER = {
+  [TILES.WATER]: 0,
+  [TILES.SWAMP_WATER]: 1,
+  [TILES.VOID_LAKE]: 2,
+  [TILES.QUICKSAND]: 3,
+  [TILES.SAND]: 10,
+  [TILES.DIRT]: 15,
+  [TILES.SWAMP_GROUND]: 18,
+  [TILES.GRASS]: 20,
+  [TILES.SNOW]: 25,
+  [TILES.VOID_GROUND]: 30,
+  [TILES.BRIDGE_H]: 40,
+  [TILES.BRIDGE_V]: 40
+};
+
+// Overlay / Canopy
+const CANOPY = {
+  NONE: 0,
+  TREE_CROWN: 1
+};
+
+// Elevation Levels (Höhenebenen: -1 = Loch/Senke, 0 = Boden, 1 = Podest Stufe 1, 2 = Podest Stufe 2)
+const ELEVATION = {
+  HOLE: -1,
+  GROUND: 0,
+  LEVEL_1: 1,
+  LEVEL_2: 2
+};
+
+// Ramps / Slopes (Schrägen / Aufgänge zwischen Ebenen)
+const RAMPS = {
+  NONE: 0,
+  UP_NORTH: 1, // Führt nach Norden bergauf (nach Süden bergab)
+  UP_SOUTH: 2, // Führt nach Süden bergauf (nach Norden bergab)
+  UP_WEST: 3,  // Führt nach Westen bergauf (nach Osten bergab)
+  UP_EAST: 4   // Führt nach Osten bergauf (nach Westen bergab)
+};
+
+const ELEVATION_PIXEL_OFFSET = 7; // Visuelle Kantenhöhe in Pixeln pro Stufe
+
+// Ground Tile Properties
+const TILE_PROPS = {
+  [TILES.GRASS]:        { name: 'Gras', solid: false, speedMod: 1.0, biome: BIOMES.GRASSLAND, minimapColor: '#489c3e' },
+  [TILES.DIRT]:         { name: 'Erdboden', solid: false, speedMod: 1.0, biome: BIOMES.GRASSLAND, minimapColor: '#7a5433' },
+  [TILES.SAND]:         { name: 'Wüstensand', solid: false, speedMod: 1.0, biome: BIOMES.DESERT, minimapColor: '#dfb867' },
+  [TILES.SNOW]:         { name: 'Schnee', solid: false, speedMod: 1.0, biome: BIOMES.SNOW, minimapColor: '#eaf1f8' },
+  [TILES.SWAMP_GROUND]: { name: 'Sumpfboden', solid: false, speedMod: 0.85, biome: BIOMES.SWAMP, minimapColor: '#445434' },
+  [TILES.VOID_GROUND]:  { name: 'Leerenboden', solid: false, speedMod: 1.0, biome: BIOMES.VOID, minimapColor: '#301348' },
+  [TILES.WATER]:        { name: 'Wasser', solid: true, speedMod: 0.0, biome: BIOMES.GRASSLAND, minimapColor: '#2670ba' },
+  [TILES.SWAMP_WATER]:  { name: 'Sumpfwasser', solid: true, speedMod: 0.0, biome: BIOMES.SWAMP, minimapColor: '#263b28' },
+  [TILES.QUICKSAND]:    { name: 'Treibsand', solid: false, speedMod: 0.35, biome: BIOMES.DESERT, minimapColor: '#a67b36' },
+  [TILES.VOID_LAKE]:    { name: 'Leeren-Abgrund', solid: false, deadly: true, speedMod: 0.0, biome: BIOMES.VOID, minimapColor: '#0c0214' },
+  [TILES.BRIDGE_H]:     { name: 'Holzbrücke', solid: false, speedMod: 1.0, biome: BIOMES.GRASSLAND, minimapColor: '#8a552b' },
+  [TILES.BRIDGE_V]:     { name: 'Holzbrücke', solid: false, speedMod: 1.0, biome: BIOMES.GRASSLAND, minimapColor: '#8a552b' },
+  // Cloud World
+  [TILES.CLOUD_PINK]:        { name: 'Rosa Wolke', solid: false, speedMod: 1.0, biome: BIOMES.CLOUDS, minimapColor: '#f472b6' },
+  [TILES.RAINBOW_BRIDGE_H]:  { name: 'Regenbogenbrücke', solid: false, speedMod: 1.15, biome: BIOMES.CLOUDS, minimapColor: '#facc15' },
+  [TILES.RAINBOW_BRIDGE_V]:  { name: 'Regenbogenbrücke', solid: false, speedMod: 1.15, biome: BIOMES.CLOUDS, minimapColor: '#facc15' },
+  [TILES.SKY_ABYSS]:         { name: 'Freier Himmel', solid: false, fallZone: true, speedMod: 1.0, biome: BIOMES.CLOUDS, minimapColor: '#1e1b4b' },
+  // Caves
+  [TILES.CAVE_FLOOR]:        { name: 'Höhlenboden', solid: false, speedMod: 1.0, biome: BIOMES.CAVES_MAIN, minimapColor: '#334155' },
+  [TILES.CAVE_WALL]:         { name: 'Höhlenwand', solid: true, speedMod: 0.0, biome: BIOMES.CAVES_MAIN, minimapColor: '#0f172a' },
+  [TILES.CAVE_WATER]:        { name: 'Unterirdischer See', solid: true, speedMod: 0.0, biome: BIOMES.CAVES_MAIN, minimapColor: '#0ea5e9' },
+  [TILES.CAVE_HOLE_EXIT]:    { name: 'Lichtschacht (Oberwelt)', solid: false, speedMod: 1.0, biome: BIOMES.CAVES_MAIN, minimapColor: '#fef08a' },
+  [TILES.CAVE_LADDER_DOWN]:  { name: 'Abgang zur Unterhöhle', solid: false, speedMod: 1.0, biome: BIOMES.CAVES_MAIN, minimapColor: '#cbd5e1' },
+  [TILES.CAVE_LADDER_UP]:    { name: 'Aufgang zur Haupthöhle', solid: false, speedMod: 1.0, biome: BIOMES.CAVES_SUB, minimapColor: '#cbd5e1' }
+};
+
+// Object Properties
+const OBJ_PROPS = {
+  [OBJECTS.ROCK_STONE]:          { solid: true,  name: 'Felsen' },
+  [OBJECTS.ROCK_ICE]:            { solid: true,  name: 'Eisfelsen' },
+  [OBJECTS.ROCK_VOID]:           { solid: true,  name: 'Leerenkristall' },
+  [OBJECTS.BUSH]:                { solid: false, name: 'Busch' },
+  [OBJECTS.CACTUS]:              { solid: true,  name: 'Kaktus' },
+  [OBJECTS.MUSHROOM]:            { solid: false, name: 'Fliegenpilz' },
+  [OBJECTS.MUSHROOM_BROWN]:      { solid: false, name: 'Waldpilze' },
+  [OBJECTS.TREE_TRUNK]:          { solid: true,  name: 'Baumstumpf' },
+  [OBJECTS.FERN]:                { solid: false, name: 'Wald-Farn' },
+  [OBJECTS.FALLEN_LOG]:          { solid: true,  name: 'Moosiger Holzstamm' },
+  [OBJECTS.FOREST_FLOWERS]:      { solid: false, name: 'Waldblumen' },
+  [OBJECTS.STONE_TORO]:          { solid: true,  name: 'Steinlaterne (Tōrō)' },
+  [OBJECTS.TORII_GATE]:          { solid: false, name: 'Torii-Schreintor' },
+  [OBJECTS.TRAMPOLINE]:          { solid: false, name: 'Bambus-Trampolin' },
+  [OBJECTS.SHRINE]:              { solid: true,  name: 'Uralter Geister-Schrein' },
+  [OBJECTS.CAVE_ENTRANCE]:       { solid: false, name: 'Höhlenschlund' },
+  [OBJECTS.STALAGMITE]:          { solid: true,  name: 'Tropfstein / Stalagmit' },
+  [OBJECTS.GLOW_CRYSTAL]:        { solid: true,  name: 'Fluoreszierender Kristall' },
+  [OBJECTS.CAVE_MUSHROOM_GLOW]:  { solid: false, name: 'Leuchtender Höhlenpilz' },
+  [OBJECTS.TRAINING_DUMMY]:      { solid: true,  name: 'Trainingspuppe' }
+};
+
+// Player Settings for 16px Scale
+const PLAYER_CONFIG = {
+  BASE_SPEED: 135,
+  SPRINT_MULTIPLIER: 1.5,
+  RADIUS: 5.5,
+  CANOPY_REVEAL_RADIUS: 52 // Exakter, scharfer Sichtkreis
+};
+
+// Combat & Ability Settings (Zelda / Smash Bros Inspired)
+const COMBAT_CONFIG = {
+  // Dash
+  DASH_DURATION: 0.18,
+  DASH_SPEED: 265,
+  DASH_COOLDOWN: 0.42,
+
+  // Melee & Combo
+  COMBO_WINDOW: 0.44,
+  COMBO_SLASH_RADIUS: 28,
+  COMBO_THRUST_RANGE: 48,
+  COMBO_THRUST_WIDTH: 22,
+  COMBO_THRUST_KNOCKBACK: 320,
+  COMBO_THRUST_LUNGE: 18,
+  COMBO_RECOVERY_PAUSE: 0.38,
+  SPIN_RADIUS: 48,
+  SPIN_CHARGE_TIME: 0.45,
+  SPIN_KNOCKBACK: 290,
+
+  // Shield
+  SHIELD_MAX: 100,
+  SHIELD_DRAIN_RATE: 22,
+  SHIELD_RECHARGE_RATE: 20,
+  SHIELD_RECHARGE_DELAY: 1.0, // 1.0s Pause bevor Schild auflädt (wenn nicht zerbrochen)
+  SHIELD_STUN_TIME: 1.2,
+  SHIELD_RADIUS: 22,
+
+  // Ranged (Bow & Arrow)
+  MAX_AMMO: 30,
+  ARROW_SPEED: 330,
+  ARROW_CHARGED_SPEED: 580,
+  ARROW_RANGE: 165,
+  ARROW_CHARGED_RANGE: 270,
+  ARROW_CHARGE_TIME: 0.55,
+  ARROW_PICKUP_RADIUS: 16
+};
+
+
+// --- noise.js ---
+// Fast 2D Simplex/Perlin-style Gradient Noise for organic terrain generation
+class Noise2D {
+  constructor(seed = 12345) {
+    this.p = new Uint8Array(512);
+    this.permutation = new Uint8Array(256);
+    let s = seed;
+    for (let i = 0; i < 256; i++) {
+      s = (s * 16807) % 2147483647;
+      this.permutation[i] = i;
+    }
+    for (let i = 255; i > 0; i--) {
+      s = (s * 16807) % 2147483647;
+      const j = s % (i + 1);
+      const temp = this.permutation[i];
+      this.permutation[i] = this.permutation[j];
+      this.permutation[j] = temp;
+    }
+    for (let i = 0; i < 512; i++) {
+      this.p[i] = this.permutation[i & 255];
+    }
+  }
+
+  fade(t) {
+    return t * t * t * (t * (t * 6 - 15) + 10);
+  }
+
+  lerp(t, a, b) {
+    return a + t * (b - a);
+  }
+
+  grad(hash, x, y) {
+    const h = hash & 7;
+    const u = h < 4 ? x : y;
+    const v = h < 4 ? y : x;
+    return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+  }
+
+  noise(x, y) {
+    const X = Math.floor(x) & 255;
+    const Y = Math.floor(y) & 255;
+    const xf = x - Math.floor(x);
+    const yf = y - Math.floor(y);
+
+    const u = this.fade(xf);
+    const v = this.fade(yf);
+
+    const A = this.p[X] + Y;
+    const B = this.p[X + 1] + Y;
+
+    return this.lerp(
+      v,
+      this.lerp(u, this.grad(this.p[A], xf, yf), this.grad(this.p[B], xf - 1, yf)),
+      this.lerp(u, this.grad(this.p[A + 1], xf, yf - 1), this.grad(this.p[B + 1], xf - 1, yf - 1))
+    );
+  }
+
+  // Fractal Brownian Motion for rich multi-scale natural features
+  fbm(x, y, octaves = 4, persistence = 0.5) {
+    let total = 0;
+    let frequency = 1;
+    let amplitude = 1;
+    let maxValue = 0;
+    for (let i = 0; i < octaves; i++) {
+      total += this.noise(x * frequency, y * frequency) * amplitude;
+      maxValue += amplitude;
+      amplitude *= persistence;
+      frequency *= 2;
+    }
+    return total / maxValue;
+  }
+}
+
+
+// --- sprites.js ---
+
+function createTileCanvas(width = TILE_SIZE, height = TILE_SIZE) {
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  return { canvas, ctx };
+}
+
+// Simple deterministic hash for procedural variation
+function hash(x, y, seed = 0) {
+  let h = (x * 374761393 + y * 668265263 + seed * 1274126177) ^ 0x5bf03635;
+  h = (h ^ (h >> 13)) * 1274126177;
+  return ((h ^ (h >> 16)) >>> 0) / 4294967296;
+}
+
+// ----------------------------------------------------
+// 1. GROUND TILES (Multiple variations for organic look)
+// ----------------------------------------------------
+function generateGrassSprites() {
+  const variations = [];
+  for (let v = 0; v < 4; v++) {
+    const { canvas, ctx } = createTileCanvas();
+    ctx.fillStyle = '#489c3e';
+    ctx.fillRect(0, 0, 16, 16);
+
+    // Varied grass blades
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        const r = hash(x, y, v * 10 + 1);
+        if (r > 0.82) {
+          ctx.fillStyle = '#59b54e';
+          ctx.fillRect(x, y, 1, 1);
+        } else if (r < 0.14) {
+          ctx.fillStyle = '#3a8332';
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+
+    // Occasional tiny wild flower on variation 2 & 3
+    if (v === 2) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(7, 8, 2, 2);
+      ctx.fillStyle = '#ffdf4a';
+      ctx.fillRect(7, 8, 1, 1);
+    } else if (v === 3) {
+      ctx.fillStyle = '#4cc7ff';
+      ctx.fillRect(11, 4, 1, 2);
+    }
+
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateDirtSprites() {
+  const variations = [];
+  for (let v = 0; v < 3; v++) {
+    const { canvas, ctx } = createTileCanvas();
+    ctx.fillStyle = '#7a5433';
+    ctx.fillRect(0, 0, 16, 16);
+
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        const r = hash(x, y, v * 20 + 3);
+        if (r > 0.8) {
+          ctx.fillStyle = '#8f653e';
+          ctx.fillRect(x, y, 1, 1);
+        } else if (r < 0.2) {
+          ctx.fillStyle = '#614023';
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+    // Small pebbles
+    if (v === 1) {
+      ctx.fillStyle = '#9e8167';
+      ctx.fillRect(4, 9, 2, 1);
+    }
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateSandSprites() {
+  const variations = [];
+  for (let v = 0; v < 3; v++) {
+    const { canvas, ctx } = createTileCanvas();
+    ctx.fillStyle = '#dfb867';
+    ctx.fillRect(0, 0, 16, 16);
+
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        const wave = Math.sin((x + y * 0.7 + v * 3) * 0.7);
+        if (wave > 0.7) {
+          ctx.fillStyle = '#ecd37f';
+          ctx.fillRect(x, y, 1, 1);
+        } else if (wave < -0.7) {
+          ctx.fillStyle = '#cb9f4d';
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateSnowSprites() {
+  const variations = [];
+  for (let v = 0; v < 3; v++) {
+    const { canvas, ctx } = createTileCanvas();
+    ctx.fillStyle = '#eaf1f8';
+    ctx.fillRect(0, 0, 16, 16);
+
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        const r = hash(x, y, v * 30 + 7);
+        if (r > 0.85) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(x, y, 1, 1);
+        } else if (r < 0.15) {
+          ctx.fillStyle = '#d1e0ee';
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateSwampGroundSprites() {
+  const variations = [];
+  for (let v = 0; v < 3; v++) {
+    const { canvas, ctx } = createTileCanvas();
+    ctx.fillStyle = '#445434';
+    ctx.fillRect(0, 0, 16, 16);
+
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        const r = hash(x, y, v * 40 + 9);
+        if (r > 0.78) {
+          ctx.fillStyle = '#546b3e';
+          ctx.fillRect(x, y, 1, 1);
+        } else if (r < 0.22) {
+          ctx.fillStyle = '#313d24';
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+    // Moss speck
+    if (v === 1) {
+      ctx.fillStyle = '#658245';
+      ctx.fillRect(8, 7, 3, 2);
+    }
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateVoidGroundSprites() {
+  const variations = [];
+  for (let v = 0; v < 3; v++) {
+    const { canvas, ctx } = createTileCanvas();
+    ctx.fillStyle = '#260f38';
+    ctx.fillRect(0, 0, 16, 16);
+
+    for (let y = 0; y < 16; y++) {
+      for (let x = 0; x < 16; x++) {
+        const r = hash(x, y, v * 50 + 13);
+        if (r > 0.8) {
+          ctx.fillStyle = '#391754';
+          ctx.fillRect(x, y, 1, 1);
+        } else if (r < 0.2) {
+          ctx.fillStyle = '#190726';
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+    }
+    // Glowing rift vein
+    if (v === 1) {
+      ctx.fillStyle = '#b03bf3';
+      ctx.fillRect(4, 7, 4, 1);
+      ctx.fillRect(7, 8, 2, 2);
+      ctx.fillStyle = '#e87eff';
+      ctx.fillRect(5, 7, 2, 1);
+    }
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+// ----------------------------------------------------
+// 2. ANIMATED GROUND TILES
+// ----------------------------------------------------
+function generateWaterSprite(time = 0) {
+  const { canvas, ctx } = createTileCanvas();
+  ctx.fillStyle = '#246baf';
+  ctx.fillRect(0, 0, 16, 16);
+
+  const t = time * 0.08;
+  for (let row = 3; row < 16; row += 5) {
+    const shift = Math.floor(Math.sin(t + row) * 2.5);
+    ctx.fillStyle = '#3d8cdb';
+    ctx.fillRect((2 + shift + 16) % 16, row, 6, 1);
+    ctx.fillStyle = '#7ac0f8';
+    ctx.fillRect((4 + shift + 16) % 16, row, 2, 1);
+  }
+  return canvas;
+}
+
+function generateSwampWaterSprite(time = 0) {
+  const { canvas, ctx } = createTileCanvas();
+  ctx.fillStyle = '#233824';
+  ctx.fillRect(0, 0, 16, 16);
+
+  const t = time * 0.05;
+  for (let row = 4; row < 16; row += 6) {
+    const shift = Math.floor(Math.sin(t + row) * 2);
+    ctx.fillStyle = '#375438';
+    ctx.fillRect((3 + shift + 16) % 16, row, 5, 1);
+  }
+  // Bubble
+  const bY = Math.floor((16 - (time * 1.5) % 16));
+  ctx.fillStyle = '#557d51';
+  ctx.fillRect(8, bY, 1, 1);
+  return canvas;
+}
+
+function generateQuicksandSprite(time = 0) {
+  const { canvas, ctx } = createTileCanvas();
+  ctx.fillStyle = '#b3833b';
+  ctx.fillRect(0, 0, 16, 16);
+
+  const cx = 8, cy = 8;
+  const rot = time * 0.15;
+  for (let y = 0; y < 16; y++) {
+    for (let x = 0; x < 16; x++) {
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx) + dist * 0.35 - rot;
+      const v = Math.sin(angle * 2.5);
+      if (dist < 2.5) {
+        ctx.fillStyle = '#5e3f16';
+        ctx.fillRect(x, y, 1, 1);
+      } else if (v > 0.4) {
+        ctx.fillStyle = '#cca04e';
+        ctx.fillRect(x, y, 1, 1);
+      } else if (v < -0.4) {
+        ctx.fillStyle = '#8a5e24';
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+  return canvas;
+}
+
+function generateVoidLakeSprite(time = 0) {
+  const { canvas, ctx } = createTileCanvas();
+  ctx.fillStyle = '#0a0112';
+  ctx.fillRect(0, 0, 16, 16);
+
+  const cx = 8, cy = 8;
+  const pulse = Math.sin(time * 0.1) * 1.5;
+
+  for (let r = 7; r > 1; r -= 2) {
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.max(1, r + pulse * (r / 7)), 0, Math.PI * 2);
+    ctx.strokeStyle = r > 4 ? '#2c0842' : '#571380';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#030005';
+  ctx.fillRect(cx - 1, cy - 1, 2, 2);
+
+  // Spark
+  const spX = Math.floor(cx + Math.cos(time * 0.15) * 4);
+  const spY = Math.floor(cy + Math.sin(time * 0.15) * 4);
+  ctx.fillStyle = '#f08aff';
+  ctx.fillRect(spX, spY, 1, 1);
+
+  return canvas;
+}
+
+function generateBridgeSprite(isHorizontal = true) {
+  const { canvas, ctx } = createTileCanvas();
+  ctx.fillStyle = '#3d2411';
+  ctx.fillRect(0, 0, 16, 16);
+
+  if (isHorizontal) {
+    for (let x = 0; x < 16; x += 4) {
+      ctx.fillStyle = (x % 8 === 0) ? '#8d5528' : '#7d4a22';
+      ctx.fillRect(x, 1, 3, 14);
+      ctx.fillStyle = '#261509';
+      ctx.fillRect(x + 1, 2, 1, 1);
+      ctx.fillRect(x + 1, 13, 1, 1);
+    }
+    ctx.fillStyle = '#543014';
+    ctx.fillRect(0, 0, 16, 1);
+    ctx.fillRect(0, 15, 16, 1);
+  } else {
+    for (let y = 0; y < 16; y += 4) {
+      ctx.fillStyle = (y % 8 === 0) ? '#8d5528' : '#7d4a22';
+      ctx.fillRect(1, y, 14, 3);
+      ctx.fillStyle = '#261509';
+      ctx.fillRect(2, y + 1, 1, 1);
+      ctx.fillRect(13, y + 1, 1, 1);
+    }
+    ctx.fillStyle = '#543014';
+    ctx.fillRect(0, 0, 1, 16);
+    ctx.fillRect(15, 0, 1, 16);
+  }
+  return canvas;
+}
+
+// ----------------------------------------------------
+// 3. OBJECTS WITH 100% TRANSPARENT BACKGROUNDS
+// (Fixes "die steine haben einen schwarzen hintergrund")
+// ----------------------------------------------------
+function generateRockStoneSprite() {
+  const { canvas, ctx } = createTileCanvas();
+  // No opaque fillRect! Canvas is fully transparent.
+
+  // 1. Soft grounded drop-shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+  ctx.beginPath();
+  ctx.ellipse(8, 13, 6, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2. Rock base body
+  ctx.fillStyle = '#525b68';
+  ctx.beginPath();
+  ctx.moveTo(3, 12);
+  ctx.lineTo(4, 7);
+  ctx.lineTo(8, 4);
+  ctx.lineTo(13, 7);
+  ctx.lineTo(14, 12);
+  ctx.lineTo(11, 14);
+  ctx.lineTo(5, 14);
+  ctx.closePath();
+  ctx.fill();
+
+  // 3. Chiseled facets
+  ctx.fillStyle = '#717c8c';
+  ctx.beginPath();
+  ctx.moveTo(4, 7);
+  ctx.lineTo(8, 4);
+  ctx.lineTo(10, 9);
+  ctx.lineTo(5, 11);
+  ctx.closePath();
+  ctx.fill();
+
+  // 4. Sun highlight on top rim
+  ctx.fillStyle = '#9aa7ba';
+  ctx.fillRect(6, 4, 3, 2);
+  ctx.fillRect(5, 6, 2, 1);
+
+  return canvas;
+}
+
+function generateRockIceSprite() {
+  const { canvas, ctx } = createTileCanvas();
+  // Transparent background!
+
+  // Soft shadow
+  ctx.fillStyle = 'rgba(0, 20, 40, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(8, 13, 6, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Crystalline ice body
+  ctx.fillStyle = '#6fa4c6';
+  ctx.beginPath();
+  ctx.moveTo(8, 2);
+  ctx.lineTo(14, 8);
+  ctx.lineTo(12, 13);
+  ctx.lineTo(4, 13);
+  ctx.lineTo(2, 7);
+  ctx.closePath();
+  ctx.fill();
+
+  // Cyan bright facet
+  ctx.fillStyle = '#b1e5f8';
+  ctx.beginPath();
+  ctx.moveTo(8, 2);
+  ctx.lineTo(11, 8);
+  ctx.lineTo(6, 11);
+  ctx.lineTo(4, 6);
+  ctx.closePath();
+  ctx.fill();
+
+  // Glimmer
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(7, 3, 2, 2);
+  ctx.fillRect(9, 5, 1, 2);
+
+  return canvas;
+}
+
+function generateRockVoidSprite() {
+  const { canvas, ctx } = createTileCanvas();
+  // Transparent background!
+
+  // Purple glow shadow
+  ctx.fillStyle = 'rgba(25, 0, 40, 0.4)';
+  ctx.beginPath();
+  ctx.ellipse(8, 14, 6, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Obelisk crystal body
+  ctx.fillStyle = '#551178';
+  ctx.beginPath();
+  ctx.moveTo(8, 1);
+  ctx.lineTo(13, 8);
+  ctx.lineTo(11, 14);
+  ctx.lineTo(5, 14);
+  ctx.lineTo(3, 8);
+  ctx.closePath();
+  ctx.fill();
+
+  // Glowing neon facet
+  ctx.fillStyle = '#b827f2';
+  ctx.beginPath();
+  ctx.moveTo(8, 1);
+  ctx.lineTo(11, 8);
+  ctx.lineTo(8, 13);
+  ctx.lineTo(5, 7);
+  ctx.closePath();
+  ctx.fill();
+
+  // White-hot magic tip
+  ctx.fillStyle = '#ff82fc';
+  ctx.fillRect(7, 2, 2, 3);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(7, 2, 1, 1);
+
+  return canvas;
+}
+
+function generateBushSprite() {
+  const { canvas, ctx } = createTileCanvas();
+  // Shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+  ctx.beginPath();
+  ctx.ellipse(8, 13, 5, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Foliage
+  ctx.fillStyle = '#2d7a36';
+  ctx.beginPath();
+  ctx.arc(8, 8, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#459e4f';
+  ctx.beginPath();
+  ctx.arc(7, 7, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Berries
+  ctx.fillStyle = '#e53935';
+  ctx.fillRect(6, 6, 1, 1);
+  ctx.fillRect(9, 8, 1, 1);
+  return canvas;
+}
+
+function generateCactusSprite() {
+  const { canvas, ctx } = createTileCanvas();
+  // Shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+  ctx.beginPath();
+  ctx.ellipse(8, 14, 4, 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Stem
+  ctx.fillStyle = '#3e8e41';
+  ctx.fillRect(7, 3, 3, 11);
+  // Left arm
+  ctx.fillRect(3, 6, 4, 2);
+  ctx.fillRect(3, 4, 2, 4);
+  // Right arm
+  ctx.fillRect(9, 8, 4, 2);
+  ctx.fillRect(11, 6, 2, 4);
+
+  // Highlight
+  ctx.fillStyle = '#61b864';
+  ctx.fillRect(8, 4, 1, 10);
+  return canvas;
+}
+
+function generateMushroomSprite() {
+  const { canvas, ctx } = createTileCanvas();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+  ctx.beginPath();
+  ctx.ellipse(8, 14, 3, 1.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Stem
+  ctx.fillStyle = '#eae2cb';
+  ctx.fillRect(7, 9, 2, 5);
+
+  // Cap
+  ctx.fillStyle = '#cf2b2b';
+  ctx.beginPath();
+  ctx.ellipse(8, 8, 5, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // White spots
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(6, 7, 1, 1);
+  ctx.fillRect(9, 7, 1, 1);
+  return canvas;
+}
+
+function generateTreeTrunkSprite() {
+  const { canvas, ctx } = createTileCanvas();
+  // Shadow
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(8, 13, 6, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Trunk
+  ctx.fillStyle = '#4a2c14';
+  ctx.fillRect(6, 4, 5, 9);
+  // Roots
+  ctx.fillRect(4, 11, 2, 3);
+  ctx.fillRect(11, 11, 2, 3);
+
+  // Bark detail
+  ctx.fillStyle = '#6b411f';
+  ctx.fillRect(7, 5, 2, 7);
+  return canvas;
+}
+
+function generateFernSprite() {
+  const { canvas, ctx } = createTileCanvas();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+  ctx.beginPath();
+  ctx.ellipse(8, 13, 5, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Feathery fern fronds
+  ctx.fillStyle = '#166534';
+  ctx.fillRect(7, 5, 2, 9);
+  ctx.fillRect(5, 7, 2, 2);
+  ctx.fillRect(9, 7, 2, 2);
+  ctx.fillRect(4, 9, 3, 2);
+  ctx.fillRect(9, 9, 3, 2);
+  ctx.fillRect(3, 11, 4, 2);
+  ctx.fillRect(9, 11, 4, 2);
+
+  ctx.fillStyle = '#22c55e';
+  ctx.fillRect(7, 4, 2, 2);
+  ctx.fillRect(4, 8, 1, 1);
+  ctx.fillRect(11, 8, 1, 1);
+  ctx.fillRect(3, 10, 1, 1);
+  ctx.fillRect(12, 10, 1, 1);
+  ctx.fillStyle = '#86efac';
+  ctx.fillRect(7, 4, 1, 1);
+
+  return canvas;
+}
+
+function generateFallenLogSprite() {
+  const { canvas, ctx } = createTileCanvas(32, 16);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(16, 13, 13, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Main horizontal log
+  ctx.fillStyle = '#4a2c14';
+  ctx.fillRect(4, 7, 24, 6);
+
+  // Cut end with rings
+  ctx.fillStyle = '#78461f';
+  ctx.beginPath();
+  ctx.ellipse(5, 10, 2.5, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#3a1f0a';
+  ctx.fillRect(5, 10, 1, 1);
+
+  // Bark cracks
+  ctx.fillStyle = '#2d1808';
+  ctx.fillRect(10, 8, 2, 4);
+  ctx.fillRect(18, 9, 3, 3);
+  ctx.fillRect(23, 7, 1, 5);
+
+  // Moss patches on top
+  ctx.fillStyle = '#489c3e';
+  ctx.fillRect(8, 6, 6, 2);
+  ctx.fillRect(16, 6, 5, 2);
+  ctx.fillStyle = '#86efac';
+  ctx.fillRect(9, 6, 3, 1);
+  ctx.fillRect(17, 6, 2, 1);
+
+  // Bracket fungi
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(14, 11, 2, 1);
+  ctx.fillRect(20, 11, 2, 1);
+
+  return canvas;
+}
+
+function generateForestFlowersSprite() {
+  const { canvas, ctx } = createTileCanvas();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.beginPath();
+  ctx.ellipse(8, 13, 5, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#22c55e';
+  ctx.fillRect(4, 8, 1, 5);
+  ctx.fillRect(7, 7, 1, 6);
+  ctx.fillRect(11, 8, 1, 5);
+
+  // Bluebells
+  ctx.fillStyle = '#3b82f6';
+  ctx.fillRect(3, 6, 2, 2);
+  ctx.fillRect(4, 5, 1, 1);
+  ctx.fillStyle = '#93c5fd';
+  ctx.fillRect(3, 6, 1, 1);
+
+  // Buttercups
+  ctx.fillStyle = '#eab308';
+  ctx.fillRect(10, 6, 2, 2);
+  ctx.fillStyle = '#fef08a';
+  ctx.fillRect(10, 6, 1, 1);
+
+  // White forest star
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(7, 5, 2, 2);
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(7, 5, 1, 1);
+
+  return canvas;
+}
+
+function generateMushroomBrownSprite() {
+  const { canvas, ctx } = createTileCanvas();
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+  ctx.beginPath();
+  ctx.ellipse(8, 13, 5, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Boletus
+  ctx.fillStyle = '#fef3c7';
+  ctx.fillRect(8, 8, 3, 5);
+  ctx.fillStyle = '#78350f';
+  ctx.beginPath();
+  ctx.ellipse(9, 7, 5, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#b45309';
+  ctx.fillRect(7, 6, 4, 1);
+
+  // Small chanterelle
+  ctx.fillStyle = '#fef3c7';
+  ctx.fillRect(4, 10, 2, 3);
+  ctx.fillStyle = '#d97706';
+  ctx.beginPath();
+  ctx.ellipse(5, 9, 3, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  return canvas;
+}
+
+// ----------------------------------------------------
+// 4. CANOPY (Treetops - Rich Dense Forest Roof)
+// ----------------------------------------------------
+function generateCanopySprites() {
+  const variations = [];
+  const configs = [
+    { base: '#0e2b13', mid1: '#16481e', mid2: '#23692d', sun: '#389647', tip: '#57be67' },
+    { base: '#0b2612', mid1: '#13401b', mid2: '#1e5c26', sun: '#31853d', tip: '#4caf58' },
+    { base: '#143313', mid1: '#21541f', mid2: '#337a2f', sun: '#4ea847', tip: '#72cf68' },
+    { base: '#1b2e11', mid1: '#2e4c1c', mid2: '#457327', sun: '#649e38', tip: '#8fd457' }
+  ];
+
+  configs.forEach((cfg, v) => {
+    const { canvas, ctx } = createTileCanvas();
+    ctx.fillStyle = cfg.base;
+    ctx.fillRect(0, 0, 16, 16);
+
+    const lobes = [
+      { x: 4,  y: 4,  r: 5, col: cfg.mid1 },
+      { x: 12, y: 4,  r: 6, col: cfg.mid2 },
+      { x: 4,  y: 12, r: 5, col: cfg.mid1 },
+      { x: 12, y: 12, r: 6, col: cfg.mid2 },
+      { x: 8,  y: 8,  r: 6, col: cfg.sun  }
+    ];
+
+    lobes.forEach(l => {
+      ctx.fillStyle = l.col;
+      ctx.beginPath();
+      ctx.arc(l.x, l.y, l.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = cfg.tip;
+    ctx.fillRect(7, 5, 3, 2);
+    ctx.fillRect(11, 9, 2, 2);
+    ctx.fillRect(3, 8, 2, 1);
+
+    if (v === 2) {
+      ctx.fillStyle = '#fbcfe8';
+      ctx.fillRect(5, 5, 1, 1);
+      ctx.fillRect(11, 12, 1, 1);
+    } else if (v === 3) {
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(6, 10, 2, 1);
+      ctx.fillRect(12, 4, 1, 1);
+    }
+
+    variations.push(canvas);
+  });
+
+  return variations;
+}
+
+// ----------------------------------------------------
+// 5. PLAYER SPRITES (Crisp 16x16 Pixel Hero)
+// ----------------------------------------------------
+function generatePlayerSprites() {
+  const directions = ['down', 'up', 'left', 'right'];
+  const frames = [0, 1];
+  const sprites = {};
+
+  directions.forEach(dir => {
+    sprites[dir] = [];
+    frames.forEach(frame => {
+      const { canvas, ctx } = createTileCanvas(16, 16);
+      const legOffset = (frame === 1) ? 1 : 0;
+
+      // Shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(8, 15, 4, 1.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Boots
+      ctx.fillStyle = '#2c1e13';
+      if (dir === 'down' || dir === 'up') {
+        ctx.fillRect(6, 13 - legOffset, 2, 2 + legOffset);
+        ctx.fillRect(9, 13 + legOffset, 2, 2 - legOffset);
+      } else if (dir === 'left') {
+        ctx.fillRect(6 - legOffset, 13, 2, 2);
+        ctx.fillRect(9 + legOffset, 13, 2, 2);
+      } else {
+        ctx.fillRect(5 - legOffset, 13, 2, 2);
+        ctx.fillRect(8 + legOffset, 13, 2, 2);
+      }
+
+      // Tunic (Teal/Emerald)
+      ctx.fillStyle = '#1b7677';
+      ctx.fillRect(6, 8, 5, 5);
+
+      // Belt
+      ctx.fillStyle = '#5c3716';
+      ctx.fillRect(6, 11, 5, 1);
+      ctx.fillStyle = '#ffcf44';
+      ctx.fillRect(8, 11, 1, 1);
+
+      // Head / Skin
+      ctx.fillStyle = '#f8c79c';
+      ctx.fillRect(6, 4, 5, 4);
+
+      // Hair
+      ctx.fillStyle = '#543018';
+      ctx.fillRect(5, 3, 7, 2);
+      ctx.fillRect(5, 4, 1, 3);
+      ctx.fillRect(11, 4, 1, 3);
+
+      // Face direction
+      if (dir === 'down') {
+        ctx.fillStyle = '#1b2230';
+        ctx.fillRect(7, 6, 1, 1);
+        ctx.fillRect(9, 6, 1, 1);
+      } else if (dir === 'left') {
+        ctx.fillStyle = '#1b2230';
+        ctx.fillRect(6, 6, 1, 1);
+      } else if (dir === 'right') {
+        ctx.fillStyle = '#1b2230';
+        ctx.fillRect(10, 6, 1, 1);
+      } else if (dir === 'up') {
+        ctx.fillStyle = '#543018';
+        ctx.fillRect(6, 4, 5, 4); // Hair covers back
+      }
+
+      sprites[dir].push(canvas);
+    });
+  });
+
+  return sprites;
+}
+
+// ----------------------------------------------------
+// 6. DETAILED MULTI-TILE TREES & SPECIES
+// ----------------------------------------------------
+const TREE_METADATA = {
+  [TREES.OAK]:          { width: 32, height: 44, anchorX: 16, anchorY: 40, trunkRadius: 6, crownHeight: 30, name: 'Eiche' },
+  [TREES.PINE]:         { width: 24, height: 46, anchorX: 12, anchorY: 42, trunkRadius: 5, crownHeight: 34, name: 'Kiefer' },
+  [TREES.BIRCH]:        { width: 20, height: 40, anchorX: 10, anchorY: 37, trunkRadius: 4, crownHeight: 28, name: 'Birke' },
+  [TREES.BLOSSOM]:      { width: 28, height: 40, anchorX: 14, anchorY: 37, trunkRadius: 5, crownHeight: 28, name: 'Blütenbaum' },
+  [TREES.AUTUMN]:       { width: 30, height: 42, anchorX: 15, anchorY: 39, trunkRadius: 6, crownHeight: 30, name: 'Herbstbaum' },
+  [TREES.SNOWY_PINE]:   { width: 24, height: 46, anchorX: 12, anchorY: 42, trunkRadius: 5, crownHeight: 34, name: 'Schneetanne' },
+  [TREES.SWAMP_WILLOW]: { width: 34, height: 44, anchorX: 17, anchorY: 40, trunkRadius: 6, crownHeight: 28, name: 'Sumpfweide' },
+  [TREES.PALM]:         { width: 28, height: 46, anchorX: 14, anchorY: 42, trunkRadius: 5, crownHeight: 26, name: 'Palme' },
+  [TREES.SAPLING]:      { width: 16, height: 22, anchorX: 8,  anchorY: 20, trunkRadius: 3, crownHeight: 14, name: 'Jungbaum' },
+  [TREES.DEADWOOD]:     { width: 24, height: 38, anchorX: 12, anchorY: 35, trunkRadius: 4, crownHeight: 24, name: 'Totholz' }
+};
+
+function generateOakSprites() {
+  const variations = [];
+  for (let v = 0; v < 2; v++) {
+    const { canvas, ctx } = createTileCanvas(32, 44);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(16, 40, 13, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Trunk & Roots
+    ctx.fillStyle = '#4a2c14';
+    ctx.fillRect(13, 22, 6, 18);
+    ctx.fillStyle = '#331c0c';
+    ctx.fillRect(13, 23, 2, 17);
+    ctx.fillStyle = '#6b411f';
+    ctx.fillRect(17, 24, 2, 15);
+    ctx.fillStyle = '#4a2c14';
+    ctx.fillRect(10, 37, 4, 3);
+    ctx.fillRect(9, 39, 2, 2);
+    ctx.fillRect(18, 37, 4, 3);
+    ctx.fillRect(21, 39, 2, 2);
+
+    // Foliage
+    const baseGreen = v === 0 ? '#18421d' : '#224016';
+    const midGreen  = v === 0 ? '#2d7836' : '#3d7a28';
+    const sunGreen  = v === 0 ? '#48a652' : '#5da836';
+    const lightTip  = v === 0 ? '#82d48a' : '#94de5b';
+
+    const clusters = [
+      { x: 10, y: 22, r: 8 },
+      { x: 22, y: 21, r: 9 },
+      { x: 16, y: 17, r: 11 },
+      { x: 16, y: 11, r: 10 }
+    ];
+
+    ctx.fillStyle = baseGreen;
+    clusters.forEach(c => {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r + 1, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = midGreen;
+    clusters.forEach(c => {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y - 1, c.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = sunGreen;
+    clusters.forEach(c => {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y - 3, c.r * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = lightTip;
+    ctx.fillRect(14, 6, 4, 2);
+    ctx.fillRect(9, 17, 3, 2);
+    ctx.fillRect(21, 15, 3, 2);
+    ctx.fillRect(15, 12, 3, 2);
+
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generatePineSprites() {
+  const variations = [];
+  for (let v = 0; v < 2; v++) {
+    const { canvas, ctx } = createTileCanvas(24, 46);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(12, 42, 10, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Trunk
+    ctx.fillStyle = '#3a200e';
+    ctx.fillRect(10, 30, 4, 12);
+    ctx.fillStyle = '#59361a';
+    ctx.fillRect(12, 31, 2, 10);
+
+    const darkNeedle = v === 0 ? '#0d2818' : '#0a2318';
+    const midNeedle  = v === 0 ? '#184b29' : '#144426';
+    const sunNeedle  = v === 0 ? '#2a7442' : '#236b3b';
+    const tipNeedle  = v === 0 ? '#48a666' : '#3f995c';
+
+    const tiers = [
+      { yTop: 24, yBot: 34, w: 20 },
+      { yTop: 16, yBot: 26, w: 16 },
+      { yTop: 9,  yBot: 18, w: 12 },
+      { yTop: 3,  yBot: 11, w: 8  }
+    ];
+
+    tiers.forEach(t => {
+      ctx.fillStyle = darkNeedle;
+      ctx.beginPath();
+      ctx.moveTo(12, t.yTop);
+      ctx.lineTo(12 - t.w / 2, t.yBot);
+      ctx.lineTo(12 + t.w / 2, t.yBot);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = midNeedle;
+      ctx.beginPath();
+      ctx.moveTo(12, t.yTop + 1);
+      ctx.lineTo(12 - t.w / 2 + 1, t.yBot - 1);
+      ctx.lineTo(12 + t.w / 2 - 1, t.yBot - 1);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = sunNeedle;
+      ctx.beginPath();
+      ctx.moveTo(12, t.yTop + 1);
+      ctx.lineTo(12 - t.w / 4, t.yBot - 2);
+      ctx.lineTo(12 + t.w / 4, t.yBot - 2);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = tipNeedle;
+      ctx.fillRect(12 - t.w / 2, t.yBot - 1, 2, 2);
+      ctx.fillRect(12 + t.w / 2 - 2, t.yBot - 1, 2, 2);
+      ctx.fillRect(12 - 1, t.yTop, 2, 2);
+    });
+
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateBirchSprites() {
+  const variations = [];
+  for (let v = 0; v < 2; v++) {
+    const { canvas, ctx } = createTileCanvas(20, 40);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+    ctx.beginPath();
+    ctx.ellipse(10, 37, 8, 2.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Trunk
+    ctx.fillStyle = '#f0f4ea';
+    ctx.fillRect(9, 18, 3, 19);
+    ctx.fillStyle = '#262322';
+    ctx.fillRect(9, 21, 2, 1);
+    ctx.fillRect(10, 26, 2, 1);
+    ctx.fillRect(9, 31, 3, 1);
+    ctx.fillRect(10, 35, 2, 1);
+
+    const circles = [
+      { x: 7,  y: 20, r: 6, col: '#346d29' },
+      { x: 13, y: 18, r: 7, col: '#458536' },
+      { x: 10, y: 11, r: 8, col: '#5ba644' }
+    ];
+
+    circles.forEach(c => {
+      ctx.fillStyle = c.col;
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = '#8ce067';
+    ctx.fillRect(9, 7, 4, 3);
+    ctx.fillRect(6, 17, 3, 2);
+    ctx.fillRect(12, 15, 3, 2);
+    ctx.fillStyle = '#c7fca2';
+    ctx.fillRect(10, 6, 2, 1);
+
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateBlossomSprites() {
+  const variations = [];
+  for (let v = 0; v < 2; v++) {
+    const { canvas, ctx } = createTileCanvas(28, 40);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.ellipse(14, 37, 11, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Trunk
+    ctx.fillStyle = '#4a2c14';
+    ctx.fillRect(12, 20, 4, 17);
+    ctx.fillStyle = '#331c0c';
+    ctx.fillRect(12, 22, 1, 15);
+    ctx.fillStyle = '#6b411f';
+    ctx.fillRect(14, 21, 2, 15);
+
+    ctx.fillRect(10, 18, 3, 4);
+    ctx.fillRect(15, 17, 3, 4);
+
+    // Foliage base
+    ctx.fillStyle = '#1e5223';
+    ctx.beginPath();
+    ctx.arc(14, 16, 11, 0, Math.PI * 2);
+    ctx.arc(9, 19, 7, 0, Math.PI * 2);
+    ctx.arc(19, 18, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#2f7d38';
+    ctx.beginPath();
+    ctx.arc(14, 14, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Cherry blossoms
+    const blossomPetal = v === 0 ? '#f472b6' : '#f9a8d4';
+    const blossomDark  = '#db2777';
+
+    ctx.fillStyle = blossomDark;
+    const dots = [
+      [8, 14], [11, 10], [16, 8], [19, 12], [21, 16],
+      [14, 13], [10, 18], [17, 18], [13, 20], [7, 18]
+    ];
+    dots.forEach(([x, y]) => {
+      ctx.fillRect(x, y, 3, 3);
+    });
+
+    ctx.fillStyle = blossomPetal;
+    dots.forEach(([x, y]) => {
+      ctx.fillRect(x + 1, y, 1, 2);
+      ctx.fillRect(x, y + 1, 2, 1);
+    });
+
+    ctx.fillStyle = '#ffffff';
+    dots.forEach(([x, y]) => {
+      ctx.fillRect(x + 1, y + 1, 1, 1);
+    });
+
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateAutumnSprites() {
+  const variations = [];
+  for (let v = 0; v < 2; v++) {
+    const { canvas, ctx } = createTileCanvas(30, 42);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+    ctx.beginPath();
+    ctx.ellipse(15, 39, 12, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Trunk
+    ctx.fillStyle = '#3f2511';
+    ctx.fillRect(13, 22, 5, 17);
+    ctx.fillStyle = '#59361a';
+    ctx.fillRect(15, 23, 2, 16);
+
+    const darkAmber  = v === 0 ? '#7c2d12' : '#881337';
+    const richOrange = v === 0 ? '#c2410c' : '#b91c1c';
+    const brightGold = v === 0 ? '#ea580c' : '#e11d48';
+    const sunYellow  = v === 0 ? '#facc15' : '#fb923c';
+
+    ctx.fillStyle = darkAmber;
+    ctx.beginPath();
+    ctx.arc(10, 21, 8, 0, Math.PI * 2);
+    ctx.arc(20, 20, 8, 0, Math.PI * 2);
+    ctx.arc(15, 15, 11, 0, Math.PI * 2);
+    ctx.arc(15, 9, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = richOrange;
+    ctx.beginPath();
+    ctx.arc(15, 13, 9, 0, Math.PI * 2);
+    ctx.arc(11, 18, 6, 0, Math.PI * 2);
+    ctx.arc(19, 17, 6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = brightGold;
+    ctx.beginPath();
+    ctx.arc(15, 10, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = sunYellow;
+    ctx.fillRect(13, 5, 4, 2);
+    ctx.fillRect(9, 14, 3, 2);
+    ctx.fillRect(19, 13, 3, 2);
+
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateSnowyPineSprites() {
+  const variations = [];
+  for (let v = 0; v < 2; v++) {
+    const { canvas, ctx } = createTileCanvas(24, 46);
+    ctx.fillStyle = 'rgba(0, 20, 40, 0.25)';
+    ctx.beginPath();
+    ctx.ellipse(12, 42, 10, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Trunk
+    ctx.fillStyle = '#2c1e13';
+    ctx.fillRect(10, 30, 4, 12);
+
+    const tiers = [
+      { yTop: 24, yBot: 34, w: 20 },
+      { yTop: 16, yBot: 26, w: 16 },
+      { yTop: 9,  yBot: 18, w: 12 },
+      { yTop: 3,  yBot: 11, w: 8  }
+    ];
+
+    tiers.forEach(t => {
+      ctx.fillStyle = '#0f2918';
+      ctx.beginPath();
+      ctx.moveTo(12, t.yTop);
+      ctx.lineTo(12 - t.w / 2, t.yBot);
+      ctx.lineTo(12 + t.w / 2, t.yBot);
+      ctx.closePath();
+      ctx.fill();
+    });
+
+    // Snowdrifts
+    tiers.forEach(t => {
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.ellipse(12, t.yTop + 2, t.w / 2 + 1, 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(12, t.yTop + 1, t.w / 2, 2.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillRect(12 - Math.floor(t.w / 4), t.yTop + 3, 1, 2);
+      ctx.fillRect(12 + Math.floor(t.w / 4), t.yTop + 3, 1, 2);
+    });
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(11, 2, 2, 3);
+
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateSwampWillowSprites() {
+  const variations = [];
+  for (let v = 0; v < 2; v++) {
+    const { canvas, ctx } = createTileCanvas(34, 44);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(17, 40, 13, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Trunk & roots
+    ctx.fillStyle = '#261b12';
+    ctx.fillRect(14, 21, 6, 19);
+    ctx.fillStyle = '#3f2d1e';
+    ctx.fillRect(16, 22, 2, 17);
+
+    ctx.fillStyle = '#261b12';
+    ctx.fillRect(11, 36, 4, 4);
+    ctx.fillRect(9, 38, 3, 2);
+    ctx.fillRect(19, 36, 4, 4);
+    ctx.fillRect(22, 38, 3, 2);
+
+    // Canopy
+    ctx.fillStyle = '#1f291a';
+    ctx.beginPath();
+    ctx.ellipse(17, 16, 14, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#33442a';
+    ctx.beginPath();
+    ctx.ellipse(17, 14, 12, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Moss tendrils
+    ctx.fillStyle = '#4c5f3c';
+    const tendrils = [6, 9, 12, 15, 18, 21, 24, 27];
+    tendrils.forEach((tx, idx) => {
+      const len = 5 + ((idx * 3 + v * 2) % 6);
+      ctx.fillRect(tx, 20, 2, len);
+      ctx.fillStyle = '#38472c';
+      ctx.fillRect(tx + 1, 20, 1, len + 1);
+      ctx.fillStyle = '#4c5f3c';
+    });
+
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generatePalmSprites() {
+  const variations = [];
+  for (let v = 0; v < 2; v++) {
+    const { canvas, ctx } = createTileCanvas(28, 46);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+    ctx.beginPath();
+    ctx.ellipse(14, 42, 9, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const lean = v === 0 ? 1 : -1;
+    ctx.fillStyle = '#825f38';
+    for (let y = 41; y >= 20; y -= 3) {
+      const progress = (41 - y) / 21;
+      const x = 13 + Math.floor(progress * 4 * lean);
+      ctx.fillRect(x, y, 4, 3);
+      ctx.fillStyle = '#b38f5f';
+      ctx.fillRect(x + 1, y, 2, 1);
+      ctx.fillStyle = '#825f38';
+    }
+
+    const crownX = 13 + Math.floor(4 * lean);
+    const crownY = 18;
+
+    // Coconuts
+    ctx.fillStyle = '#482a13';
+    ctx.fillRect(crownX - 1, crownY + 1, 2, 2);
+    ctx.fillRect(crownX + 2, crownY + 2, 2, 2);
+
+    // Palm fronds
+    ctx.fillStyle = '#1e5e22';
+    const fronds = [
+      { dx: -11, dy: -6 },
+      { dx: 11,  dy: -6 },
+      { dx: -12, dy: 3 },
+      { dx: 12,  dy: 3 },
+      { dx: -5,  dy: -12 },
+      { dx: 5,   dy: -12 }
+    ];
+
+    fronds.forEach(f => {
+      ctx.beginPath();
+      ctx.moveTo(crownX + 1, crownY);
+      ctx.quadraticCurveTo(crownX + f.dx * 0.6, crownY + f.dy * 0.3 - 3, crownX + f.dx, crownY + f.dy);
+      ctx.strokeStyle = '#2d7830';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#4fa854';
+      ctx.fillRect(crownX + Math.floor(f.dx * 0.7), crownY + Math.floor(f.dy * 0.7), 2, 2);
+    });
+
+    variations.push(canvas);
+  }
+  return variations;
+}
+
+function generateSaplingSprites() {
+  const { canvas, ctx } = createTileCanvas(16, 22);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+  ctx.beginPath();
+  ctx.ellipse(8, 20, 5, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#543217';
+  ctx.fillRect(7, 10, 2, 10);
+
+  ctx.fillStyle = '#2d7836';
+  ctx.beginPath();
+  ctx.arc(8, 7, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#52b85c';
+  ctx.beginPath();
+  ctx.arc(8, 6, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#a1f2aa';
+  ctx.fillRect(7, 4, 2, 2);
+
+  return [canvas];
+}
+
+function generateDeadwoodSprites() {
+  const { canvas, ctx } = createTileCanvas(24, 38);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+  ctx.beginPath();
+  ctx.ellipse(12, 35, 8, 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#3f3d3a';
+  ctx.fillRect(10, 18, 4, 17);
+  ctx.fillStyle = '#656360';
+  ctx.fillRect(12, 19, 2, 15);
+
+  ctx.strokeStyle = '#3f3d3a';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(11, 22);
+  ctx.lineTo(4, 15);
+  ctx.lineTo(2, 10);
+  ctx.moveTo(13, 20);
+  ctx.lineTo(19, 13);
+  ctx.lineTo(22, 8);
+  ctx.moveTo(12, 18);
+  ctx.lineTo(11, 9);
+  ctx.lineTo(7, 4);
+  ctx.stroke();
+
+  return [canvas];
+}
+
+function generateAllTreeSprites() {
+  const treeMap = new Map();
+  treeMap.set(TREES.OAK, generateOakSprites());
+  treeMap.set(TREES.PINE, generatePineSprites());
+  treeMap.set(TREES.BIRCH, generateBirchSprites());
+  treeMap.set(TREES.BLOSSOM, generateBlossomSprites());
+  treeMap.set(TREES.AUTUMN, generateAutumnSprites());
+  treeMap.set(TREES.SNOWY_PINE, generateSnowyPineSprites());
+  treeMap.set(TREES.SWAMP_WILLOW, generateSwampWillowSprites());
+  treeMap.set(TREES.PALM, generatePalmSprites());
+  treeMap.set(TREES.SAPLING, generateSaplingSprites());
+  treeMap.set(TREES.DEADWOOD, generateDeadwoodSprites());
+  return treeMap;
+}
+
+// ----------------------------------------------------
+// 7. ORGANIC EDGE TRANSITION OVERLAYS (No more square tiles!)
+// ----------------------------------------------------
+function generateEdgeTransitionOverlays() {
+  const overlays = new Map();
+
+  const configs = [
+    {
+      tile: TILES.GRASS,
+      main: '#489c3e',
+      light: '#59b54e',
+      dark: '#3a8332',
+      shadow: 'rgba(0, 0, 0, 0.24)'
+    },
+    {
+      tile: TILES.SNOW,
+      main: '#eaf1f8',
+      light: '#ffffff',
+      dark: '#cbd5e1',
+      shadow: 'rgba(0, 25, 50, 0.18)'
+    },
+    {
+      tile: TILES.SAND,
+      main: '#dfb867',
+      light: '#ecd37f',
+      dark: '#cb9f4d',
+      shadow: 'rgba(50, 35, 10, 0.2)'
+    },
+    {
+      tile: TILES.DIRT,
+      main: '#7a5433',
+      light: '#8f653e',
+      dark: '#614023',
+      shadow: 'rgba(0, 0, 0, 0.22)'
+    },
+    {
+      tile: TILES.SWAMP_GROUND,
+      main: '#445434',
+      light: '#546b3e',
+      dark: '#313d24',
+      shadow: 'rgba(0, 0, 0, 0.26)'
+    },
+    {
+      tile: TILES.VOID_GROUND,
+      main: '#260f38',
+      light: '#551178',
+      dark: '#150522',
+      accent: '#b03bf3',
+      shadow: 'rgba(100, 0, 160, 0.35)'
+    }
+  ];
+
+  configs.forEach(cfg => {
+    const set = {};
+
+    // 1. OVERHANG FROM NORTH (reaches down from y=0 by 1 to 4px)
+    {
+      const { canvas, ctx } = createTileCanvas();
+      const heights = [3, 2, 4, 3, 2, 4, 3, 1, 3, 4, 2, 4, 3, 2, 3, 2];
+      for (let x = 0; x < 16; x++) {
+        const h = heights[x];
+        ctx.fillStyle = cfg.shadow;
+        ctx.fillRect(x, h, 1, 1);
+        ctx.fillStyle = cfg.main;
+        ctx.fillRect(x, 0, 1, h);
+        ctx.fillStyle = cfg.light;
+        ctx.fillRect(x, h - 1, 1, 1);
+        if (cfg.accent && x % 4 === 0) {
+          ctx.fillStyle = cfg.accent;
+          ctx.fillRect(x, 0, 1, 1);
+        }
+      }
+      set['FROM_N'] = canvas;
+    }
+
+    // 2. OVERHANG FROM SOUTH (reaches up from y=15 into tile by 1 to 4px)
+    {
+      const { canvas, ctx } = createTileCanvas();
+      const heights = [2, 4, 3, 2, 3, 4, 2, 3, 4, 1, 3, 2, 4, 3, 2, 3];
+      for (let x = 0; x < 16; x++) {
+        const h = heights[x];
+        const startY = 16 - h;
+        ctx.fillStyle = cfg.shadow;
+        ctx.fillRect(x, startY - 1, 1, 1);
+        ctx.fillStyle = cfg.main;
+        ctx.fillRect(x, startY, 1, h);
+        ctx.fillStyle = cfg.light;
+        ctx.fillRect(x, startY, 1, 1);
+        if (cfg.accent && x % 4 === 2) {
+          ctx.fillStyle = cfg.accent;
+          ctx.fillRect(x, 15, 1, 1);
+        }
+      }
+      set['FROM_S'] = canvas;
+    }
+
+    // 3. OVERHANG FROM WEST (reaches right from x=0 into tile by 1 to 4px)
+    {
+      const { canvas, ctx } = createTileCanvas();
+      const widths = [3, 2, 4, 2, 3, 4, 1, 3, 4, 2, 3, 4, 2, 3, 2, 3];
+      for (let y = 0; y < 16; y++) {
+        const w = widths[y];
+        ctx.fillStyle = cfg.shadow;
+        ctx.fillRect(w, y, 1, 1);
+        ctx.fillStyle = cfg.main;
+        ctx.fillRect(0, y, w, 1);
+        ctx.fillStyle = cfg.light;
+        ctx.fillRect(w - 1, y, 1, 1);
+      }
+      set['FROM_W'] = canvas;
+    }
+
+    // 4. OVERHANG FROM EAST (reaches left from x=15 into tile by 1 to 4px)
+    {
+      const { canvas, ctx } = createTileCanvas();
+      const widths = [2, 3, 4, 3, 2, 4, 3, 2, 4, 1, 3, 2, 4, 3, 2, 3];
+      for (let y = 0; y < 16; y++) {
+        const w = widths[y];
+        const startX = 16 - w;
+        ctx.fillStyle = cfg.shadow;
+        ctx.fillRect(startX - 1, y, 1, 1);
+        ctx.fillStyle = cfg.main;
+        ctx.fillRect(startX, y, w, 1);
+        ctx.fillStyle = cfg.light;
+        ctx.fillRect(startX, y, 1, 1);
+      }
+      set['FROM_E'] = canvas;
+    }
+
+    // 5. INNER CORNERS
+    // Top-Left Inner Corner
+    {
+      const { canvas, ctx } = createTileCanvas();
+      ctx.fillStyle = cfg.shadow;
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI / 2);
+      ctx.lineTo(0, 0);
+      ctx.fill();
+
+      ctx.fillStyle = cfg.main;
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI / 2);
+      ctx.lineTo(0, 0);
+      ctx.fill();
+
+      ctx.fillStyle = cfg.light;
+      ctx.beginPath();
+      ctx.arc(0, 0, 3, 0, Math.PI / 2);
+      ctx.lineTo(0, 0);
+      ctx.fill();
+      set['INNER_NW'] = canvas;
+    }
+
+    // Top-Right Inner Corner
+    {
+      const { canvas, ctx } = createTileCanvas();
+      ctx.fillStyle = cfg.shadow;
+      ctx.beginPath();
+      ctx.arc(16, 0, 6, Math.PI / 2, Math.PI);
+      ctx.lineTo(16, 0);
+      ctx.fill();
+
+      ctx.fillStyle = cfg.main;
+      ctx.beginPath();
+      ctx.arc(16, 0, 5, Math.PI / 2, Math.PI);
+      ctx.lineTo(16, 0);
+      ctx.fill();
+
+      ctx.fillStyle = cfg.light;
+      ctx.beginPath();
+      ctx.arc(16, 0, 3, Math.PI / 2, Math.PI);
+      ctx.lineTo(16, 0);
+      ctx.fill();
+      set['INNER_NE'] = canvas;
+    }
+
+    // Bottom-Left Inner Corner
+    {
+      const { canvas, ctx } = createTileCanvas();
+      ctx.fillStyle = cfg.shadow;
+      ctx.beginPath();
+      ctx.arc(0, 16, 6, -Math.PI / 2, 0);
+      ctx.lineTo(0, 16);
+      ctx.fill();
+
+      ctx.fillStyle = cfg.main;
+      ctx.beginPath();
+      ctx.arc(0, 16, 5, -Math.PI / 2, 0);
+      ctx.lineTo(0, 16);
+      ctx.fill();
+
+      ctx.fillStyle = cfg.light;
+      ctx.beginPath();
+      ctx.arc(0, 16, 3, -Math.PI / 2, 0);
+      ctx.lineTo(0, 16);
+      ctx.fill();
+      set['INNER_SW'] = canvas;
+    }
+
+    // Bottom-Right Inner Corner
+    {
+      const { canvas, ctx } = createTileCanvas();
+      ctx.fillStyle = cfg.shadow;
+      ctx.beginPath();
+      ctx.arc(16, 16, 6, Math.PI, Math.PI * 1.5);
+      ctx.lineTo(16, 16);
+      ctx.fill();
+
+      ctx.fillStyle = cfg.main;
+      ctx.beginPath();
+      ctx.arc(16, 16, 5, Math.PI, Math.PI * 1.5);
+      ctx.lineTo(16, 16);
+      ctx.fill();
+
+      ctx.fillStyle = cfg.light;
+      ctx.beginPath();
+      ctx.arc(16, 16, 3, Math.PI, Math.PI * 1.5);
+      ctx.lineTo(16, 16);
+      ctx.fill();
+      set['INNER_SE'] = canvas;
+    }
+
+    // 6. OUTER CORNER BEVELS
+    // Top-Left Outer Corner Bevel
+    {
+      const { canvas, ctx } = createTileCanvas();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.fillRect(0, 0, 1, 1);
+      ctx.fillRect(1, 0, 1, 1);
+      ctx.fillRect(0, 1, 1, 1);
+      ctx.fillStyle = cfg.dark;
+      ctx.fillRect(1, 1, 2, 1);
+      ctx.fillRect(1, 2, 1, 2);
+      set['OUTER_NW'] = canvas;
+    }
+
+    // Top-Right Outer Corner Bevel
+    {
+      const { canvas, ctx } = createTileCanvas();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.fillRect(15, 0, 1, 1);
+      ctx.fillRect(14, 0, 1, 1);
+      ctx.fillRect(15, 1, 1, 1);
+      ctx.fillStyle = cfg.dark;
+      ctx.fillRect(13, 1, 2, 1);
+      ctx.fillRect(14, 2, 1, 2);
+      set['OUTER_NE'] = canvas;
+    }
+
+    // Bottom-Left Outer Corner Bevel
+    {
+      const { canvas, ctx } = createTileCanvas();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.fillRect(0, 15, 1, 1);
+      ctx.fillRect(1, 15, 1, 1);
+      ctx.fillRect(0, 14, 1, 1);
+      ctx.fillStyle = cfg.dark;
+      ctx.fillRect(1, 14, 2, 1);
+      ctx.fillRect(1, 12, 1, 2);
+      set['OUTER_SW'] = canvas;
+    }
+
+    // Bottom-Right Outer Corner Bevel
+    {
+      const { canvas, ctx } = createTileCanvas();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.fillRect(15, 15, 1, 1);
+      ctx.fillRect(14, 15, 1, 1);
+      ctx.fillRect(15, 14, 1, 1);
+      ctx.fillStyle = cfg.dark;
+      ctx.fillRect(13, 14, 2, 1);
+      ctx.fillRect(14, 12, 1, 2);
+      set['OUTER_SE'] = canvas;
+    }
+
+    overlays.set(cfg.tile, set);
+  });
+
+  return overlays;
+}
+
+// ----------------------------------------------------
+// SPRITE MANAGER
+// ----------------------------------------------------
+class SpriteManager {
+  constructor() {
+    this.groundVariants = new Map();
+    this.objects = new Map();
+    this.trees = new Map();
+    this.edgeOverlays = new Map();
+    this.canopyVariants = [];
+    this.playerSprites = null;
+    this.animTime = 0;
+
+    this.init();
+  }
+
+  init() {
+    // Ground variants
+    this.groundVariants.set(TILES.GRASS, generateGrassSprites());
+    this.groundVariants.set(TILES.DIRT, generateDirtSprites());
+    this.groundVariants.set(TILES.SAND, generateSandSprites());
+    this.groundVariants.set(TILES.SNOW, generateSnowSprites());
+    this.groundVariants.set(TILES.SWAMP_GROUND, generateSwampGroundSprites());
+    this.groundVariants.set(TILES.VOID_GROUND, generateVoidGroundSprites());
+    this.groundVariants.set(TILES.BRIDGE_H, [generateBridgeSprite(true)]);
+    this.groundVariants.set(TILES.BRIDGE_V, [generateBridgeSprite(false)]);
+
+    // Transparent Objects & Undergrowth
+    this.objects.set(OBJECTS.ROCK_STONE, generateRockStoneSprite());
+    this.objects.set(OBJECTS.ROCK_ICE, generateRockIceSprite());
+    this.objects.set(OBJECTS.ROCK_VOID, generateRockVoidSprite());
+    this.objects.set(OBJECTS.BUSH, generateBushSprite());
+    this.objects.set(OBJECTS.CACTUS, generateCactusSprite());
+    this.objects.set(OBJECTS.MUSHROOM, generateMushroomSprite());
+    this.objects.set(OBJECTS.MUSHROOM_BROWN, generateMushroomBrownSprite());
+    this.objects.set(OBJECTS.TREE_TRUNK, generateTreeTrunkSprite());
+    this.objects.set(OBJECTS.FERN, generateFernSprite());
+    this.objects.set(OBJECTS.FALLEN_LOG, generateFallenLogSprite());
+    this.objects.set(OBJECTS.FOREST_FLOWERS, generateForestFlowersSprite());
+
+    // Trees
+    this.trees = generateAllTreeSprites();
+
+    // Edge Transitions
+    this.edgeOverlays = generateEdgeTransitionOverlays();
+
+    // Canopy variants
+    this.canopyVariants = generateCanopySprites();
+
+    // Player
+    this.playerSprites = generatePlayerSprites();
+  }
+
+  update(dt) {
+    this.animTime += dt;
+  }
+
+  getGroundSprite(tileId, tileX = 0, tileY = 0) {
+    const t = Math.floor(this.animTime * 12);
+
+    if (tileId === TILES.WATER) return generateWaterSprite(t);
+    if (tileId === TILES.SWAMP_WATER) return generateSwampWaterSprite(t);
+    if (tileId === TILES.QUICKSAND) return generateQuicksandSprite(t);
+    if (tileId === TILES.VOID_LAKE) return generateVoidLakeSprite(t);
+
+    const variants = this.groundVariants.get(tileId);
+    if (variants && variants.length > 0) {
+      const index = Math.abs((tileX * 73856093 ^ tileY * 19349663) % variants.length);
+      return variants[index];
+    }
+    return this.groundVariants.get(TILES.GRASS)[0];
+  }
+
+  getObjectSprite(objId) {
+    return this.objects.get(objId) || null;
+  }
+
+  getTreeSprite(treeType, variant = 0) {
+    const list = this.trees.get(treeType);
+    if (!list || list.length === 0) return null;
+    return list[variant % list.length];
+  }
+
+  getTreeMetadata(treeType) {
+    return TREE_METADATA[treeType] || null;
+  }
+
+  getEdgeOverlay(tileType, key) {
+    const set = this.edgeOverlays.get(tileType);
+    return set ? set[key] : null;
+  }
+
+  getCanopySprite(tileX = 0, tileY = 0) {
+    const index = Math.abs((tileX * 31 + tileY * 17) % this.canopyVariants.length);
+    return this.canopyVariants[index];
+  }
+
+  getPlayerSprite(direction, isMoving) {
+    const dir = this.playerSprites[direction] || this.playerSprites['down'];
+    if (!isMoving) return dir[0];
+    const frame = Math.floor(this.animTime * 7) % 2;
+    return dir[frame];
+  }
+}
+
+
+// --- caveMap.js ---
+
+class CaveMap {
+  constructor(id = 'main_complex') {
+    this.id = id;
+    this.noise = new Noise2D(8819);
+
+    if (id === 'main_complex') {
+      this.width = 90;
+      this.height = 70;
+      this.name = 'Tiefenhöhlen & Unterirdischer See';
+      this.biome = BIOMES.CAVES_MAIN;
+    } else if (id === 'sub_crystal') {
+      this.width = 36;
+      this.height = 30;
+      this.name = 'Kristall-Unterhöhle';
+      this.biome = BIOMES.CAVES_SUB;
+    } else if (id === 'forest_grotto') {
+      this.width = 22;
+      this.height = 18;
+      this.name = 'Moosige Wald-Grotte';
+      this.biome = BIOMES.CAVES_GROTTO;
+    } else if (id === 'snow_grotto') {
+      this.width = 22;
+      this.height = 18;
+      this.name = 'Gefrorene Eis-Spalte';
+      this.biome = BIOMES.CAVES_GROTTO;
+    } else if (id === 'void_grotto') {
+      this.width = 24;
+      this.height = 18;
+      this.name = 'Astrale Tiefen-Kluft';
+      this.biome = BIOMES.CAVES_GROTTO;
+    } else {
+      this.width = 30;
+      this.height = 25;
+      this.name = 'Unterirdische Grotte';
+      this.biome = BIOMES.CAVES_GROTTO;
+    }
+
+    this.ground = [];
+    this.objects = [];
+    this.elevation = [];
+    this.ramps = [];
+    this.exits = []; // { x, y, targetDim, targetX, targetY, label }
+    this.shrines = [];
+
+    this.init();
+  }
+
+  isValid(x, y) {
+    return x >= 0 && x < this.width && y >= 0 && y < this.height;
+  }
+
+  getGroundTile(x, y) {
+    if (!this.isValid(x, y)) return TILES.CAVE_WALL;
+    return this.ground[y][x];
+  }
+
+  getObjectTile(x, y) {
+    if (!this.isValid(x, y)) return OBJECTS.NONE;
+    return this.objects[y][x];
+  }
+
+  getTheme(x, y) {
+    if (this.id === 'snow_grotto') return 'snow';
+    if (this.id === 'void_grotto') return 'void';
+    if (this.id === 'forest_grotto') return 'forest';
+    if (this.id === 'sub_crystal') return 'crystal';
+    if (this.id === 'main_complex') {
+      if (x < 42 && y > 38) return 'desert';
+      if (x < 42 && y <= 38) return 'forest';
+      if (x >= 42 && y > 38) return 'swamp';
+      return 'crystal';
+    }
+    return 'main';
+  }
+
+  getElevation(x, y) {
+    if (!this.isValid(x, y)) return 0;
+    return this.elevation[y][x];
+  }
+
+  getRamp(x, y) {
+    if (!this.isValid(x, y)) return 0;
+    return this.ramps[y][x];
+  }
+
+  isSolid(x, y) {
+    if (!this.isValid(x, y)) return true;
+    const tile = this.ground[y][x];
+    if (tile === TILES.CAVE_WALL || tile === TILES.CAVE_WATER) return true;
+    const obj = this.objects[y][x];
+    if (obj === OBJECTS.STALAGMITE || obj === OBJECTS.GLOW_CRYSTAL || obj === OBJECTS.SHRINE || obj === OBJECTS.TORCH) return true;
+    return false;
+  }
+
+  isElevationPassable(fromX, fromY, toX, toY) {
+    if (!this.isValid(toX, toY)) return false;
+    return !this.isSolid(toX, toY);
+  }
+
+  checkTreeCollision() {
+    return false;
+  }
+
+  getSpeedModifier() {
+    return 1.0;
+  }
+
+  isDeadly() {
+    return false;
+  }
+
+  getBiome() {
+    return this.biome;
+  }
+
+  init() {
+    for (let y = 0; y < this.height; y++) {
+      this.ground[y] = new Uint8Array(this.width);
+      this.objects[y] = new Uint8Array(this.width);
+      this.elevation[y] = new Int8Array(this.width);
+      this.ramps[y] = new Uint8Array(this.width);
+      for (let x = 0; x < this.width; x++) {
+        this.ground[y][x] = TILES.CAVE_WALL;
+      }
+    }
+
+    if (this.id === 'main_complex') {
+      this.generateMainComplex();
+    } else if (this.id === 'sub_crystal') {
+      this.generateSubCrystal();
+    } else {
+      this.generateSingleGrotto();
+    }
+  }
+
+  // Aushöhlen eines Raumes / Pfades
+  carveRoom(cx, cy, rx, ry, roughness = 0.25) {
+    const n = this.noise;
+    for (let dy = -ry - 1; dy <= ry + 1; dy++) {
+      for (let dx = -rx - 1; dx <= rx + 1; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        if (!this.isValid(x, y) || x <= 1 || x >= this.width - 2 || y <= 1 || y >= this.height - 2) continue;
+
+        const dist = Math.hypot(dx / rx, dy / ry) + n.noise(x * 0.4, y * 0.4) * roughness;
+        if (dist <= 1.0) {
+          this.ground[y][x] = TILES.CAVE_FLOOR;
+        }
+      }
+    }
+  }
+
+  // Aushöhlen eines Tunnels zwischen zwei Punkten
+  carveTunnel(x1, y1, x2, y2, radius = 2.5) {
+    const dist = Math.hypot(x2 - x1, y2 - y1);
+    const steps = Math.ceil(dist * 2);
+    const n = this.noise;
+
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const curX = x1 + (x2 - x1) * t + Math.sin(t * Math.PI) * (n.noise(s * 0.2, 5) * 4);
+      const curY = y1 + (y2 - y1) * t + Math.cos(t * Math.PI) * (n.noise(s * 0.2, 10) * 4);
+
+      for (let dy = -Math.ceil(radius) - 1; dy <= Math.ceil(radius) + 1; dy++) {
+        for (let dx = -Math.ceil(radius) - 1; dx <= Math.ceil(radius) + 1; dx++) {
+          const tx = Math.floor(curX + dx);
+          const ty = Math.floor(curY + dy);
+          if (!this.isValid(tx, ty) || tx <= 1 || tx >= this.width - 2 || ty <= 1 || ty >= this.height - 2) continue;
+
+          if (Math.hypot(dx, dy) <= radius) {
+            this.ground[ty][tx] = TILES.CAVE_FLOOR;
+          }
+        }
+      }
+    }
+  }
+
+  // Großes verzweigtes Höhlensystem (verbindet 3 Löcher: Grasland, Wüste, Sumpf)
+  generateMainComplex() {
+    // 1. Kammern
+    // Eingang 1 (Grasland-Loch): Nordwesten
+    const roomNW = { x: 16, y: 16, rx: 7, ry: 6 };
+    this.carveRoom(roomNW.x, roomNW.y, roomNW.rx, roomNW.ry);
+
+    // Eingang 2 (Wüsten-Loch): Südwesten
+    const roomSW = { x: 20, y: 54, rx: 8, ry: 7 };
+    this.carveRoom(roomSW.x, roomSW.y, roomSW.rx, roomSW.ry);
+
+    // Eingang 3 (Sumpf-Loch): Südosten
+    const roomSE = { x: 74, y: 52, rx: 8, ry: 7 };
+    this.carveRoom(roomSE.x, roomSE.y, roomSE.rx, roomSE.ry);
+
+    // Zentrale Tropfsteinhalle
+    const roomCenter = { x: 44, y: 32, rx: 11, ry: 9 };
+    this.carveRoom(roomCenter.x, roomCenter.y, roomCenter.rx, roomCenter.ry);
+
+    // Unterirdischer See (Nordosten)
+    const roomNE = { x: 68, y: 22, rx: 14, ry: 10 };
+    this.carveRoom(roomNE.x, roomNE.y, roomNE.rx, roomNE.ry);
+
+    // Unterhöhlen-Vorraum (Abgang zur Kristall-Unterhöhle)
+    const roomSub = { x: 46, y: 56, rx: 6, ry: 5 };
+    this.carveRoom(roomSub.x, roomSub.y, roomSub.rx, roomSub.ry);
+
+    // 2. Tunnels verbinden
+    this.carveTunnel(roomNW.x, roomNW.y, roomCenter.x, roomCenter.y, 2.8);
+    this.carveTunnel(roomSW.x, roomSW.y, roomCenter.x, roomCenter.y, 2.8);
+    this.carveTunnel(roomCenter.x, roomCenter.y, roomNE.x, roomNE.y, 3.2);
+    this.carveTunnel(roomNE.x, roomNE.y, roomSE.x, roomSE.y, 2.8);
+    this.carveTunnel(roomCenter.x, roomCenter.y, roomSub.x, roomSub.y, 2.5);
+    this.carveTunnel(roomSW.x, roomSW.y, roomSub.x, roomSub.y, 2.5);
+
+    // 3. Unterirdischer See in Raum NE füllen
+    for (let dy = -6; dy <= 6; dy++) {
+      for (let dx = -9; dx <= 9; dx++) {
+        const x = roomNE.x + dx;
+        const y = roomNE.y + dy;
+        if (this.isValid(x, y) && this.ground[y][x] === TILES.CAVE_FLOOR) {
+          if (Math.hypot(dx / 9, dy / 6) <= 0.82) {
+            this.ground[y][x] = TILES.CAVE_WATER;
+          }
+        }
+      }
+    }
+    // Trittstein-Inseln im See
+    this.ground[roomNE.y][roomNE.x] = TILES.CAVE_FLOOR;
+    this.ground[roomNE.y - 1][roomNE.x + 1] = TILES.CAVE_FLOOR;
+    this.ground[roomNE.y + 1][roomNE.x - 2] = TILES.CAVE_FLOOR;
+
+    // 4. Ausgänge zur Oberwelt platzieren
+    // Ausgang 1: Grasland-Loch bei (12, 38)
+    this.ground[roomNW.y][roomNW.x] = TILES.CAVE_HOLE_EXIT;
+    this.exits.push({
+      x: roomNW.x,
+      y: roomNW.y,
+      targetDim: 'overworld',
+      targetX: 12,
+      targetY: 38,
+      label: 'Aufgang zum Grasland-Loch'
+    });
+
+    // Ausgang 2: Wüsten-Loch bei (38, 76)
+    this.ground[roomSW.y][roomSW.x] = TILES.CAVE_HOLE_EXIT;
+    this.exits.push({
+      x: roomSW.x,
+      y: roomSW.y,
+      targetDim: 'overworld',
+      targetX: 38,
+      targetY: 76,
+      label: 'Aufgang zum Wüsten-Trichter'
+    });
+
+    // Ausgang 3: Sumpf-Loch bei (82, 64)
+    this.ground[roomSE.y][roomSE.x] = TILES.CAVE_HOLE_EXIT;
+    this.exits.push({
+      x: roomSE.x,
+      y: roomSE.y,
+      targetDim: 'overworld',
+      targetX: 82,
+      targetY: 64,
+      label: 'Aufgang zur Sumpf-Kuhle'
+    });
+
+    // Abgang zur Kristall-Unterhöhle
+    this.ground[roomSub.y][roomSub.x] = TILES.CAVE_LADDER_DOWN;
+    this.exits.push({
+      x: roomSub.x,
+      y: roomSub.y,
+      targetDim: 'sub_crystal',
+      targetX: 18,
+      targetY: 6,
+      label: 'Abgang in die Kristall-Unterhöhle'
+    });
+
+    // 5. Dekorationen (Tropfsteine, Leuchtkristalle, Pilze)
+    for (let y = 2; y < this.height - 2; y++) {
+      for (let x = 2; x < this.width - 2; x++) {
+        if (this.ground[y][x] === TILES.CAVE_FLOOR && this.ground[y][x] !== TILES.CAVE_HOLE_EXIT) {
+          const hasWallNeighbor = (
+            this.ground[y - 1][x] === TILES.CAVE_WALL ||
+            this.ground[y + 1][x] === TILES.CAVE_WALL ||
+            this.ground[y][x - 1] === TILES.CAVE_WALL ||
+            this.ground[y][x + 1] === TILES.CAVE_WALL
+          );
+
+          const r = (x * 37 + y * 53) % 100;
+          if (hasWallNeighbor) {
+            if (r < 16) {
+              this.objects[y][x] = OBJECTS.STALAGMITE;
+            } else if (r < 25) {
+              this.objects[y][x] = OBJECTS.GLOW_CRYSTAL;
+            } else if (r < 34) {
+              this.objects[y][x] = OBJECTS.CAVE_MUSHROOM_GLOW;
+            } else if (r < 44) {
+              this.objects[y][x] = OBJECTS.TORCH; // Cave corridor torches along walls!
+            }
+          } else {
+            if (r === 99) {
+              this.objects[y][x] = OBJECTS.CAVE_MUSHROOM_GLOW;
+            }
+          }
+        }
+      }
+    }
+
+    // Fackeln neben den Höhlenausgängen, Leitern und Schrein
+    const placeTorchIfFloor = (tx, ty) => {
+      if (this.isValid(tx, ty) && this.ground[ty][tx] === TILES.CAVE_FLOOR && this.objects[ty][tx] === OBJECTS.NONE) {
+        this.objects[ty][tx] = OBJECTS.TORCH;
+      }
+    };
+
+    placeTorchIfFloor(roomNW.x - 2, roomNW.y);
+    placeTorchIfFloor(roomNW.x + 2, roomNW.y);
+    placeTorchIfFloor(roomSW.x - 2, roomSW.y);
+    placeTorchIfFloor(roomSW.x + 2, roomSW.y);
+    placeTorchIfFloor(roomSE.x - 2, roomSE.y);
+    placeTorchIfFloor(roomSE.x + 2, roomSE.y);
+    placeTorchIfFloor(roomSub.x - 2, roomSub.y);
+    placeTorchIfFloor(roomSub.x + 2, roomSub.y);
+
+    // Seltene Schrein-Nische am Seeufer
+    const shrineX = roomNE.x + 7;
+    const shrineY = roomNE.y - 4;
+    if (this.isValid(shrineX, shrineY) && this.ground[shrineY][shrineX] === TILES.CAVE_FLOOR) {
+      this.objects[shrineY][shrineX] = OBJECTS.SHRINE;
+      this.shrines.push({ x: shrineX, y: shrineY, name: 'Schrein des Tiefenwassers' });
+      placeTorchIfFloor(shrineX - 2, shrineY);
+      placeTorchIfFloor(shrineX + 2, shrineY);
+    }
+  }
+
+  // Kristall-Unterhöhle (Unterhöhle mit seltenem Tiefenschrein)
+  generateSubCrystal() {
+    const cx = Math.floor(this.width / 2);
+    const cy = Math.floor(this.height / 2);
+    this.carveRoom(cx, cy, 12, 10, 0.2);
+
+    // Aufgang zurück zur Haupthöhle
+    const ladderX = 18;
+    const ladderY = 6;
+    this.ground[ladderY][ladderX] = TILES.CAVE_LADDER_UP;
+    this.exits.push({
+      x: ladderX,
+      y: ladderY,
+      targetDim: 'main_complex',
+      targetX: 46,
+      targetY: 57,
+      label: 'Aufgang zur Haupthöhle'
+    });
+
+    // Ein kleiner Leuchtpool
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        const px = cx + dx;
+        const py = cy + 4 + dy;
+        if (this.isValid(px, py) && Math.hypot(dx / 3, dy / 2) <= 0.85) {
+          this.ground[py][px] = TILES.CAVE_WATER;
+        }
+      }
+    }
+
+    // Kristalle, Fackeln & Stalagmiten ringsum
+    for (let y = 2; y < this.height - 2; y++) {
+      for (let x = 2; x < this.width - 2; x++) {
+        if (this.ground[y][x] === TILES.CAVE_FLOOR && !(x === ladderX && y === ladderY)) {
+          const hash = (x * 47 + y * 71) % 50;
+          if (hash < 6) {
+            this.objects[y][x] = OBJECTS.GLOW_CRYSTAL;
+          } else if (hash < 9) {
+            this.objects[y][x] = OBJECTS.STALAGMITE;
+          } else if (hash < 12) {
+            this.objects[y][x] = OBJECTS.CAVE_MUSHROOM_GLOW;
+          } else if (hash < 16) {
+            this.objects[y][x] = OBJECTS.TORCH;
+          }
+        }
+      }
+    }
+
+    // Fackeln neben Aufgangsleiter
+    if (this.isValid(ladderX - 2, ladderY)) this.objects[ladderY][ladderX - 2] = OBJECTS.TORCH;
+    if (this.isValid(ladderX + 2, ladderY)) this.objects[ladderY][ladderX + 2] = OBJECTS.TORCH;
+
+    // Alter Geister-Schrein im Zentrum der Kristallkammer
+    this.objects[cy - 2][cx] = OBJECTS.SHRINE;
+    this.shrines.push({ x: cx, y: cy - 2, name: 'Schrein des Äther-Kristalls' });
+    if (this.isValid(cx - 3, cy - 2)) this.objects[cy - 2][cx - 3] = OBJECTS.TORCH;
+    if (this.isValid(cx + 3, cy - 2)) this.objects[cy - 2][cx + 3] = OBJECTS.TORCH;
+  }
+
+  // Kompakte Ein-Raum-Grotten
+  generateSingleGrotto() {
+    const cx = Math.floor(this.width / 2);
+    const cy = Math.floor(this.height / 2);
+    this.carveRoom(cx, cy, 7, 5, 0.15);
+
+    // Ausgang zurück zur Oberwelt
+    const exitX = cx;
+    const exitY = cy + 4;
+    this.ground[exitY][exitX] = TILES.CAVE_HOLE_EXIT;
+
+    let targetX = 34, targetY = 12;
+    let label = 'Aufgang zur Wald-Senke';
+    let shrineName = 'Schrein des Verborgenen Mooses';
+
+    if (this.id === 'snow_grotto') {
+      targetX = 104; targetY = 16;
+      label = 'Aufgang zur Eisspalte';
+      shrineName = 'Schrein der Ewigen Kälte';
+    } else if (this.id === 'void_grotto') {
+      targetX = 118; targetY = 48;
+      label = 'Aufgang zum Leeren-Riss';
+      shrineName = 'Schrein der Astralen Stille';
+    }
+
+    this.exits.push({
+      x: exitX,
+      y: exitY,
+      targetDim: 'overworld',
+      targetX,
+      targetY,
+      label
+    });
+
+    // Fackeln neben dem Ausstiegsloch
+    if (this.isValid(exitX - 2, exitY) && this.ground[exitY][exitX - 2] === TILES.CAVE_FLOOR) {
+      this.objects[exitY][exitX - 2] = OBJECTS.TORCH;
+    }
+    if (this.isValid(exitX + 2, exitY) && this.ground[exitY][exitX + 2] === TILES.CAVE_FLOOR) {
+      this.objects[exitY][exitX + 2] = OBJECTS.TORCH;
+    }
+
+    // Kleine biome-spezifische Wasser- / Kristall-Pfütze
+    if (this.isValid(cx - 3, cy - 1)) this.ground[cy - 1][cx - 3] = TILES.CAVE_WATER;
+    if (this.isValid(cx - 2, cy - 1)) this.ground[cy - 1][cx - 2] = TILES.CAVE_WATER;
+
+    // Biomspezifische Dekorationen
+    for (let y = 2; y < this.height - 2; y++) {
+      for (let x = 2; x < this.width - 2; x++) {
+        if (this.ground[y][x] === TILES.CAVE_FLOOR && !(x === exitX && y === exitY)) {
+          const h = (x * 29 + y * 43) % 20;
+          if (this.id === 'snow_grotto') {
+            if (h === 1) this.objects[y][x] = OBJECTS.ROCK_ICE;
+            if (h === 2 || h === 4) this.objects[y][x] = OBJECTS.GLOW_CRYSTAL;
+          } else if (this.id === 'void_grotto') {
+            if (h === 1) this.objects[y][x] = OBJECTS.ROCK_VOID;
+            if (h === 2 || h === 4) this.objects[y][x] = OBJECTS.GLOW_CRYSTAL;
+          } else {
+            // forest_grotto
+            if (h === 1) this.objects[y][x] = OBJECTS.STALAGMITE;
+            if (h === 2) this.objects[y][x] = OBJECTS.FERN;
+            if (h === 3 || h === 4) this.objects[y][x] = OBJECTS.CAVE_MUSHROOM_GLOW;
+          }
+        }
+      }
+    }
+
+    // Schrein in der Grotte mit Fackeln
+    const sX = cx;
+    const sY = cy - 3;
+    if (this.isValid(sX, sY) && this.ground[sY][sX] === TILES.CAVE_FLOOR) {
+      this.objects[sY][sX] = OBJECTS.SHRINE;
+      this.shrines.push({ x: sX, y: sY, name: shrineName });
+      if (this.isValid(sX - 2, sY) && this.ground[sY][sX - 2] === TILES.CAVE_FLOOR) {
+        this.objects[sY][sX - 2] = OBJECTS.TORCH;
+      }
+      if (this.isValid(sX + 2, sY) && this.ground[sY][sX + 2] === TILES.CAVE_FLOOR) {
+        this.objects[sY][sX + 2] = OBJECTS.TORCH;
+      }
+    }
+  }
+}
+
+
+// --- cloudMap.js ---
+
+class CloudMap {
+  constructor() {
+    this.width = MAP_WIDTH;   // 130 Kacheln
+    this.height = MAP_HEIGHT; // 90 Kacheln
+    this.name = 'Rosa Wolkenreich';
+    this.biome = BIOMES.CLOUDS;
+
+    this.ground = [];
+    this.objects = [];
+    this.elevation = [];
+    this.ramps = [];
+    this.shrines = [];
+
+    this.noise = new Noise2D(9923);
+    this.init();
+  }
+
+  isValid(x, y) {
+    return x >= 0 && x < this.width && y >= 0 && y < this.height;
+  }
+
+  getGroundTile(x, y) {
+    if (!this.isValid(x, y)) return TILES.SKY_ABYSS;
+    return this.ground[y][x];
+  }
+
+  getObjectTile(x, y) {
+    if (!this.isValid(x, y)) return OBJECTS.NONE;
+    return this.objects[y][x];
+  }
+
+  getElevation() {
+    return 0;
+  }
+
+  getRamp() {
+    return 0;
+  }
+
+  isSolid(x, y) {
+    if (!this.isValid(x, y)) return true;
+    const obj = this.objects[y][x];
+    if (obj === OBJECTS.SHRINE) return true;
+    return false;
+  }
+
+  isElevationPassable() {
+    return true;
+  }
+
+  checkTreeCollision() {
+    return false;
+  }
+
+  getSpeedModifier(x, y) {
+    if (!this.isValid(x, y)) return 1.0;
+    const tile = this.ground[y][x];
+    if (tile === TILES.RAINBOW_BRIDGE_H || tile === TILES.RAINBOW_BRIDGE_V) {
+      return 1.15; // Sanfter Geschwindigkeits-Boost auf Regenbogenbrücken
+    }
+    return 1.0;
+  }
+
+  isDeadly() {
+    return false;
+  }
+
+  getBiome() {
+    return this.biome;
+  }
+
+  init() {
+    for (let y = 0; y < this.height; y++) {
+      this.ground[y] = new Uint8Array(this.width);
+      this.objects[y] = new Uint8Array(this.width);
+      this.elevation[y] = new Int8Array(this.width);
+      this.ramps[y] = new Uint8Array(this.width);
+      for (let x = 0; x < this.width; x++) {
+        // Standardmäßig freier Himmel / Fallzone
+        this.ground[y][x] = TILES.SKY_ABYSS;
+      }
+    }
+
+    this.generateCloudIslands();
+    this.generateRainbowBridges();
+    this.generateCloudShrines();
+  }
+
+  // Generiert eine organisch geformte rosa Wolke aus mehreren überlappenden Puff-Kreisen
+  createCloudPuff(cx, cy, radius, roughness = 0.3) {
+    const n = this.noise;
+    const r = Math.round(radius);
+    const centerX = Math.round(cx);
+    const centerY = Math.round(cy);
+
+    for (let dy = -r - 2; dy <= r + 2; dy++) {
+      for (let dx = -r - 2; dx <= r + 2; dx++) {
+        const x = centerX + dx;
+        const y = centerY + dy;
+        if (!this.isValid(x, y)) continue;
+
+        const dist = Math.hypot(dx, dy) + n.noise(x * 0.3, y * 0.3) * roughness * radius;
+        if (dist <= radius) {
+          this.ground[y][x] = TILES.CLOUD_PINK;
+        }
+      }
+    }
+  }
+
+  createCloudIsland(cx, cy, radius = 5) {
+    // Kleiner zentraler fluffiger Kern
+    this.createCloudPuff(cx, cy, radius);
+
+    // 7 überlappende Bausch-Lappen (Fluffy Lobes) für die süße Wolkenform
+    const lobes = 7;
+    for (let i = 0; i < lobes; i++) {
+      const angle = (i / lobes) * Math.PI * 2;
+      const lx = Math.round(cx + Math.cos(angle) * (radius * 0.7));
+      const ly = Math.round(cy + Math.sin(angle) * (radius * 0.65));
+      const lRadius = Math.max(2, Math.round(radius * 0.55 + ((i % 2) * 1.2)));
+      this.createCloudPuff(lx, ly, lRadius);
+    }
+  }
+
+  generateCloudIslands() {
+    // 15 kleinere, fluffige rosa Wolkeninseln im Himmel
+    // Nördliche Reihe
+    this.createCloudIsland(20, 20, 4.5);  // A1: West-Wald Himmel
+    this.createCloudIsland(44, 20, 4.5);  // A2: Nordwest Trittwolke
+    this.createCloudIsland(65, 14, 5.0);  // A3: Nordgipfel Wolke (Schrein)
+    this.createCloudIsland(86, 20, 4.5);  // A4: Nordost Schnee Himmel
+    this.createCloudIsland(110, 20, 4.5); // A5: Fernost Wolke
+
+    // Mittlere Reihe
+    this.createCloudIsland(18, 44, 4.5);  // B1: West Horizont
+    this.createCloudIsland(38, 44, 4.5);  // B2: Westzentrum
+    this.createCloudIsland(65, 44, 5.5);  // B3: Zentrales Wolkenheiligtum (Schrein)
+    this.createCloudIsland(90, 44, 4.5);  // B4: Ostzentrum
+    this.createCloudIsland(112, 44, 5.0); // B5: Fernost Morgenwolke (Schrein)
+
+    // Südliche Reihe
+    this.createCloudIsland(24, 70, 4.5);  // C1: Südwest Wüsten Himmel
+    this.createCloudIsland(44, 70, 4.5);  // C2: Südwest Trittwolke
+    this.createCloudIsland(65, 74, 5.0);  // C3: Südgipfel Wolke
+    this.createCloudIsland(90, 70, 4.5);  // C4: Südost Sumpf Himmel
+    this.createCloudIsland(112, 70, 4.5); // C5: Fern-Südost Wolke
+  }
+
+  // Horizontale Regenbogenbrücke
+  createRainbowBridgeH(x1, x2, y, thickness = 2) {
+    const minX = Math.min(x1, x2);
+    const maxX = Math.max(x1, x2);
+    for (let x = minX; x <= maxX; x++) {
+      for (let dy = 0; dy < thickness; dy++) {
+        const ty = y + dy;
+        if (this.isValid(x, ty) && this.ground[ty][x] === TILES.SKY_ABYSS) {
+          this.ground[ty][x] = TILES.RAINBOW_BRIDGE_H;
+        }
+      }
+    }
+  }
+
+  // Vertikale Regenbogenbrücke
+  createRainbowBridgeV(y1, y2, x, thickness = 2) {
+    const minY = Math.min(y1, y2);
+    const maxY = Math.max(y1, y2);
+    for (let y = minY; y <= maxY; y++) {
+      for (let dx = 0; dx < thickness; dx++) {
+        const tx = x + dx;
+        if (this.isValid(tx, y) && this.ground[y][tx] === TILES.SKY_ABYSS) {
+          this.ground[y][tx] = TILES.RAINBOW_BRIDGE_V;
+        }
+      }
+    }
+  }
+
+  generateRainbowBridges() {
+    // ========================================================================
+    // LANGE REGENBOGENBRÜCKEN ZWISCHEN DEN FLUFFIGEN WOLKENINSELN
+    // ========================================================================
+    // 1. Nördliche Querbrücken
+    this.createRainbowBridgeH(25, 39, 20, 2);   // A1 -> A2 (15 Kacheln)
+    this.createRainbowBridgeH(49, 60, 18, 2);   // A2 -> A3 (12 Kacheln)
+    this.createRainbowBridgeV(15, 18, 60, 2);
+    this.createRainbowBridgeH(70, 81, 18, 2);   // A3 -> A4 (12 Kacheln)
+    this.createRainbowBridgeV(15, 18, 70, 2);
+    this.createRainbowBridgeH(91, 105, 20, 2);  // A4 -> A5 (15 Kacheln)
+
+    // 2. Mittlere Haupt-Himmelsstraße (Lange Brücken ins Zentrum)
+    this.createRainbowBridgeH(23, 33, 44, 2);   // B1 -> B2 (11 Kacheln)
+    this.createRainbowBridgeH(43, 59, 44, 2);   // B2 -> B3 Zentrum (17 Kacheln!)
+    this.createRainbowBridgeH(71, 85, 44, 2);   // B3 Zentrum -> B4 (15 Kacheln!)
+    this.createRainbowBridgeH(95, 107, 44, 2);  // B4 -> B5 (13 Kacheln)
+
+    // 3. Südliche Querbrücken
+    this.createRainbowBridgeH(29, 39, 70, 2);   // C1 -> C2 (11 Kacheln)
+    this.createRainbowBridgeH(49, 60, 72, 2);   // C2 -> C3 (12 Kacheln)
+    this.createRainbowBridgeV(72, 74, 60, 2);
+    this.createRainbowBridgeH(70, 85, 72, 2);   // C3 -> C4 (16 Kacheln)
+    this.createRainbowBridgeV(72, 74, 70, 2);
+    this.createRainbowBridgeH(95, 107, 70, 2);  // C4 -> C5 (13 Kacheln)
+
+    // 4. Lange vertikale Himmelsbögen (Nord nach Süd)
+    this.createRainbowBridgeV(20, 39, 65, 2);   // A3 Nordgipfel -> B3 Zentrum (20 Kacheln!)
+    this.createRainbowBridgeV(49, 69, 65, 2);   // B3 Zentrum -> C3 Südgipfel (21 Kacheln!)
+
+    // 5. Äußere vertikale Verbindungen
+    this.createRainbowBridgeV(25, 39, 19, 2);   // A1 -> B1 (15 Kacheln)
+    this.createRainbowBridgeV(49, 65, 21, 2);   // B1 -> C1 (17 Kacheln)
+
+    this.createRainbowBridgeV(25, 39, 111, 2);  // A5 -> B5 (15 Kacheln)
+    this.createRainbowBridgeV(49, 65, 112, 2);  // B5 -> C5 (17 Kacheln)
+  }
+
+  generateCloudShrines() {
+    // 1. Schrein des Himmels-Zenits (Im Zentrum des zentralen Wolkenheiligtums)
+    const shrineCenter = { x: 65, y: 42, name: 'Schrein des Himmels-Zenits' };
+    this.objects[shrineCenter.y][shrineCenter.x] = OBJECTS.SHRINE;
+    this.shrines.push(shrineCenter);
+
+    // 2. Schrein der Rosa Dämmerung (Auf der Fernost-Morgenwolke)
+    const shrineEast = { x: 112, y: 42, name: 'Schrein der Rosa Dämmerung' };
+    this.objects[shrineEast.y][shrineEast.x] = OBJECTS.SHRINE;
+    this.shrines.push(shrineEast);
+
+    // 3. Schrein des Regenbogen-Wächters (Auf dem Nordgipfel)
+    const shrineNorth = { x: 65, y: 13, name: 'Schrein des Regenbogen-Wächters' };
+    this.objects[shrineNorth.y][shrineNorth.x] = OBJECTS.SHRINE;
+    this.shrines.push(shrineNorth);
+  }
+}
+
+
+// --- map.js ---
+
+class WorldMap {
+  constructor() {
+    this.width = MAP_WIDTH;
+    this.height = MAP_HEIGHT;
+
+    this.ground = [];
+    this.objects = [];
+    this.canopy = [];
+    this.canopyCrowns = [];
+    this.trees = [];
+    this.kodamas = [];
+    this.elevation = []; // Int8Array: -1, 0, 1, 2
+    this.ramps = [];     // Uint8Array: RAMPS.*
+    this.holeEntrances = []; // Portale / Zugänge zu Höhlen in Löchern
+    this.trampolines = [];   // Trampoline zum Wolkenreich
+
+    this.spawnPoint = { x: 30, y: 45 }; // In 16px tiles
+    this.noise = new Noise2D(4242);     // Deterministic seed for reproducible test world
+
+    this.initMap();
+  }
+
+  initMap() {
+    for (let y = 0; y < this.height; y++) {
+      this.ground[y] = new Uint8Array(this.width);
+      this.objects[y] = new Uint8Array(this.width);
+      this.canopy[y] = new Uint8Array(this.width);
+      this.elevation[y] = new Int8Array(this.width); // 0 by default (ELEVATION.GROUND)
+      this.ramps[y] = new Uint8Array(this.width);     // 0 by default (RAMPS.NONE)
+    }
+
+    const n = this.noise;
+
+    // --------------------------------------------------------------------
+    // STEP 1: ORGANIC BIOME ASSIGNMENT WITH NOISE PERTURBATION
+    // --------------------------------------------------------------------
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        // Domain warping for natural, curvy, non-linear biome borders
+        const warpX = x + n.fbm(x * 0.04, y * 0.04, 3) * 12;
+        const warpY = y + n.fbm((x + 50) * 0.04, (y + 50) * 0.04, 3) * 12;
+
+        const nx = warpX / this.width;
+        const ny = warpY / this.height;
+
+        // Default: Grassland
+        let tile = TILES.GRASS;
+
+        // Northeast: Snow & Ice
+        if (nx > 0.52 && ny < 0.44) {
+          tile = TILES.SNOW;
+        }
+        // Southwest: Desert & Quicksand
+        else if (nx < 0.46 && ny > 0.52) {
+          tile = TILES.SAND;
+        }
+        // Far East: The Void
+        else if (nx > 0.74 && ny > 0.35) {
+          tile = TILES.VOID_GROUND;
+        }
+        // Southeast: Swamp
+        else if (nx > 0.44 && ny > 0.48) {
+          tile = TILES.SWAMP_GROUND;
+        }
+
+        this.ground[y][x] = tile;
+      }
+    }
+
+    // --------------------------------------------------------------------
+    // STEP 2: ORGANIC MEANDERING RIVER & WATER BODIES
+    // --------------------------------------------------------------------
+    // A natural winding river flowing from North to South through Grassland
+    for (let y = 0; y < this.height; y++) {
+      // River center weaves with noise
+      const riverCenter = 44 + Math.sin(y * 0.08) * 8 + n.noise(y * 0.05, 10) * 10;
+      const riverWidth = 3.5 + Math.sin(y * 0.15) * 1.5;
+
+      for (let x = 0; x < this.width; x++) {
+        const dist = Math.abs(x - riverCenter);
+        if (dist < riverWidth) {
+          // If in swamp area, turn into swamp water
+          if (this.ground[y][x] === TILES.SWAMP_GROUND) {
+            this.ground[y][x] = TILES.SWAMP_WATER;
+          } else if (this.ground[y][x] !== TILES.VOID_GROUND) {
+            this.ground[y][x] = TILES.WATER;
+          }
+        }
+      }
+    }
+
+    // Organic Lake in Snow region
+    this.createOrganicBlob(88, 22, 9, TILES.WATER, 0.6);
+
+    // Organic Swamp Water Ponds in Swamp
+    this.createOrganicBlob(72, 64, 7, TILES.SWAMP_WATER, 0.55);
+    this.createOrganicBlob(86, 78, 8, TILES.SWAMP_WATER, 0.58);
+
+    // --------------------------------------------------------------------
+    // STEP 3: QUICKSAND IN THE DESERT (Organic swirling sinkhole)
+    // --------------------------------------------------------------------
+    this.createOrganicBlob(28, 72, 8, TILES.QUICKSAND, 0.5);
+
+    // --------------------------------------------------------------------
+    // STEP 4: DEADLY VOID LAKE IN THE VOID (Jagged Abyss)
+    // --------------------------------------------------------------------
+    this.createOrganicBlob(112, 62, 10, TILES.VOID_LAKE, 0.52);
+
+    // --------------------------------------------------------------------
+    // STEP 5: BRIDGES OVER THE RIVER
+    // --------------------------------------------------------------------
+    // Main horizontal wooden bridge connecting West and East
+    const bridgeY = 44;
+    for (let x = 36; x <= 52; x++) {
+      if (this.ground[bridgeY][x] === TILES.WATER || this.ground[bridgeY][x] === TILES.SWAMP_WATER) {
+        this.ground[bridgeY - 1][x] = TILES.BRIDGE_H;
+        this.ground[bridgeY][x] = TILES.BRIDGE_H;
+      }
+    }
+
+    // Northern snow crossing bridge
+    const bridgeY2 = 18;
+    for (let x = 36; x <= 50; x++) {
+      if (this.ground[bridgeY2][x] === TILES.WATER) {
+        this.ground[bridgeY2][x] = TILES.BRIDGE_H;
+      }
+    }
+
+    // --------------------------------------------------------------------
+    // STEP 6: NATURAL WINDING DIRT PATHS
+    // --------------------------------------------------------------------
+    // Connect spawn point to bridge and north
+    this.createWindingPath(this.spawnPoint.x, this.spawnPoint.y, 42, 44, 2);
+    this.createWindingPath(46, 44, 75, 44, 2);
+    this.createWindingPath(30, 45, 20, 20, 2); // towards forest
+
+    // --------------------------------------------------------------------
+    // STEP 6b: MULTI-TIER ELEVATION SYSTEM (Plateaus +1, +2 and Holes -1 with Ramps)
+    // --------------------------------------------------------------------
+    this.generateElevationsAndRamps();
+
+    // --------------------------------------------------------------------
+    // STEP 7: DENSE LIVING FOREST (Thick Canopy Roof + Walkable Trails)
+    // --------------------------------------------------------------------
+    this.trees = [];
+
+    // Clear canopy array
+    for (let y = 0; y < this.height; y++) {
+      this.canopy[y].fill(CANOPY.NONE);
+    }
+
+    // 1. Thick Forest Canopy Roof with Organic Sunbeam Openings
+    for (let y = 4; y <= 34; y++) {
+      for (let x = 4; x <= 40; x++) {
+        if (!this.isValid(x, y)) continue;
+        const gTile = this.ground[y][x];
+        if (gTile === TILES.WATER || gTile === TILES.SWAMP_WATER || gTile === TILES.BRIDGE_H) continue;
+        if (Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y) < 5) continue;
+
+        const distFromCenter = Math.hypot(x - 22, y - 18);
+        const forestDensity = n.fbm(x * 0.12, y * 0.12, 3);
+
+        if (distFromCenter < 16 + forestDensity * 7) {
+          // Forest floor gets dirt and rich shaded soil
+          if (n.noise(x * 0.28, y * 0.28) > -0.1) {
+            this.ground[y][x] = TILES.DIRT;
+          }
+
+          // Seltene, kleine Lichtschneisen ("nur an einigen wenigen Stellen bricht ein Sonnenstrahl durch")
+          const gapNoise = n.noise(x * 0.35, y * 0.35);
+          if (gapNoise > 0.68) {
+            // Sunlit gap: ground visible from above!
+            this.canopy[y][x] = CANOPY.NONE;
+            if (n.noise(x * 1.7, y * 1.7) > 0.2) {
+              this.objects[y][x] = OBJECTS.FOREST_FLOWERS;
+            } else if (n.noise(x * 1.7, y * 1.7) < -0.2) {
+              this.objects[y][x] = OBJECTS.FERN;
+            }
+          } else {
+            // Dichtes, geschlossenes Blätterdach über dem Kopf
+            this.canopy[y][x] = CANOPY.TREE_CROWN;
+          }
+        }
+      }
+    }
+
+    // 1b. Grosse, überlappende Baumkronen für das geschlossene Kronendach
+    this.canopyCrowns = [];
+    const crownSpacingX = 18;
+    const crownSpacingY = 16;
+
+    for (let py = 3 * TILE_SIZE; py <= 36 * TILE_SIZE; py += crownSpacingY) {
+      const rowIndex = Math.floor(py / crownSpacingY);
+      const rowOffset = (rowIndex % 2 === 1) ? crownSpacingX * 0.5 : 0;
+
+      for (let px = 3 * TILE_SIZE; px <= 42 * TILE_SIZE; px += crownSpacingX) {
+        const jx = px + rowOffset + n.noise(px * 0.15, py * 0.15) * 5;
+        const jy = py + n.noise(px * 0.25, py * 0.25) * 5;
+
+        const tileX = Math.floor(jx / TILE_SIZE);
+        const tileY = Math.floor(jy / TILE_SIZE);
+
+        if (!this.isValid(tileX, tileY)) continue;
+        if (this.canopy[tileY][tileX] !== CANOPY.TREE_CROWN) continue;
+
+        // Verschiedene Baumarten & organische Kronengrößen (deutlich größer als 1 Tile!)
+        const tRand = Math.abs(n.noise(tileX * 0.7 + 15, tileY * 0.7 + 15));
+        let treeType = TREES.OAK;
+        if (tRand > 0.76) treeType = TREES.PINE;
+        else if (tRand > 0.54) treeType = TREES.BIRCH;
+        else if (tRand > 0.40) treeType = TREES.AUTUMN;
+        else if (tRand > 0.22) treeType = TREES.BLOSSOM;
+
+        const radius = 17 + Math.abs(n.noise(tileX * 0.85, tileY * 0.85)) * 5; // 17px bis 22px Radius = 34px bis 44px Durchmesser!
+        const hasLantern = (n.noise(jx * 0.18, jy * 0.18) > 0.65);
+
+        this.canopyCrowns.push({
+          x: jx,
+          y: jy,
+          type: treeType,
+          radius,
+          hasLantern
+        });
+      }
+    }
+
+    // Von Nord nach Süd sortieren, damit südliche Kronen die nördlichen mit Schatten überdecken
+    this.canopyCrowns.sort((a, b) => a.y - b.y);
+
+    // 2. Walkable Trees under the Canopy (Spaced 4 tiles apart so player can walk freely!)
+    for (let ty = 6; ty <= 32; ty += 4) {
+      for (let tx = 6; tx <= 38; tx += 4) {
+        const jx = tx + (n.noise(tx * 1.3, ty * 1.3) * 1.4);
+        const jy = ty + (n.noise(tx * 2.1, ty * 2.1) * 1.4);
+        const rx = Math.round(jx);
+        const ry = Math.round(jy);
+        if (!this.isValid(rx, ry)) continue;
+        const gTile = this.ground[ry][rx];
+        if (gTile === TILES.WATER || gTile === TILES.SWAMP_WATER || gTile === TILES.BRIDGE_H) continue;
+        if (Math.hypot(rx - this.spawnPoint.x, ry - this.spawnPoint.y) < 5) continue;
+
+        const distFromCenter = Math.hypot(rx - 22, ry - 18);
+        const forestDensity = n.fbm(rx * 0.12, ry * 0.12, 3);
+
+        if (distFromCenter < 14 + forestDensity * 6) {
+          // Diverse tree species under canopy
+          const tRand = Math.abs(n.noise(rx * 0.7 + 10, ry * 0.7 + 10));
+          let treeType = TREES.OAK;
+          if (tRand > 0.72) {
+            treeType = TREES.PINE;
+          } else if (tRand > 0.52) {
+            treeType = TREES.BIRCH;
+          } else if (tRand > 0.38) {
+            treeType = TREES.AUTUMN;
+          } else if (tRand > 0.22) {
+            treeType = TREES.BLOSSOM;
+          } else if (tRand > 0.12) {
+            treeType = TREES.SAPLING;
+          }
+
+          const variant = Math.abs(Math.floor(n.noise(rx * 3.3, ry * 3.3) * 10)) % 2;
+          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, treeType, variant);
+
+          // Selective obstacles ("nur an manchen stellen kommt man nicht durch")
+          const obstRand = n.noise(rx * 1.9, ry * 1.9);
+          if (obstRand > 0.58 && rx + 1 < this.width && this.objects[ry][rx + 1] === OBJECTS.NONE && !this.isNearRamp(rx + 1, ry, 2)) {
+            this.objects[ry][rx + 1] = OBJECTS.FALLEN_LOG;
+          } else if (obstRand < -0.58 && ry + 1 < this.height && this.objects[ry + 1][rx] === OBJECTS.NONE && !this.isNearRamp(rx, ry + 1, 2)) {
+            this.objects[ry + 1][rx] = OBJECTS.ROCK_STONE;
+          }
+
+          // Walkable undergrowth
+          const underRand = n.noise(rx * 2.5, ry * 2.5);
+          if (underRand > 0.45 && this.objects[ry][rx] === OBJECTS.NONE) {
+            this.objects[ry][rx] = OBJECTS.FERN;
+          } else if (underRand < -0.45 && this.objects[ry][rx] === OBJECTS.NONE) {
+            this.objects[ry][rx] = OBJECTS.MUSHROOM_BROWN;
+          }
+        }
+      }
+    }
+
+    // 2. Snow Biome: Snowy Firs & Conifers
+    for (let ty = 6; ty <= 36; ty += 4) {
+      for (let tx = 65; tx <= 122; tx += 4) {
+        if (!this.isValid(tx, ty)) continue;
+        if (this.ground[ty][tx] !== TILES.SNOW) continue;
+        const snowNoise = n.fbm(tx * 0.1, ty * 0.1, 2);
+        if (snowNoise > 0.12) {
+          const jx = tx + n.noise(tx * 1.5, ty * 1.5) * 1.4;
+          const jy = ty + n.noise(tx * 2.5, ty * 2.5) * 1.4;
+          const rx = Math.round(jx);
+          const ry = Math.round(jy);
+          if (this.isValid(rx, ry) && this.ground[ry][rx] === TILES.SNOW) {
+            const isSnowy = n.noise(rx * 0.6, ry * 0.6) > 0.0;
+            this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, isSnowy ? TREES.SNOWY_PINE : TREES.PINE, Math.abs(rx) % 2);
+          }
+        }
+      }
+    }
+
+    // 3. Swamp Biome: Gnarled Weeping Willows & Deadwood
+    for (let ty = 52; ty <= 84; ty += 4) {
+      for (let tx = 55; tx <= 118; tx += 4) {
+        if (!this.isValid(tx, ty)) continue;
+        if (this.ground[ty][tx] !== TILES.SWAMP_GROUND) continue;
+        const swampNoise = n.fbm(tx * 0.11, ty * 0.11, 2);
+        if (swampNoise > 0.15) {
+          const jx = tx + n.noise(tx * 1.7, ty * 1.7) * 1.4;
+          const jy = ty + n.noise(tx * 2.7, ty * 2.7) * 1.4;
+          const rx = Math.round(jx);
+          const ry = Math.round(jy);
+          if (this.isValid(rx, ry) && this.ground[ry][rx] === TILES.SWAMP_GROUND) {
+            const isWillow = n.noise(rx * 0.5, ry * 0.5) > -0.1;
+            this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, isWillow ? TREES.SWAMP_WILLOW : TREES.DEADWOOD, Math.abs(rx) % 2);
+          }
+        }
+      }
+    }
+
+    // 4. Desert Biome: Desert Palms near Water & Oases
+    for (let ty = 54; ty <= 82; ty += 3) {
+      for (let tx = 8; tx <= 44; tx += 3) {
+        if (!this.isValid(tx, ty)) continue;
+        if (this.ground[ty][tx] !== TILES.SAND) continue;
+
+        let nearWater = false;
+        for (let dy = -3; dy <= 3; dy++) {
+          for (let dx = -3; dx <= 3; dx++) {
+            const cx = tx + dx, cy = ty + dy;
+            if (this.isValid(cx, cy)) {
+              const g = this.ground[cy][cx];
+              if (g === TILES.WATER || g === TILES.QUICKSAND) {
+                nearWater = true;
+                break;
+              }
+            }
+          }
+          if (nearWater) break;
+        }
+
+        if (nearWater && n.noise(tx * 0.4, ty * 0.4) > 0.0) {
+          this.addTree(tx * TILE_SIZE + 8, ty * TILE_SIZE + 12, TREES.PALM, Math.abs(tx) % 2);
+        }
+      }
+    }
+
+    // 5. Grassland Plains: Scattered Solitary & Pair Trees
+    for (let ty = 36; ty <= 60; ty += 5) {
+      for (let tx = 10; tx <= 65; tx += 5) {
+        if (!this.isValid(tx, ty)) continue;
+        if (this.ground[ty][tx] !== TILES.GRASS) continue;
+        if (Math.hypot(tx - this.spawnPoint.x, ty - this.spawnPoint.y) < 5) continue;
+
+        if (n.noise(tx * 0.22, ty * 0.22) > 0.32) {
+          const jx = tx + n.noise(tx * 1.8, ty * 1.8) * 1.8;
+          const jy = ty + n.noise(tx * 2.8, ty * 2.8) * 1.8;
+          const rx = Math.round(jx);
+          const ry = Math.round(jy);
+          if (this.isValid(rx, ry) && this.ground[ry][rx] === TILES.GRASS) {
+            const pVal = n.noise(rx * 0.8, ry * 0.8);
+            const type = pVal > 0.35 ? TREES.BLOSSOM : (pVal > -0.1 ? TREES.OAK : TREES.BIRCH);
+            this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, type, 0);
+          }
+        }
+      }
+    }
+
+    // --------------------------------------------------------------------
+    // STEP 8: OBJECTS & DECORATIONS WITH TRANSPARENT BACKGROUNDS
+    // (Rocks, Ice Boulders, Void Crystals, Bushes, Cacti, Ferns, Flowers, Logs)
+    // --------------------------------------------------------------------
+    for (let y = 2; y < this.height - 2; y++) {
+      for (let x = 2; x < this.width - 2; x++) {
+        if (this.objects[y][x] !== OBJECTS.NONE) continue;
+        const ground = this.ground[y][x];
+        if (ground === TILES.WATER || ground === TILES.SWAMP_WATER || ground === TILES.VOID_LAKE ||
+            ground === TILES.QUICKSAND || ground === TILES.BRIDGE_H || ground === TILES.BRIDGE_V) {
+          continue;
+        }
+
+        // Keep ramps and stairs corridors 100% free of obstacles
+        if (this.isNearRamp(x, y, 2)) continue;
+
+        // Don't place solid object right on a tree base
+        let onTree = false;
+        for (const t of this.trees) {
+          if (Math.hypot(t.x - (x * TILE_SIZE + 8), t.y - (y * TILE_SIZE + 8)) < 12) {
+            onTree = true;
+            break;
+          }
+        }
+        if (onTree) continue;
+
+        const objNoise = n.noise(x * 0.25, y * 0.25);
+        const rand = n.noise(x * 1.7, y * 1.7);
+
+        // Grassland Objects: Boulders, Bushes, Flowers, Ferns
+        if (ground === TILES.GRASS) {
+          if (objNoise > 0.52 && rand > 0.6) {
+            this.objects[y][x] = OBJECTS.ROCK_STONE;
+          } else if (objNoise > 0.44 && rand < -0.45) {
+            this.objects[y][x] = OBJECTS.BUSH;
+          } else if (rand > 0.72) {
+            this.objects[y][x] = OBJECTS.FOREST_FLOWERS;
+          } else if (rand < -0.65) {
+            this.objects[y][x] = OBJECTS.FERN;
+          }
+        }
+
+        // Forest Floor / Dirt Paths: Mushrooms, Logs, Ferns
+        else if (ground === TILES.DIRT) {
+          if (rand > 0.68) {
+            this.objects[y][x] = OBJECTS.MUSHROOM_BROWN;
+          } else if (rand < -0.68) {
+            this.objects[y][x] = OBJECTS.FERN;
+          } else if (objNoise > 0.52 && rand > 0.35) {
+            this.objects[y][x] = OBJECTS.FALLEN_LOG;
+          }
+        }
+
+        // Snow Objects: Ice Boulders
+        else if (ground === TILES.SNOW) {
+          if (objNoise > 0.42 && rand > 0.45) {
+            this.objects[y][x] = OBJECTS.ROCK_ICE;
+          }
+        }
+
+        // Desert Objects: Cacti & Desert Boulders
+        else if (ground === TILES.SAND) {
+          if (objNoise > 0.45 && rand > 0.6) {
+            this.objects[y][x] = OBJECTS.CACTUS;
+          } else if (objNoise > 0.5 && rand < -0.4) {
+            this.objects[y][x] = OBJECTS.ROCK_STONE;
+          }
+        }
+
+        // Swamp Objects: Mushrooms, Fallen Logs & Mossy Rocks
+        else if (ground === TILES.SWAMP_GROUND) {
+          if (objNoise > 0.45 && rand > 0.55) {
+            this.objects[y][x] = rand > 0.75 ? OBJECTS.MUSHROOM_BROWN : OBJECTS.MUSHROOM;
+          } else if (objNoise > 0.5 && rand < -0.5) {
+            this.objects[y][x] = OBJECTS.FALLEN_LOG;
+          } else if (objNoise > 0.48 && rand < -0.3) {
+            this.objects[y][x] = OBJECTS.ROCK_STONE;
+          }
+        }
+
+        // The Void: Neon Void Crystals
+        else if (ground === TILES.VOID_GROUND) {
+          if (objNoise > 0.38 && rand > 0.4) {
+            this.objects[y][x] = OBJECTS.ROCK_VOID;
+          }
+        }
+      }
+    }
+
+    // Outer boundary water barrier
+    for (let x = 0; x < this.width; x++) {
+      this.ground[0][x] = TILES.WATER;
+      this.ground[1][x] = TILES.WATER;
+      this.ground[this.height - 1][x] = TILES.WATER;
+      this.ground[this.height - 2][x] = TILES.WATER;
+    }
+    for (let y = 0; y < this.height; y++) {
+      this.ground[y][0] = TILES.WATER;
+      this.ground[y][1] = TILES.WATER;
+      this.ground[y][this.width - 1] = TILES.WATER;
+      this.ground[y][this.width - 2] = TILES.WATER;
+    }
+
+    // Ensure spawn tile is clean grass
+    this.ground[this.spawnPoint.y][this.spawnPoint.x] = TILES.GRASS;
+    this.objects[this.spawnPoint.y][this.spawnPoint.x] = OBJECTS.NONE;
+    this.canopy[this.spawnPoint.y][this.spawnPoint.x] = CANOPY.NONE;
+
+    // Place Stone Lanterns (Tōrō) and Torii Gates at bridge crossings & paths
+    if (this.isValid(35, 42)) this.objects[42][35] = OBJECTS.STONE_TORO;
+    if (this.isValid(35, 45)) this.objects[45][35] = OBJECTS.STONE_TORO;
+    if (this.isValid(53, 42)) this.objects[42][53] = OBJECTS.STONE_TORO;
+    if (this.isValid(53, 45)) this.objects[45][53] = OBJECTS.STONE_TORO;
+    if (this.isValid(35, 18)) this.objects[18][35] = OBJECTS.TORII_GATE;
+    if (this.isValid(51, 18)) this.objects[18][51] = OBJECTS.TORII_GATE;
+
+    // Populate Kodama Forest Spirits in the sacred forest & mossy groves
+    this.kodamas = [];
+    for (let i = 0; i < 28; i++) {
+      const kx = 8 + Math.abs(n.noise(i * 13.7, 42.1)) * 34;
+      const ky = 6 + Math.abs(n.noise(i * 27.3, 81.5)) * 28;
+      const tx = Math.floor(kx);
+      const ty = Math.floor(ky);
+      if (this.isValid(tx, ty) && (this.ground[ty][tx] === TILES.GRASS || this.ground[ty][tx] === TILES.DIRT)) {
+        this.kodamas.push({
+          x: tx * TILE_SIZE + 8 + (n.noise(i * 3, 1) * 3),
+          y: ty * TILE_SIZE + 10 + (n.noise(i * 3, 2) * 3),
+          tiltSpeed: 2.2 + Math.abs(n.noise(i, 9)) * 2,
+          tiltOffset: i * 1.6,
+          floatOffset: i * 2.3
+        });
+      }
+    }
+
+    // --------------------------------------------------------------------
+    // STEP 9: HÖHLEN-ZUGÄNGE IN LÖCHERN & TRAMPOLINE ZUM WOLKENREICH
+    // --------------------------------------------------------------------
+    this.placeCaveEntrances();
+    this.placeTrampolines();
+
+    // --------------------------------------------------------------------
+    // STEP 10: RAMPEN & TREPPEN FREIHALTEN (Keine Bäume oder Objekte)
+    // --------------------------------------------------------------------
+    this.clearRampsAndAccessCorridors();
+  }
+
+  placeCaveEntrances() {
+    this.holeEntrances = [
+      { x: 12, y: 38, targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Loch (Tiefenhöhlen)' },
+      { x: 34, y: 12, targetCave: 'forest_grotto', targetX: 11, targetY: 11, name: 'Wald-Loch (Moosige Grotte)' },
+      { x: 38, y: 76, targetCave: 'main_complex', targetX: 20, targetY: 53, name: 'Wüsten-Trichter (Tiefenhöhlen)' },
+      { x: 104, y: 16, targetCave: 'snow_grotto', targetX: 11, targetY: 11, name: 'Schnee-Eisspalte (Eis-Grotte)' },
+      { x: 118, y: 48, targetCave: 'void_grotto', targetX: 12, targetY: 11, name: 'Leeren-Riss (Astrale Kluft)' },
+      { x: 82, y: 64, targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' }
+    ];
+
+    for (const entrance of this.holeEntrances) {
+      if (this.isValid(entrance.x, entrance.y)) {
+        this.objects[entrance.y][entrance.x] = OBJECTS.CAVE_ENTRANCE;
+      }
+    }
+  }
+
+  placeTrampolines() {
+    this.trampolines = [];
+    const candidates = [
+      // Unter Zentraler Himmelsstadt
+      { x: 62, y: 44 }, { x: 68, y: 46 }, { x: 65, y: 42 },
+      // Unter Nordwest-Wolke (Grasland & Wald)
+      { x: 22, y: 18 }, { x: 26, y: 22 }, { x: 18, y: 22 }, { x: 28, y: 16 },
+      // Unter Südwest-Wolke (Wüste)
+      { x: 24, y: 68 }, { x: 28, y: 72 }, { x: 20, y: 70 }, { x: 32, y: 72 },
+      // Unter Nordost-Wolke (Schnee & Eis)
+      { x: 86, y: 20 }, { x: 90, y: 24 }, { x: 84, y: 24 }, { x: 92, y: 18 },
+      // Unter Südost-Wolke (Sumpf)
+      { x: 94, y: 66 }, { x: 98, y: 70 }, { x: 92, y: 68 }, { x: 96, y: 74 },
+      // Unter Brücken-Trittwolken & Außenposten
+      { x: 44, y: 32 }, { x: 44, y: 58 }, { x: 78, y: 33 }, { x: 82, y: 57 },
+      { x: 14, y: 46 }, { x: 115, y: 38 }, { x: 65, y: 12 }, { x: 65, y: 78 }
+    ];
+
+    for (const c of candidates) {
+      if (!this.isValid(c.x, c.y)) continue;
+      const g = this.ground[c.y][c.x];
+      if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.QUICKSAND) continue;
+
+      // Entferne etwaige kleine Felsen/Bäume an der Stelle
+      this.objects[c.y][c.x] = OBJECTS.TRAMPOLINE;
+      this.trampolines.push({ x: c.x, y: c.y });
+    }
+  }
+
+  getHoleEntrance(tileX, tileY) {
+    return this.holeEntrances.find(h => h.x === tileX && h.y === tileY);
+  }
+
+  isTrampoline(tileX, tileY) {
+    if (!this.isValid(tileX, tileY)) return false;
+    return this.objects[tileY][tileX] === OBJECTS.TRAMPOLINE;
+  }
+
+  // Stellt sicher, dass Treppen / Rampen und deren Zugänge 100% frei von Bäumen, Felsen und Objekten sind
+  clearRampsAndAccessCorridors() {
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        if (!this.ramps[y] || this.ramps[y][x] === RAMPS.NONE) continue;
+
+        const rampCenterX = x * TILE_SIZE + 8;
+        const rampCenterY = y * TILE_SIZE + 8;
+
+        // 1. Felsen, Holzstämme und sonstige feste Hindernisse im Rampenkorridor entfernen
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (!this.isValid(nx, ny)) continue;
+
+            const obj = this.objects[ny][nx];
+            if (obj !== OBJECTS.NONE && obj !== OBJECTS.CAVE_ENTRANCE && obj !== OBJECTS.TRAMPOLINE) {
+              const prop = OBJ_PROPS[obj];
+              if (!prop || prop.solid || Math.abs(dx) + Math.abs(dy) <= 2) {
+                this.objects[ny][nx] = OBJECTS.NONE;
+              }
+            }
+          }
+        }
+
+        // 2. Bäume im Umkreis von 34px (mehr als 2 Kacheln) um die Treppe entfernen
+        this.trees = this.trees.filter(t => {
+          const dist = Math.hypot(t.x - rampCenterX, t.y - rampCenterY);
+          return dist >= 34;
+        });
+
+        // 3. Überhängende Baumkronen im Kronendach lichten, damit die Treppe hell und sichtbar ist
+        if (this.canopyCrowns) {
+          this.canopyCrowns = this.canopyCrowns.filter(c => {
+            const dist = Math.hypot(c.x - rampCenterX, c.y - rampCenterY);
+            return dist >= 26;
+          });
+        }
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (this.isValid(nx, ny)) {
+              this.canopy[ny][nx] = CANOPY.NONE;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Helper for generating organic, wavy blobs (lakes, quicksand pits)
+  createOrganicBlob(cx, cy, radius, tileId, threshold = 0.5) {
+    const n = this.noise;
+    const r = radius + 4;
+    for (let y = cy - r; y <= cy + r; y++) {
+      for (let x = cx - r; x <= cx + r; x++) {
+        if (!this.isValid(x, y)) continue;
+        const dx = x - cx;
+        const dy = y - cy;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+
+        // Organic wobble on radius
+        const wobble = n.noise(Math.cos(angle) * 2, Math.sin(angle) * 2) * (radius * 0.45);
+        if (dist <= radius + wobble) {
+          this.ground[y][x] = tileId;
+          this.objects[y][x] = OBJECTS.NONE; // Clear objects in water/pit
+        }
+      }
+    }
+  }
+
+  // Winding path generator between two points
+  createWindingPath(x1, y1, x2, y2, width = 2) {
+    const steps = Math.hypot(x2 - x1, y2 - y1) * 1.5;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      let px = x1 + (x2 - x1) * t;
+      let py = y1 + (y2 - y1) * t;
+
+      // Add gentle sine/noise curve
+      const offset = Math.sin(t * Math.PI) * 4 * this.noise.noise(t * 5, 2);
+      px += -((y2 - y1) / (steps || 1)) * offset;
+      py += ((x2 - x1) / (steps || 1)) * offset;
+
+      const tx = Math.round(px);
+      const ty = Math.round(py);
+
+      for (let ox = -Math.floor(width / 2); ox <= Math.floor(width / 2); ox++) {
+        for (let oy = -Math.floor(width / 2); oy <= Math.floor(width / 2); oy++) {
+          const cx = tx + ox;
+          const cy = ty + oy;
+          if (this.isValid(cx, cy)) {
+            // Don't overwrite water
+            if (this.ground[cy][cx] !== TILES.WATER && this.ground[cy][cx] !== TILES.SWAMP_WATER) {
+              this.ground[cy][cx] = TILES.DIRT;
+              this.objects[cy][cx] = OBJECTS.NONE;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  isValid(x, y) {
+    return x >= 0 && x < this.width && y >= 0 && y < this.height;
+  }
+
+  getGroundTile(x, y) {
+    if (!this.isValid(x, y)) return TILES.WATER;
+    return this.ground[y][x];
+  }
+
+  getObjectTile(x, y) {
+    if (!this.isValid(x, y)) return OBJECTS.NONE;
+    return this.objects[y][x];
+  }
+
+  getCanopyTile(x, y) {
+    if (!this.isValid(x, y)) return CANOPY.NONE;
+    return this.canopy[y][x];
+  }
+
+  isSolid(tileX, tileY) {
+    if (!this.isValid(tileX, tileY)) return true;
+
+    // Check ground solidity
+    const ground = this.getGroundTile(tileX, tileY);
+    const groundProps = TILE_PROPS[ground];
+    if (groundProps && groundProps.solid) return true;
+
+    // Check object solidity (rocks, ice, void crystals, trunks, cacti)
+    const obj = this.getObjectTile(tileX, tileY);
+    const objProps = OBJ_PROPS[obj];
+    if (objProps && objProps.solid) return true;
+
+    return false;
+  }
+
+  isDeadly(tileX, tileY) {
+    const ground = this.getGroundTile(tileX, tileY);
+    const props = TILE_PROPS[ground];
+    return props ? Boolean(props.deadly) : false;
+  }
+
+  getSpeedModifier(tileX, tileY) {
+    const ground = this.getGroundTile(tileX, tileY);
+    const props = TILE_PROPS[ground];
+    return props ? (props.speedMod ?? 1.0) : 1.0;
+  }
+
+  getBiome(tileX, tileY) {
+    const ground = this.getGroundTile(tileX, tileY);
+    const props = TILE_PROPS[ground];
+    return props ? props.biome : BIOMES.GRASSLAND;
+  }
+
+  isNearRamp(tileX, tileY, radius = 2) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const nx = tileX + dx;
+        const ny = tileY + dy;
+        if (this.isValid(nx, ny) && this.ramps[ny] && this.ramps[ny][nx] !== RAMPS.NONE) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  addTree(px, py, type, variant = 0) {
+    const tileX = Math.floor(px / TILE_SIZE);
+    const tileY = Math.floor(py / TILE_SIZE);
+    if (this.isNearRamp(tileX, tileY, 2)) return; // Treppen/Rampen immer frei von Bäumen halten!
+
+    for (const t of this.trees) {
+      if (Math.hypot(t.x - px, t.y - py) < 14) return;
+    }
+    const meta = {
+      [TREES.OAK]:          { trunkRadius: 6, crownHeight: 30, width: 32, height: 44, anchorX: 16, anchorY: 40 },
+      [TREES.PINE]:         { trunkRadius: 5, crownHeight: 34, width: 24, height: 46, anchorX: 12, anchorY: 42 },
+      [TREES.BIRCH]:        { trunkRadius: 4, crownHeight: 28, width: 20, height: 40, anchorX: 10, anchorY: 37 },
+      [TREES.BLOSSOM]:      { trunkRadius: 5, crownHeight: 28, width: 28, height: 40, anchorX: 14, anchorY: 37 },
+      [TREES.AUTUMN]:       { trunkRadius: 6, crownHeight: 30, width: 30, height: 42, anchorX: 15, anchorY: 39 },
+      [TREES.SNOWY_PINE]:   { trunkRadius: 5, crownHeight: 34, width: 24, height: 46, anchorX: 12, anchorY: 42 },
+      [TREES.SWAMP_WILLOW]: { trunkRadius: 6, crownHeight: 28, width: 34, height: 44, anchorX: 17, anchorY: 40 },
+      [TREES.PALM]:         { trunkRadius: 5, crownHeight: 26, width: 28, height: 46, anchorX: 14, anchorY: 42 },
+      [TREES.SAPLING]:      { trunkRadius: 3, crownHeight: 14, width: 16, height: 22, anchorX: 8,  anchorY: 20 },
+      [TREES.DEADWOOD]:     { trunkRadius: 4, crownHeight: 24, width: 24, height: 38, anchorX: 12, anchorY: 35 }
+    }[type] || { trunkRadius: 5, crownHeight: 25, width: 24, height: 40, anchorX: 12, anchorY: 38 };
+
+    const nearBridge = (Math.abs(tileX - 44) < 12 && Math.abs(tileY - 44) < 6);
+    const nearSnowBridge = (Math.abs(tileX - 44) < 8 && Math.abs(tileY - 18) < 5);
+    const sacredLantern = (this.noise.noise(px * 0.18, py * 0.18) > 0.52);
+    const hasLantern = nearBridge || nearSnowBridge || sacredLantern;
+
+    this.trees.push({
+      id: this.trees.length,
+      x: px,
+      y: py,
+      tileX,
+      tileY,
+      type,
+      variant,
+      hasLantern,
+      ...meta
+    });
+  }
+
+  checkTreeCollision(px, py, playerRadius) {
+    for (const tree of this.trees) {
+      if (Math.abs(px - tree.x) > 16 || Math.abs(py - tree.y) > 16) continue;
+      const dist = Math.hypot(px - tree.x, py - tree.y);
+      if (dist < (tree.trunkRadius + playerRadius)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  getVisibleTrees(bounds) {
+    const startX = bounds.startX * TILE_SIZE - 40;
+    const endX   = bounds.endX * TILE_SIZE + 40;
+    const startY = bounds.startY * TILE_SIZE - 55;
+    const endY   = bounds.endY * TILE_SIZE + 55;
+
+    return this.trees.filter(t => t.x >= startX && t.x <= endX && t.y >= startY && t.y <= endY);
+  }
+
+  getVisibleCanopyCrowns(bounds) {
+    const startX = bounds.startX * TILE_SIZE - 50;
+    const endX   = bounds.endX * TILE_SIZE + 50;
+    const startY = bounds.startY * TILE_SIZE - 50;
+    const endY   = bounds.endY * TILE_SIZE + 50;
+
+    return this.canopyCrowns.filter(c => c.x >= startX && c.x <= endX && c.y >= startY && c.y <= endY);
+  }
+
+  getVisibleKodamas(bounds) {
+    const startX = bounds.startX * TILE_SIZE - 25;
+    const endX   = bounds.endX * TILE_SIZE + 25;
+    const startY = bounds.startY * TILE_SIZE - 25;
+    const endY   = bounds.endY * TILE_SIZE + 25;
+
+    return this.kodamas.filter(k => k.x >= startX && k.x <= endX && k.y >= startY && k.y <= endY);
+  }
+
+  getNeighbors(x, y) {
+    return {
+      N:  this.getGroundTile(x, y - 1),
+      S:  this.getGroundTile(x, y + 1),
+      W:  this.getGroundTile(x - 1, y),
+      E:  this.getGroundTile(x + 1, y),
+      NW: this.getGroundTile(x - 1, y - 1),
+      NE: this.getGroundTile(x + 1, y - 1),
+      SW: this.getGroundTile(x - 1, y + 1),
+      SE: this.getGroundTile(x + 1, y + 1)
+    };
+  }
+
+  // ==========================================================================
+  // HÖHENEBENEN-SYSTEM (Podeste +1, +2, Löcher -1 und Schrägen / Rampen)
+  // ==========================================================================
+  generateElevationsAndRamps() {
+    // 1. Grasland: Podest (+1 & +2) und Gras-Loch (-1)
+    this.createPlateau(20, 52, 8, 6, ELEVATION.LEVEL_1, ['S', 'E']);
+    this.createPlateau(20, 52, 4, 3, ELEVATION.LEVEL_2, ['S']);
+    this.createHole(12, 38, 3, 3, 'S');
+
+    // 2. Dichter Wald: Wald-Podest (+1) und Wald-Senke (-1)
+    this.createPlateau(16, 14, 6, 5, ELEVATION.LEVEL_1, ['S']);
+    this.createHole(34, 12, 4, 3, 'S');
+
+    // 3. Wüste (Sand): Dünen-Plateau (+1 & +2) und Wüsten-Trichter (-1)
+    this.createPlateau(16, 72, 8, 6, ELEVATION.LEVEL_1, ['N', 'E']);
+    this.createPlateau(16, 72, 4, 3, ELEVATION.LEVEL_2, ['E']);
+    this.createHole(38, 76, 4, 4, 'N');
+
+    // 4. Schnee & Eis: Eis-Plateau (+1 & +2) und Eisspalte / Loch (-1)
+    this.createPlateau(76, 18, 8, 6, ELEVATION.LEVEL_1, ['S', 'W']);
+    this.createPlateau(76, 18, 4, 3, ELEVATION.LEVEL_2, ['S']);
+    this.createHole(104, 16, 4, 3, 'S');
+
+    // 5. Die Leere: Schwebendes Astral-Podest (+1 & +2) und Leeren-Riss (-1)
+    this.createPlateau(104, 42, 8, 6, ELEVATION.LEVEL_1, ['W', 'N']);
+    this.createPlateau(104, 42, 4, 3, ELEVATION.LEVEL_2, ['W']);
+    this.createHole(118, 48, 4, 3, 'W');
+
+    // 6. Düsterer Sumpf: Sumpf-Plateau (+1) und Sumpf-Kuhle (-1)
+    this.createPlateau(66, 76, 6, 5, ELEVATION.LEVEL_1, ['N']);
+    this.createHole(82, 64, 4, 3, 'S');
+  }
+
+  createPlateau(cx, cy, rx, ry, level = 1, rampDirections = ['S']) {
+    const n = this.noise;
+    const tilesInPlateau = [];
+
+    for (let dy = -ry - 2; dy <= ry + 2; dy++) {
+      for (let dx = -rx - 2; dx <= rx + 2; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        if (!this.isValid(x, y)) continue;
+
+        // Wasser, Quicksand, Void-Lake und Brücken auslassen
+        const g = this.ground[y][x];
+        if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.BRIDGE_H || g === TILES.BRIDGE_V) continue;
+        if (Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y) < 6) continue;
+
+        // Organische Ellipse mit Noise
+        const distNorm = Math.hypot(dx / rx, dy / ry) + n.noise(x * 0.3, y * 0.3) * 0.22;
+        if (distNorm <= 1.0) {
+          // Stufe 2 darf nur auf bestehende Stufe 1 gesetzt werden
+          if (level === 2 && this.elevation[y][x] < 1) continue;
+          this.elevation[y][x] = level;
+          tilesInPlateau.push({ x, y });
+        }
+      }
+    }
+
+    if (tilesInPlateau.length === 0) return;
+
+    // Rampen für gewünschte Richtungen anlegen
+    for (const dir of rampDirections) {
+      this.placePlateauRamp(cx, cy, rx, ry, level, dir);
+    }
+  }
+
+  placePlateauRamp(cx, cy, rx, ry, level, dir) {
+    let rampX = cx;
+    let rampY = cy;
+
+    if (dir === 'S') {
+      for (let y = cy + ry + 2; y >= cy; y--) {
+        if (this.isValid(cx, y) && this.elevation[y][cx] === level) {
+          rampX = cx;
+          rampY = y;
+          break;
+        }
+      }
+      if (this.isValid(rampX, rampY)) {
+        this.elevation[rampY][rampX] = level - 1; // Rampe vermittelt von unterer Ebene
+        this.ramps[rampY][rampX] = RAMPS.UP_NORTH; // Nach Norden hochsteigen
+        this.objects[rampY][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX, rampY + 1)) this.objects[rampY + 1][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX, rampY - 1)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
+      }
+    } else if (dir === 'N') {
+      for (let y = cy - ry - 2; y <= cy; y++) {
+        if (this.isValid(cx, y) && this.elevation[y][cx] === level) {
+          rampX = cx;
+          rampY = y;
+          break;
+        }
+      }
+      if (this.isValid(rampX, rampY)) {
+        this.elevation[rampY][rampX] = level - 1;
+        this.ramps[rampY][rampX] = RAMPS.UP_SOUTH; // Nach Süden hochsteigen
+        this.objects[rampY][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX, rampY - 1)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX, rampY + 1)) this.objects[rampY + 1][rampX] = OBJECTS.NONE;
+      }
+    } else if (dir === 'E') {
+      for (let x = cx + rx + 2; x >= cx; x--) {
+        if (this.isValid(x, cy) && this.elevation[cy][x] === level) {
+          rampX = x;
+          rampY = cy;
+          break;
+        }
+      }
+      if (this.isValid(rampX, rampY)) {
+        this.elevation[rampY][rampX] = level - 1;
+        this.ramps[rampY][rampX] = RAMPS.UP_WEST; // Nach Westen hochsteigen
+        this.objects[rampY][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX + 1, rampY)) this.objects[rampY + 1][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX - 1, rampY)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
+      }
+    } else if (dir === 'W') {
+      for (let x = cx - rx - 2; x <= cx; x++) {
+        if (this.isValid(x, cy) && this.elevation[cy][x] === level) {
+          rampX = x;
+          rampY = cy;
+          break;
+        }
+      }
+      if (this.isValid(rampX, rampY)) {
+        this.elevation[rampY][rampX] = level - 1;
+        this.ramps[rampY][rampX] = RAMPS.UP_EAST; // Nach Osten hochsteigen
+        this.objects[rampY][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX - 1, rampY)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX + 1, rampY)) this.objects[rampY + 1][rampX] = OBJECTS.NONE;
+      }
+    }
+  }
+
+  createHole(cx, cy, rx, ry, exitDir = 'S') {
+    const n = this.noise;
+    for (let dy = -ry - 1; dy <= ry + 1; dy++) {
+      for (let dx = -rx - 1; dx <= rx + 1; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
+        if (!this.isValid(x, y)) continue;
+
+        const g = this.ground[y][x];
+        if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.BRIDGE_H || g === TILES.BRIDGE_V) continue;
+        if (Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y) < 6) continue;
+
+        const distNorm = Math.hypot(dx / rx, dy / ry) + n.noise(x * 0.35, y * 0.35) * 0.2;
+        if (distNorm <= 1.0) {
+          this.elevation[y][x] = ELEVATION.HOLE; // -1
+          if (this.objects[y][x] === OBJECTS.ROCK_STONE || this.objects[y][x] === OBJECTS.FALLEN_LOG) {
+            this.objects[y][x] = OBJECTS.NONE;
+          }
+        }
+      }
+    }
+
+    // Garantiere Aufgangs-Rampe aus dem Loch (-1) nach oben auf Ebene 0
+    let rampX = cx;
+    let rampY = cy;
+    if (exitDir === 'S') {
+      for (let y = cy + ry + 1; y >= cy; y--) {
+        if (this.isValid(cx, y) && this.elevation[y][cx] === ELEVATION.HOLE) {
+          rampX = cx;
+          rampY = y;
+          break;
+        }
+      }
+      if (this.isValid(rampX, rampY)) {
+        this.ramps[rampY][rampX] = RAMPS.UP_SOUTH; // Nach Süden rauslaufen
+        this.objects[rampY][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX, rampY + 1)) this.objects[rampY + 1][rampX] = OBJECTS.NONE;
+      }
+    } else if (exitDir === 'N') {
+      for (let y = cy - ry - 1; y <= cy; y++) {
+        if (this.isValid(cx, y) && this.elevation[y][cx] === ELEVATION.HOLE) {
+          rampX = cx;
+          rampY = y;
+          break;
+        }
+      }
+      if (this.isValid(rampX, rampY)) {
+        this.ramps[rampY][rampX] = RAMPS.UP_NORTH; // Nach Norden rauslaufen
+        this.objects[rampY][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX, rampY - 1)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
+      }
+    } else if (exitDir === 'W') {
+      for (let x = cx - rx - 1; x <= cx; x++) {
+        if (this.isValid(x, cy) && this.elevation[cy][x] === ELEVATION.HOLE) {
+          rampX = x;
+          rampY = cy;
+          break;
+        }
+      }
+      if (this.isValid(rampX, rampY)) {
+        this.ramps[rampY][rampX] = RAMPS.UP_WEST; // Nach Westen rauslaufen
+        this.objects[rampY][rampX] = OBJECTS.NONE;
+        if (this.isValid(rampX - 1, rampY)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
+      }
+    }
+  }
+
+  getElevation(tileX, tileY) {
+    if (!this.isValid(tileX, tileY)) return ELEVATION.GROUND;
+    return this.elevation[tileY][tileX];
+  }
+
+  getRamp(tileX, tileY) {
+    if (!this.isValid(tileX, tileY)) return RAMPS.NONE;
+    return this.ramps[tileY][tileX];
+  }
+
+  isElevationPassable(fromX, fromY, toX, toY) {
+    if (!this.isValid(toX, toY)) return false;
+    if (!this.isValid(fromX, fromY)) return true;
+
+    const fromElev = this.getElevation(fromX, fromY);
+    const toElev = this.getElevation(toX, toY);
+    const diff = toElev - fromElev;
+
+    // 1. Gleiche Höhe -> immer passierbar
+    if (diff === 0) return true;
+
+    // 2. Eine Ebene nach oben (+1): Nur mit passender Rampe
+    if (diff === 1) {
+      const fromRamp = this.getRamp(fromX, fromY);
+      const toRamp = this.getRamp(toX, toY);
+
+      const moveDx = toX - fromX;
+      const moveDy = toY - fromY;
+
+      if (moveDy < 0 && (toRamp === RAMPS.UP_NORTH || fromRamp === RAMPS.UP_NORTH)) return true;
+      if (moveDy > 0 && (toRamp === RAMPS.UP_SOUTH || fromRamp === RAMPS.UP_SOUTH)) return true;
+      if (moveDx < 0 && (toRamp === RAMPS.UP_WEST || fromRamp === RAMPS.UP_WEST)) return true;
+      if (moveDx > 0 && (toRamp === RAMPS.UP_EAST || fromRamp === RAMPS.UP_EAST)) return true;
+
+      // Klippenwand blockiert Aufstieg
+      return false;
+    }
+
+    // 3. Eine Ebene nach unten (-1): Herabspringen oder über Rampe runtergehen erlaubt
+    if (diff === -1) {
+      return true;
+    }
+
+    // 4. Größere Höhenunterschiede (>= 2 Stufen auf einmal): blockiert
+    return false;
+  }
+}
+
+
+// --- player.js ---
+
+class Player {
+  constructor(x, y, map, game = null) {
+    this.map = map;
+    this.game = game;
+    this.spawnX = x * TILE_SIZE + TILE_SIZE / 2;
+    this.spawnY = y * TILE_SIZE + TILE_SIZE / 2;
+    this.x = this.spawnX;
+    this.y = this.spawnY;
+
+    this.elevation = 0;        // Aktuelle Ebene (-1, 0, 1, 2)
+    this.visualElevation = 0;  // Sanft interpolierte optische Höhe für Rampen
+
+    this.radius = PLAYER_CONFIG.RADIUS;
+    this.baseSpeed = PLAYER_CONFIG.BASE_SPEED;
+    this.currentSpeed = this.baseSpeed;
+    this.speedMod = 1.0;
+
+    this.direction = 'down';
+    this.isMoving = false;
+    this.isSprinting = false;
+
+    this.isDead = false;
+    this.deathTimer = 0;
+    this.deathCount = 0;
+
+    this.particles = [];
+
+    // Combat & Ability State (Dash, Melee, Shield, Ranged)
+    this.dash = {
+      active: false,
+      timer: 0,
+      cooldown: 0,
+      vx: 0,
+      vy: 0,
+      ghosts: []
+    };
+
+    this.melee = {
+      comboStep: 0,       // 0 = idle, 1 = slash1, 2 = slash2, 3 = thrust
+      comboTimer: 0,      // buffer window for next combo attack
+      recoveryTimer: 0,   // pause after thrust (schnitt schnitt stich PAUSE)
+      charging: false,
+      chargeTimer: 0,
+      isSpinning: false,
+      spinTimer: 0,
+      swingProgress: 1.0, // for visual sword rendering
+      swingType: null     // 'slash1' | 'slash2' | 'thrust' | 'spin'
+    };
+
+    this.shield = {
+      active: false,
+      energy: COMBAT_CONFIG.SHIELD_MAX,
+      broken: false,
+      stunTimer: 0,
+      rechargeDelay: 0
+    };
+
+    this.ranged = {
+      ammo: COMBAT_CONFIG.MAX_AMMO,
+      charging: false,
+      chargeTimer: 0
+    };
+
+    // Dimensions-Transitionen (Trampolin, Wolkenfall, Höhleneinstieg)
+    this.transition = null; // { type, timer, duration, targetDim, targetX, targetY, switched }
+    this.transitionCooldown = 0;
+    this.lastTransitionTile = null; // Verhindert Re-Triggering solange man auf dem Zielfeld steht
+    this.discoveredShrines = new Set();
+    this.shrineMessage = null;
+  }
+
+  respawn() {
+    this.transition = null;
+    this.transitionCooldown = 0.5;
+    this.lastTransitionTile = null;
+    this.isDead = false;
+    this.deathTimer = 0;
+
+    // Reset combat states
+    this.dash.active = false;
+    this.dash.cooldown = 0;
+    this.dash.ghosts = [];
+    this.melee.charging = false;
+    this.melee.isSpinning = false;
+    this.melee.comboStep = 0;
+    this.melee.recoveryTimer = 0;
+    this.shield.active = false;
+    this.shield.broken = false;
+    this.shield.stunTimer = 0;
+    this.shield.rechargeDelay = 0;
+    this.shield.energy = COMBAT_CONFIG.SHIELD_MAX;
+    this.ranged.charging = false;
+
+    if (this.game && this.game.currentDimension !== 'overworld') {
+      this.game.switchDimension('overworld', this.spawnX, this.spawnY);
+    } else {
+      this.x = this.spawnX;
+      this.y = this.spawnY;
+      this.elevation = 0;
+      this.visualElevation = 0;
+    }
+  }
+
+  // ==========================================================================
+  // DIRECTION & VECTOR HELPERS (8-Directional Support)
+  // ==========================================================================
+
+  getFacingAngle() {
+    switch (this.direction) {
+      case 'right': return 0;
+      case 'down-right': return Math.PI / 4;
+      case 'down': return Math.PI / 2;
+      case 'down-left': return 3 * Math.PI / 4;
+      case 'left': return Math.PI;
+      case 'up-left': return -3 * Math.PI / 4;
+      case 'up': return -Math.PI / 2;
+      case 'up-right': return -Math.PI / 4;
+      default: return 0;
+    }
+  }
+
+  getFacingVector() {
+    switch (this.direction) {
+      case 'right': return { x: 1, y: 0 };
+      case 'down-right': return { x: Math.SQRT1_2, y: Math.SQRT1_2 };
+      case 'down': return { x: 0, y: 1 };
+      case 'down-left': return { x: -Math.SQRT1_2, y: Math.SQRT1_2 };
+      case 'left': return { x: -1, y: 0 };
+      case 'up-left': return { x: -Math.SQRT1_2, y: -Math.SQRT1_2 };
+      case 'up': return { x: 0, y: -1 };
+      case 'up-right': return { x: Math.SQRT1_2, y: -Math.SQRT1_2 };
+      default: return { x: 1, y: 0 };
+    }
+  }
+
+  setDirectionFromVector(dx, dy) {
+    if (dx === 0 && dy === 0) return;
+    const angle = Math.atan2(dy, dx);
+    const step = Math.PI / 4;
+    const offset = Math.PI / 8;
+    let a = angle;
+    if (a < 0) a += Math.PI * 2;
+    const index = Math.floor((a + offset) / step) % 8;
+    const dirs = ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'];
+    this.direction = dirs[index];
+  }
+
+  syncDirectionFromInput() {
+    if (this.game && this.game.input) {
+      let dx = 0;
+      let dy = 0;
+      const keys = this.game.input.keys || {};
+      if (keys['ArrowUp'] || keys['KeyW']) dy -= 1;
+      if (keys['ArrowDown'] || keys['KeyS']) dy += 1;
+      if (keys['ArrowLeft'] || keys['KeyA']) dx -= 1;
+      if (keys['ArrowRight'] || keys['KeyD']) dx += 1;
+      if (this.game.input.joystick && this.game.input.joystick.active) {
+        dx += this.game.input.joystick.x;
+        dy += this.game.input.joystick.y;
+      }
+      if (dx !== 0 || dy !== 0) {
+        this.setDirectionFromVector(dx, dy);
+      }
+    }
+  }
+
+  // ==========================================================================
+  // COMBAT ACTIONS (Zelda & Smash Bros Mechanics)
+  // ==========================================================================
+
+  triggerDash() {
+    if (this.dash.cooldown > 0 || this.dash.active || this.shield.active || this.shield.stunTimer > 0 || this.isDead || this.transition) {
+      return;
+    }
+
+    this.syncDirectionFromInput();
+
+    const vec = this.getFacingVector();
+    const dirX = vec.x;
+    const dirY = vec.y;
+
+    const speed = COMBAT_CONFIG.DASH_SPEED;
+    this.dash.active = true;
+    this.dash.timer = COMBAT_CONFIG.DASH_DURATION;
+    this.dash.cooldown = COMBAT_CONFIG.DASH_COOLDOWN;
+    this.dash.vx = dirX * speed;
+    this.dash.vy = dirY * speed;
+
+    // Ground dust puff particles
+    for (let i = 0; i < 8; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      this.particles.push({
+        x: this.x,
+        y: this.y + 4,
+        vx: -dirX * 30 + Math.cos(angle) * 15,
+        vy: -dirY * 30 + Math.sin(angle) * 15,
+        size: Math.random() * 2.5 + 1.2,
+        color: 'rgba(240, 240, 245, 0.75)',
+        life: 0.28,
+        maxLife: 0.28
+      });
+    }
+  }
+
+  startMelee() {
+    if (this.shield.active || this.shield.stunTimer > 0 || this.isDead || this.transition) return;
+    if (this.melee.recoveryTimer > 0) return; // Pause nach Stich einhalten!
+    if (this.melee.charging) return; // Bereits am Laden: chargeTimer nicht zurücksetzen!
+    this.syncDirectionFromInput();
+    this.melee.charging = true;
+    this.melee.chargeTimer = 0;
+  }
+
+  releaseMelee() {
+    if (!this.melee.charging) return;
+    this.melee.charging = false;
+
+    if (this.melee.chargeTimer >= COMBAT_CONFIG.SPIN_CHARGE_TIME) {
+      // Execute 360 Spin Attack (Kreisel-Angriff)
+      this.executeSpinAttack();
+    } else {
+      // Execute Next Combo Step (1 = Schnitt 1, 2 = Schnitt 2, 3 = Stich)
+      this.executeComboStep();
+    }
+    this.melee.chargeTimer = 0;
+  }
+
+  executeSpinAttack() {
+    this.melee.isSpinning = true;
+    this.melee.spinTimer = 0.32;
+    this.melee.swingProgress = 0;
+    this.melee.swingType = 'spin';
+    this.melee.comboStep = 0;
+    this.melee.comboTimer = 0;
+    this.melee.recoveryTimer = 0;
+
+    const radius = COMBAT_CONFIG.SPIN_RADIUS;
+    if (this.game && this.game.combat) {
+      this.game.combat.addSlashEffect('spin', this.x, this.y - 6, 0, radius);
+      this.game.combat.checkMeleeHits({
+        type: 'spin',
+        x: this.x,
+        y: this.y - 6,
+        radius,
+        knockback: COMBAT_CONFIG.SPIN_KNOCKBACK
+      });
+    }
+  }
+
+  executeComboStep() {
+    let nextStep = 1;
+    if (this.melee.comboStep === 1 && this.melee.comboTimer > 0) {
+      nextStep = 2;
+    } else if (this.melee.comboStep === 2 && this.melee.comboTimer > 0) {
+      nextStep = 3;
+    }
+
+    this.syncDirectionFromInput();
+    this.melee.comboStep = nextStep;
+    this.melee.swingProgress = 0;
+
+    const angle = this.getFacingAngle();
+
+    if (nextStep === 1) {
+      this.melee.swingType = 'slash1';
+      this.melee.comboTimer = COMBAT_CONFIG.COMBO_WINDOW;
+      this.melee.recoveryTimer = 0;
+      const radius = COMBAT_CONFIG.COMBO_SLASH_RADIUS;
+      if (this.game && this.game.combat) {
+        this.game.combat.addSlashEffect('slash1', this.x, this.y - 6, angle, radius);
+        this.game.combat.checkMeleeHits({
+          type: 'slash1',
+          x: this.x,
+          y: this.y - 6,
+          angle,
+          radius,
+          knockback: 75
+        });
+      }
+    } else if (nextStep === 2) {
+      this.melee.swingType = 'slash2';
+      this.melee.comboTimer = COMBAT_CONFIG.COMBO_WINDOW;
+      this.melee.recoveryTimer = 0;
+      const radius = COMBAT_CONFIG.COMBO_SLASH_RADIUS + 2;
+      if (this.game && this.game.combat) {
+        this.game.combat.addSlashEffect('slash2', this.x, this.y - 6, angle, radius);
+        this.game.combat.checkMeleeHits({
+          type: 'slash2',
+          x: this.x,
+          y: this.y - 6,
+          angle,
+          radius,
+          knockback: 95
+        });
+      }
+    } else if (nextStep === 3) {
+      // Kräftiger Stich / Thrust mit spürbarem Vorstoß, Wucht & anschließender Pause
+      this.melee.swingType = 'thrust';
+      this.melee.comboTimer = 0; // Kombo-Kette endet mit dem Stich
+      this.melee.recoveryTimer = COMBAT_CONFIG.COMBO_RECOVERY_PAUSE; // Pause nach Stich
+      const range = COMBAT_CONFIG.COMBO_THRUST_RANGE;
+
+      // Vorwärts-Lunge (kräftiger Ausfallschritt nach vorne)
+      const lungeDist = COMBAT_CONFIG.COMBO_THRUST_LUNGE;
+      const lx = Math.cos(angle) * lungeDist;
+      const ly = Math.sin(angle) * lungeDist;
+      if (!this.checkCollision(this.x + lx, this.y)) {
+        this.x += lx;
+      }
+      if (!this.checkCollision(this.x, this.y + ly)) {
+        this.y += ly;
+      }
+
+      // Staub- und Windpartikel nach hinten schleudern
+      for (let i = 0; i < 7; i++) {
+        const spread = (Math.random() - 0.5) * 0.8;
+        const pSpeed = Math.random() * 50 + 30;
+        this.particles.push({
+          x: this.x - Math.cos(angle) * 8 + (Math.random() * 4 - 2),
+          y: this.y + 4 + (Math.random() * 4 - 2),
+          vx: -Math.cos(angle + spread) * pSpeed,
+          vy: -Math.sin(angle + spread) * pSpeed,
+          size: Math.random() * 2.5 + 1.2,
+          color: 'rgba(254, 240, 138, 0.75)',
+          life: 0.28,
+          maxLife: 0.28
+        });
+      }
+
+      if (this.game && this.game.combat) {
+        this.game.combat.addSlashEffect('thrust', this.x, this.y - 6, angle, range);
+        this.game.combat.checkMeleeHits({
+          type: 'thrust',
+          x: this.x,
+          y: this.y - 6,
+          angle,
+          range,
+          width: COMBAT_CONFIG.COMBO_THRUST_WIDTH,
+          knockback: COMBAT_CONFIG.COMBO_THRUST_KNOCKBACK
+        });
+      }
+    }
+  }
+
+  setShield(isDown) {
+    if (this.shield.broken || this.shield.stunTimer > 0 || this.isDead || this.transition) {
+      this.shield.active = false;
+      return;
+    }
+    const wasActive = this.shield.active;
+    this.shield.active = Boolean(isDown);
+    if (this.shield.active) {
+      this.melee.charging = false;
+      this.ranged.charging = false;
+      this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
+    } else if (wasActive && !this.shield.broken) {
+      this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
+    }
+  }
+
+  startRanged() {
+    if (this.shield.active || this.shield.stunTimer > 0 || this.isDead || this.transition) return;
+    if (this.ranged.charging) return; // Bereits am Laden
+    this.syncDirectionFromInput();
+    if (this.ranged.ammo <= 0) {
+      if (this.game && this.game.combat) {
+        this.game.combat.floatingTexts.push({
+          text: 'Keine Pfeile! (0/30) 🏹',
+          x: this.x,
+          y: this.y - 22,
+          timer: 0,
+          duration: 0.65,
+          color: '#ef4444'
+        });
+      }
+      return;
+    }
+    this.ranged.charging = true;
+    this.ranged.chargeTimer = 0;
+  }
+
+  releaseRanged() {
+    if (!this.ranged.charging) return;
+    this.ranged.charging = false;
+
+    if (this.ranged.ammo > 0) {
+      this.syncDirectionFromInput();
+      this.ranged.ammo--;
+      const isCharged = (this.ranged.chargeTimer >= COMBAT_CONFIG.ARROW_CHARGE_TIME);
+
+      const vec = this.getFacingVector();
+      const dirX = vec.x;
+      const dirY = vec.y;
+
+      if (this.game && this.game.combat) {
+        this.game.combat.fireArrow(this.x, this.y - 6, dirX, dirY, isCharged);
+      }
+    }
+    this.ranged.chargeTimer = 0;
+  }
+
+  update(dt, input) {
+    this.updateParticles(dt);
+
+    if (this.transitionCooldown > 0) {
+      this.transitionCooldown -= dt;
+    }
+
+    if (this.shrineMessage) {
+      this.shrineMessage.timer -= dt;
+      if (this.shrineMessage.timer <= 0) {
+        this.shrineMessage = null;
+      }
+    }
+
+    if (this.transition) {
+      this.transition.timer += dt;
+      const prog = this.transition.timer / this.transition.duration;
+      if (prog >= 0.5 && !this.transition.switched) {
+        this.transition.switched = true;
+        if (this.game) {
+          this.game.switchDimension(this.transition.targetDim, this.transition.targetX, this.transition.targetY);
+        } else {
+          this.x = this.transition.targetX;
+          this.y = this.transition.targetY;
+        }
+      }
+      if (prog >= 1.0) {
+        // Sicherstellen, dass der Spieler nach Wolkensturz nicht auf Bäumen oder im Wasser landet
+        if (this.transition.type === 'fall') {
+          const safe = this.findSafeLandingPosition(this.map, this.x, this.y);
+          this.x = safe.x;
+          this.y = safe.y;
+        }
+
+        // Landing puff
+        for (let i = 0; i < 15; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          this.particles.push({
+            x: this.x,
+            y: this.y + 4,
+            vx: Math.cos(angle) * (Math.random() * 25 + 10),
+            vy: Math.sin(angle) * (Math.random() * 10 + 5),
+            size: Math.random() * 2.5 + 1,
+            color: 'rgba(255, 255, 255, 0.7)',
+            life: 0.35,
+            maxLife: 0.35
+          });
+        }
+        this.transition = null;
+        this.transitionCooldown = 0.1;
+        this.lastTransitionTile = {
+          x: Math.floor(this.x / TILE_SIZE),
+          y: Math.floor(this.y / TILE_SIZE)
+        };
+      }
+      return;
+    }
+
+    if (this.isDead) {
+      this.deathTimer += dt;
+      if (this.deathTimer >= 1.2) {
+        this.respawn();
+      }
+      return;
+    }
+
+    let dx = 0;
+    let dy = 0;
+
+    if (input.keys['ArrowUp'] || input.keys['KeyW']) dy -= 1;
+    if (input.keys['ArrowDown'] || input.keys['KeyS']) dy += 1;
+    if (input.keys['ArrowLeft'] || input.keys['KeyA']) dx -= 1;
+    if (input.keys['ArrowRight'] || input.keys['KeyD']) dx += 1;
+
+    // Mobile / Tablet Touch Joystick
+    if (input.joystick && input.joystick.active) {
+      dx += input.joystick.x;
+      dy += input.joystick.y;
+    }
+
+    // Update facing direction immediately from movement input (supports 8 directions)
+    if ((dx !== 0 || dy !== 0) && !this.dash.active && this.shield.stunTimer <= 0) {
+      this.setDirectionFromVector(dx, dy);
+    }
+
+    // ==========================================================================
+    // COMBAT INPUTS DISPATCH & TIMERS UPDATE
+    // ==========================================================================
+
+    // Dash (Button A on Mobile/Touch, Space on PC)
+    if (input.keys['Space'] || (input.buttons && input.buttons['A'])) {
+      this.triggerDash();
+    }
+
+    // Melee (Button B on Mobile/Touch, KeyJ or Left Click on PC)
+    const meleeDown = Boolean(input.keys['KeyJ'] || input.mouseLeft || (input.buttons && input.buttons['B']));
+    if (meleeDown && !this.melee.charging) {
+      this.startMelee();
+    } else if (!meleeDown && this.melee.charging) {
+      this.releaseMelee();
+    }
+
+    // Shield (Button Y on Mobile/Touch, KeyK or Right Click on PC)
+    const shieldDown = Boolean(input.keys['KeyK'] || input.mouseRight || (input.buttons && input.buttons['Y']));
+    this.setShield(shieldDown);
+
+    // Ranged (Button X on Mobile/Touch, KeyL or KeyF on PC)
+    const rangedDown = Boolean(input.keys['KeyL'] || input.keys['KeyF'] || (input.buttons && input.buttons['X']));
+    if (rangedDown && !this.ranged.charging) {
+      this.startRanged();
+    } else if (!rangedDown && this.ranged.charging) {
+      this.releaseRanged();
+    }
+
+    this.isSprinting = Boolean(input.keys['ShiftLeft'] || input.keys['ShiftRight']);
+
+    if (input.keys['KeyR']) {
+      this.respawn();
+    }
+
+    // 1. Dash timers & ghost fading
+    if (this.dash.cooldown > 0) this.dash.cooldown -= dt;
+    if (this.dash.active) {
+      this.dash.timer -= dt;
+      if (this.dash.timer <= 0) {
+        this.dash.active = false;
+      }
+    }
+    for (let g = this.dash.ghosts.length - 1; g >= 0; g--) {
+      this.dash.ghosts[g].alpha -= dt * 3.5;
+      if (this.dash.ghosts[g].alpha <= 0) {
+        this.dash.ghosts.splice(g, 1);
+      }
+    }
+
+    // 2. Shield drain, broken state full recovery & passive recharge with 1s delay
+    if (this.shield.broken) {
+      if (this.shield.stunTimer > 0) {
+        this.shield.stunTimer -= dt;
+      }
+      // Erst wieder nutzbar, wenn es EINMAL VOLL (100%) aufgeladen ist!
+      this.shield.energy = Math.min(COMBAT_CONFIG.SHIELD_MAX, this.shield.energy + COMBAT_CONFIG.SHIELD_RECHARGE_RATE * dt);
+      if (this.shield.energy >= COMBAT_CONFIG.SHIELD_MAX) {
+        this.shield.energy = COMBAT_CONFIG.SHIELD_MAX;
+        this.shield.broken = false; // Voll aufgeladen und wieder einsatzbereit!
+        this.shield.rechargeDelay = 0;
+      }
+    } else if (this.shield.active) {
+      this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY; // 1.0s Pause vorbereiten
+      this.shield.energy = Math.max(0, this.shield.energy - COMBAT_CONFIG.SHIELD_DRAIN_RATE * dt);
+      if (this.shield.energy <= 0) {
+        // Shield Shatters!
+        this.shield.broken = true;
+        this.shield.active = false;
+        this.shield.energy = 0;
+        this.shield.stunTimer = COMBAT_CONFIG.SHIELD_STUN_TIME;
+
+        // Shatter burst particles
+        for (let i = 0; i < 20; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const spSpeed = Math.random() * 100 + 35;
+          this.particles.push({
+            x: this.x,
+            y: this.y - 10,
+            vx: Math.cos(angle) * spSpeed,
+            vy: Math.sin(angle) * spSpeed,
+            size: Math.random() * 3.5 + 1.5,
+            color: '#38bdf8',
+            life: 0.5,
+            maxLife: 0.5
+          });
+        }
+      }
+    } else {
+      // Wenn nicht zerbrochen: erst nach 1 Sekunde Pause wieder aufladen
+      if (this.shield.rechargeDelay > 0) {
+        this.shield.rechargeDelay -= dt;
+      } else {
+        // Passive Shield Recharge nach 1s Pause
+        this.shield.energy = Math.min(COMBAT_CONFIG.SHIELD_MAX, this.shield.energy + COMBAT_CONFIG.SHIELD_RECHARGE_RATE * dt);
+      }
+    }
+
+    // 3. Melee combo, recovery & charge timers
+    if (this.melee.recoveryTimer > 0) {
+      this.melee.recoveryTimer -= dt;
+      if (this.melee.recoveryTimer <= 0) {
+        this.melee.recoveryTimer = 0;
+        this.melee.comboStep = 0; // Kombo-Pause beendet, nächster Schlag ist Schnitt 1
+      }
+    } else if (this.melee.comboTimer > 0) {
+      this.melee.comboTimer -= dt;
+      if (this.melee.comboTimer <= 0) {
+        this.melee.comboStep = 0;
+      }
+    }
+    if (this.melee.charging) {
+      this.melee.chargeTimer += dt;
+      // Charging aura sparkles
+      if (this.melee.chargeTimer >= COMBAT_CONFIG.SPIN_CHARGE_TIME && Math.random() < 0.4) {
+        this.particles.push({
+          x: this.x + (Math.random() - 0.5) * 16,
+          y: this.y - 8 + (Math.random() - 0.5) * 16,
+          vx: (Math.random() - 0.5) * 20,
+          vy: -Math.random() * 25 - 10,
+          size: Math.random() * 2 + 1,
+          color: '#67e8f9',
+          life: 0.25,
+          maxLife: 0.25
+        });
+      }
+    }
+    if (this.melee.isSpinning) {
+      this.melee.spinTimer -= dt;
+      if (this.melee.spinTimer <= 0) {
+        this.melee.isSpinning = false;
+      }
+    }
+    if (this.melee.swingProgress < 1.0) {
+      const swingSpeed = (this.melee.swingType === 'thrust') ? 2.8 : 5.0;
+      this.melee.swingProgress += dt * swingSpeed;
+    }
+
+    // 4. Ranged charge timer
+    if (this.ranged.charging) {
+      this.ranged.chargeTimer += dt;
+      if (this.ranged.chargeTimer >= COMBAT_CONFIG.ARROW_CHARGE_TIME && Math.random() < 0.35) {
+        this.particles.push({
+          x: this.x + (Math.random() - 0.5) * 12,
+          y: this.y - 12 + (Math.random() - 0.5) * 12,
+          vx: (Math.random() - 0.5) * 15,
+          vy: -Math.random() * 20 - 5,
+          size: Math.random() * 2 + 1,
+          color: '#38bdf8',
+          life: 0.2,
+          maxLife: 0.2
+        });
+      }
+    }
+
+    // Dash movement override
+    if (this.dash.active) {
+      const dMoveX = this.dash.vx * dt;
+      const dMoveY = this.dash.vy * dt;
+
+      if (!this.checkCollision(this.x + dMoveX, this.y)) this.x += dMoveX;
+      if (!this.checkCollision(this.x, this.y + dMoveY)) this.y += dMoveY;
+
+      // Dust puff particles while dashing
+      if (Math.random() < 0.6) {
+        this.particles.push({
+          x: this.x + (Math.random() * 6 - 3),
+          y: this.y + 4,
+          vx: -this.dash.vx * 0.15 + (Math.random() * 8 - 4),
+          vy: -this.dash.vy * 0.15 + (Math.random() * 8 - 4),
+          size: Math.random() * 2.2 + 1,
+          color: 'rgba(255, 255, 255, 0.6)',
+          life: 0.22,
+          maxLife: 0.22
+        });
+      }
+
+      // Record ghost afterimage
+      if (Math.random() < 0.5) {
+        this.dash.ghosts.push({
+          x: this.x,
+          y: this.y,
+          elevY: Math.round(this.visualElevation * ELEVATION_PIXEL_OFFSET),
+          direction: this.direction,
+          alpha: 0.65
+        });
+      }
+    }
+
+    this.isMoving = dx !== 0 || dy !== 0;
+
+    // Stun / Shield Movement adjustments
+    if (this.shield.stunTimer > 0) {
+      dx = 0;
+      dy = 0;
+      this.isMoving = false;
+    }
+
+    if (this.isMoving && !this.dash.active) {
+      const len = Math.hypot(dx, dy);
+      dx /= len;
+      dy /= len;
+
+      this.setDirectionFromVector(dx, dy);
+
+      const currentTileX = Math.floor(this.x / TILE_SIZE);
+      const currentTileY = Math.floor(this.y / TILE_SIZE);
+      this.speedMod = this.map.getSpeedModifier(currentTileX, currentTileY);
+
+      let speed = this.baseSpeed * this.speedMod;
+      if (input.joystick && input.joystick.active) {
+        const joyMag = Math.min(1.0, Math.hypot(input.joystick.x, input.joystick.y));
+        speed *= Math.max(0.45, joyMag);
+      }
+      if (this.isSprinting && this.speedMod > 0.5) {
+        speed *= PLAYER_CONFIG.SPRINT_MULTIPLIER;
+      }
+      if (this.shield.active) {
+        speed *= 0.38; // Guarding walk
+      }
+      if (this.melee.isSpinning) {
+        speed *= 0.45;
+      }
+      this.currentSpeed = speed;
+
+      const moveX = dx * speed * dt;
+      const moveY = dy * speed * dt;
+
+      // Check previous tile before movement
+      const prevTileX = Math.floor(this.x / TILE_SIZE);
+      const prevTileY = Math.floor(this.y / TILE_SIZE);
+      const prevElev = this.map.getElevation(prevTileX, prevTileY);
+
+      // Sliding collision
+      if (!this.checkCollision(this.x + moveX, this.y)) {
+        this.x += moveX;
+      }
+      if (!this.checkCollision(this.x, this.y + moveY)) {
+        this.y += moveY;
+      }
+
+      // Ledge hop boost: when stepping down an elevation tier, advance player 6px
+      // in movement direction so they land cleanly on lower ground without clipping cliff walls
+      const newTileX = Math.floor(this.x / TILE_SIZE);
+      const newTileY = Math.floor(this.y / TILE_SIZE);
+      const newElev = this.map.getElevation(newTileX, newTileY);
+
+      if (newElev < prevElev) {
+        if (dx !== 0) {
+          const hopX = this.x + Math.sign(dx) * 6;
+          if (!this.checkCollision(hopX, this.y)) {
+            this.x = hopX;
+          }
+        }
+        if (dy !== 0) {
+          const hopY = this.y + Math.sign(dy) * 6;
+          if (!this.checkCollision(this.x, hopY)) {
+            this.y = hopY;
+          }
+        }
+      }
+
+      // Footstep particles
+      if (Math.random() < 0.3) {
+        const tile = this.map.getGroundTile(currentTileX, currentTileY);
+        let pColor = 'rgba(255,255,255,0.3)';
+        if (tile === TILES.SAND || tile === TILES.QUICKSAND) pColor = 'rgba(215, 175, 95, 0.55)';
+        if (tile === TILES.SNOW) pColor = 'rgba(235, 245, 255, 0.65)';
+        if (tile === TILES.VOID_GROUND) pColor = 'rgba(185, 60, 245, 0.55)';
+
+        this.particles.push({
+          x: this.x + (Math.random() * 6 - 3),
+          y: this.y + 6,
+          vx: -dx * 12 + (Math.random() * 8 - 4),
+          vy: -dy * 12 + (Math.random() * 8 - 4),
+          size: Math.random() * 2 + 1,
+          color: pColor,
+          life: 0.3,
+          maxLife: 0.3
+        });
+      }
+    } else {
+      this.currentSpeed = 0;
+    }
+
+    // Check deadly abyss & update elevation
+    const curTileX = Math.floor(this.x / TILE_SIZE);
+    const curTileY = Math.floor(this.y / TILE_SIZE);
+
+    // Sobald sich der Spieler vom Lande-Kachel wegbewegt, wird der Schutz aufgehoben
+    if (this.lastTransitionTile && (this.lastTransitionTile.x !== curTileX || this.lastTransitionTile.y !== curTileY)) {
+      this.lastTransitionTile = null;
+    }
+
+    if (this.map.isDeadly(curTileX, curTileY)) {
+      this.die('void');
+    }
+
+    const tileElev = this.map.getElevation(curTileX, curTileY);
+    const tileRamp = this.map.getRamp(curTileX, curTileY);
+    this.elevation = tileElev;
+
+    // Sanfte optische Höhenanpassung auf Rampen
+    if (tileRamp !== RAMPS.NONE) {
+      let rampProgress = 0.5;
+      const subX = (this.x % TILE_SIZE) / TILE_SIZE;
+      const subY = (this.y % TILE_SIZE) / TILE_SIZE;
+
+      if (tileRamp === RAMPS.UP_NORTH) {
+        rampProgress = 1.0 - subY;
+      } else if (tileRamp === RAMPS.UP_SOUTH) {
+        rampProgress = subY;
+      } else if (tileRamp === RAMPS.UP_WEST) {
+        rampProgress = 1.0 - subX;
+      } else if (tileRamp === RAMPS.UP_EAST) {
+        rampProgress = subX;
+      }
+
+      const targetVis = tileElev + Math.max(0, Math.min(1, rampProgress));
+      this.visualElevation += (targetVis - this.visualElevation) * Math.min(1, dt * 15);
+    } else {
+      this.visualElevation += (tileElev - this.visualElevation) * Math.min(1, dt * 15);
+    }
+
+    // Seltene Schreine prüfen (immer prüfen, auch im Stehen)
+    this.checkShrines(curTileX, curTileY);
+
+    // Dimension-Trigger prüfen (nur wenn keine Transition läuft, Cooldown vorbei ist und nicht auf Lande-Kachel)
+    const isLandingTile = Boolean(this.lastTransitionTile && this.lastTransitionTile.x === curTileX && this.lastTransitionTile.y === curTileY);
+
+    if (!this.transition && this.transitionCooldown <= 0 && !isLandingTile) {
+      // 1. Trampolin auf der Oberwelt -> Bounced in die Wolkenwelt
+      if (this.game && this.game.currentDimension === 'overworld') {
+        if (this.map.isTrampoline && this.map.isTrampoline(curTileX, curTileY)) {
+          this.startTransition('trampoline', 'clouds', this.x, this.y, 0.8);
+        } else if (this.map.getHoleEntrance) {
+          const entrance = this.map.getHoleEntrance(curTileX, curTileY);
+          if (entrance) {
+            this.startTransition('cave_enter', entrance.targetCave, entrance.targetX * TILE_SIZE + 8, entrance.targetY * TILE_SIZE + 8, 0.65);
+          }
+        }
+      }
+      // 2. Freier Himmel in der Wolkenwelt -> Sturzflug zurück zur Oberwelt
+      else if (this.game && this.game.currentDimension === 'clouds') {
+        const gTile = this.map.getGroundTile(curTileX, curTileY);
+        if (gTile === TILES.SKY_ABYSS) {
+          this.startTransition('fall', 'overworld', this.x, this.y, 0.85);
+        }
+      }
+      // 3. Lichtschacht oder Leiter in Höhlen
+      else if (this.game && this.game.currentDimension === 'caves') {
+        if (this.map.exits) {
+          const exit = this.map.exits.find(e => e.x === curTileX && e.y === curTileY);
+          if (exit) {
+            const tType = exit.targetDim === 'overworld' ? 'cave_exit' : 'ladder';
+            this.startTransition(tType, exit.targetDim, exit.targetX * TILE_SIZE + 8, exit.targetY * TILE_SIZE + 8, 0.65);
+          }
+        }
+      }
+    }
+  }
+
+  findSafeLandingPosition(map, startX, startY) {
+    if (!map) return { x: startX, y: startY };
+
+    const isSafe = (x, y) => {
+      const tx = Math.floor(x / TILE_SIZE);
+      const ty = Math.floor(y / TILE_SIZE);
+      if (tx < 2 || tx >= map.width - 2 || ty < 2 || ty >= map.height - 2) return false;
+      if (map.isDeadly && map.isDeadly(tx, ty)) return false;
+
+      const g = map.getGroundTile(tx, ty);
+      if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE ||
+          g === TILES.QUICKSAND || g === TILES.SKY_ABYSS) {
+        return false;
+      }
+      if (map.getSpeedModifier && map.getSpeedModifier(tx, ty) <= 0.05) return false;
+
+      if (map.isSolid && map.isSolid(tx, ty)) return false;
+      if (map.checkTreeCollision && map.checkTreeCollision(x, y, this.radius || 6)) return false;
+
+      return true;
+    };
+
+    // Wenn Zielposition bereits vollkommen frei und sicher ist: direkt nutzen!
+    if (isSafe(startX, startY)) {
+      return { x: startX, y: startY };
+    }
+
+    // Andernfalls: Spiralförmig nach außen suchen, um die nächste freie Kachel daneben zu finden
+    const startTileX = Math.floor(startX / TILE_SIZE);
+    const startTileY = Math.floor(startY / TILE_SIZE);
+
+    for (let r = 1; r <= 20; r++) {
+      const candidates = [];
+      for (let dx = -r; dx <= r; dx++) {
+        for (let dy = -r; dy <= r; dy++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const tx = startTileX + dx;
+          const ty = startTileY + dy;
+          const cx = tx * TILE_SIZE + 8;
+          const cy = ty * TILE_SIZE + 8;
+          if (isSafe(cx, cy)) {
+            candidates.push({ x: cx, y: cy, dist: Math.hypot(cx - startX, cy - startY) });
+          }
+        }
+      }
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => a.dist - b.dist);
+        return { x: candidates[0].x, y: candidates[0].y };
+      }
+    }
+
+    // Fallback auf Spawn-Punkt
+    if (map.spawnPoint) {
+      return { x: map.spawnPoint.x * TILE_SIZE + 8, y: map.spawnPoint.y * TILE_SIZE + 8 };
+    }
+    return { x: startX, y: startY };
+  }
+
+  startTransition(type, targetDim, targetX, targetY, duration = 0.8) {
+    if (this.transition) return;
+
+    let destX = targetX;
+    let destY = targetY;
+
+    if (type === 'fall' && targetDim === 'overworld') {
+      const targetMap = (this.game && this.game.overworldMap) ? this.game.overworldMap : this.map;
+      const safe = this.findSafeLandingPosition(targetMap, targetX, targetY);
+      destX = safe.x;
+      destY = safe.y;
+    }
+
+    this.transition = {
+      type,
+      timer: 0,
+      duration,
+      startX: this.x,
+      startY: this.y,
+      targetDim,
+      targetX: destX,
+      targetY: destY,
+      switched: false
+    };
+
+    if (type === 'trampoline') {
+      for (let i = 0; i < 24; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 45 + 25;
+        this.particles.push({
+          x: this.x,
+          y: this.y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 40,
+          size: Math.random() * 3.5 + 2,
+          color: Math.random() > 0.5 ? '#f472b6' : '#fcd34d',
+          life: 0.65,
+          maxLife: 0.65
+        });
+      }
+    } else if (type === 'fall') {
+      for (let i = 0; i < 25; i++) {
+        this.particles.push({
+          x: this.x + (Math.random() * 20 - 10),
+          y: this.y + (Math.random() * 20 - 10),
+          vx: (Math.random() - 0.5) * 20,
+          vy: Math.random() * 50 + 40,
+          size: Math.random() * 3 + 1.5,
+          color: 'rgba(255, 255, 255, 0.85)',
+          life: 0.5,
+          maxLife: 0.5
+        });
+      }
+    }
+  }
+
+  checkShrines(tx, ty) {
+    if (!this.map.objects) return;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = tx + dx;
+        const ny = ty + dy;
+        if (nx >= 0 && nx < this.map.width && ny >= 0 && ny < this.map.height) {
+          if (this.map.objects[ny][nx] === OBJECTS.SHRINE) {
+            const dim = this.game ? (this.game.activeSubCave || this.game.currentDimension) : 'world';
+            const shrineKey = `${dim}_${nx}_${ny}`;
+            if (!this.discoveredShrines.has(shrineKey)) {
+              this.discoveredShrines.add(shrineKey);
+              let sName = 'Uralter Geister-Schrein';
+              if (this.map.shrines) {
+                const found = this.map.shrines.find(s => s.x === nx && s.y === ny);
+                if (found) sName = found.name;
+              }
+              this.shrineMessage = {
+                title: '⛩️ SCHREIN ENTDECKT!',
+                name: sName,
+                total: this.discoveredShrines.size,
+                timer: 4.5
+              };
+              for (let i = 0; i < 35; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 45 + 15;
+                this.particles.push({
+                  x: nx * TILE_SIZE + 8,
+                  y: ny * TILE_SIZE + 8,
+                  vx: Math.cos(angle) * speed,
+                  vy: Math.sin(angle) * speed,
+                  size: Math.random() * 3 + 1.5,
+                  color: Math.random() > 0.4 ? '#fcd34d' : '#f472b6',
+                  life: 0.9,
+                  maxLife: 0.9
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  die(cause = 'void') {
+    if (this.isDead) return;
+    this.isDead = true;
+    this.deathTimer = 0;
+    this.deathCount++;
+
+    for (let i = 0; i < 25; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * 35;
+      this.particles.push({
+        x: this.x,
+        y: this.y,
+        vx: Math.cos(angle) * dist,
+        vy: Math.sin(angle) * dist,
+        size: Math.random() * 3 + 1.5,
+        color: Math.random() > 0.5 ? '#d946ef' : '#8b24d6',
+        life: 0.7,
+        maxLife: 0.7
+      });
+    }
+  }
+
+  checkCollision(targetX, targetY) {
+    const r = this.radius;
+    const curTileX = Math.floor(this.x / TILE_SIZE);
+    const curTileY = Math.floor(this.y / TILE_SIZE);
+
+    const moveDx = targetX - this.x;
+    const moveDy = targetY - this.y;
+
+    // Nur Punkte auf der vorderen Kante (Leading Edge) in Bewegungsrichtung prüfen.
+    // Verhindert das Hängenbleiben an Kanten, von denen man sich wegbewegt.
+    let checkPoints = [];
+    if (moveDx > 0) {
+      checkPoints = [
+        { x: targetX + r, y: targetY - r * 0.7 },
+        { x: targetX + r, y: targetY },
+        { x: targetX + r, y: targetY + r * 0.7 }
+      ];
+    } else if (moveDx < 0) {
+      checkPoints = [
+        { x: targetX - r, y: targetY - r * 0.7 },
+        { x: targetX - r, y: targetY },
+        { x: targetX - r, y: targetY + r * 0.7 }
+      ];
+    } else if (moveDy > 0) {
+      checkPoints = [
+        { x: targetX - r * 0.7, y: targetY + r },
+        { x: targetX, y: targetY + r },
+        { x: targetX + r * 0.7, y: targetY + r }
+      ];
+    } else if (moveDy < 0) {
+      checkPoints = [
+        { x: targetX - r * 0.7, y: targetY - r },
+        { x: targetX, y: targetY - r },
+        { x: targetX + r * 0.7, y: targetY - r }
+      ];
+    } else {
+      checkPoints = [
+        { x: targetX - r, y: targetY - r },
+        { x: targetX + r, y: targetY - r },
+        { x: targetX - r, y: targetY + r },
+        { x: targetX + r, y: targetY + r }
+      ];
+    }
+
+    for (const pt of checkPoints) {
+      const tx = Math.floor(pt.x / TILE_SIZE);
+      const ty = Math.floor(pt.y / TILE_SIZE);
+      if (this.map.isSolid(tx, ty)) {
+        return true;
+      }
+      // Gleiche Kachel wie Spielerzentrum -> kein Höhenwechsel
+      if (tx === curTileX && ty === curTileY) continue;
+
+      // Kantenkollision prüfen
+      if (!this.map.isElevationPassable(curTileX, curTileY, tx, ty)) {
+        return true;
+      }
+    }
+
+    // Check tree trunk collision
+    if (this.map.checkTreeCollision(targetX, targetY, r)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  updateParticles(dt) {
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.life -= dt;
+      if (p.life <= 0) {
+        this.particles.splice(i, 1);
+        continue;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+    }
+  }
+
+  renderParticles(ctx) {
+    this.particles.forEach(p => {
+      const alpha = p.life / p.maxLife;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  render(ctx, spriteManager, animTime = 0, nightFactor = 0) {
+    this.renderParticles(ctx);
+
+    const px = Math.round(this.x);
+    const elevY = Math.round(this.visualElevation * ELEVATION_PIXEL_OFFSET);
+
+    // Transitions-Höhe & Effekte (Trampolin-Sprung, Freifall, Höhleneinstieg)
+    let transOffset = 0;
+    let transScale = 1.0;
+    let transAlpha = 1.0;
+
+    if (this.transition) {
+      const prog = this.transition.timer / this.transition.duration;
+      if (this.transition.type === 'trampoline') {
+        transOffset = Math.sin(prog * Math.PI) * 45;
+        transScale = 1.0 + Math.sin(prog * Math.PI) * 0.35;
+
+        // Aufsteigende Wind- & Glitzerstreifen
+        ctx.save();
+        ctx.strokeStyle = 'rgba(244, 114, 182, 0.75)';
+        ctx.lineWidth = 1.8;
+        for (let l = 0; l < 5; l++) {
+          const lx = px - 10 + l * 5;
+          ctx.beginPath();
+          ctx.moveTo(lx, Math.round(this.y) - elevY - transOffset + 8);
+          ctx.lineTo(lx, Math.round(this.y) - elevY - transOffset + 22);
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else if (this.transition.type === 'fall') {
+        if (prog < 0.5) {
+          transOffset = prog * 25;
+          transScale = 1.0 - prog * 0.4;
+          transAlpha = 1.0 - prog * 0.4;
+        } else {
+          transOffset = (1.0 - prog) * 35;
+          transScale = 0.8 + (prog - 0.5) * 0.4;
+          transAlpha = 0.6 + (prog - 0.5) * 0.8;
+        }
+
+        // Nach unten ziehende Sturzflug-Linien
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.lineWidth = 2.0;
+        for (let l = 0; l < 5; l++) {
+          const lx = px - 10 + l * 5;
+          ctx.beginPath();
+          ctx.moveTo(lx, Math.round(this.y) - elevY - transOffset - 20);
+          ctx.lineTo(lx, Math.round(this.y) - elevY - transOffset - 6);
+          ctx.stroke();
+        }
+        ctx.restore();
+      } else if (this.transition.type === 'cave_enter') {
+        if (prog < 0.5) {
+          transOffset = -prog * 16;
+          transScale = Math.max(0.3, 1.0 - prog * 1.2);
+          transAlpha = Math.max(0.3, 1.0 - prog * 1.2);
+        } else {
+          transOffset = (1.0 - prog) * 20;
+          transScale = 0.5 + (prog - 0.5) * 1.0;
+          transAlpha = 0.5 + (prog - 0.5) * 1.0;
+        }
+      } else if (this.transition.type === 'cave_exit' || this.transition.type === 'ladder') {
+        if (prog < 0.5) {
+          transOffset = prog * 18;
+          transScale = 1.0 - prog * 0.5;
+          transAlpha = 1.0 - prog * 0.5;
+        } else {
+          transOffset = -(1.0 - prog) * 14;
+          transScale = 0.6 + (prog - 0.5) * 0.8;
+          transAlpha = 0.6 + (prog - 0.5) * 0.8;
+        }
+      }
+    }
+
+    const py = Math.round(this.y) - elevY - Math.round(transOffset);
+    const bob = this.isMoving ? Math.sin(animTime * 10) * 1.5 : 0;
+
+    if (this.isDead) {
+      const progress = this.deathTimer / 1.2;
+      ctx.save();
+      ctx.translate(this.x, this.y - elevY);
+      ctx.rotate(progress * 12);
+      ctx.scale(1 - progress, 1 - progress);
+      ctx.globalAlpha = 1 - progress;
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(-6, -12, 12, 16);
+      ctx.restore();
+      return;
+    }
+
+    ctx.save();
+    if (transScale !== 1.0 || transAlpha !== 1.0) {
+      ctx.translate(px, py);
+      ctx.scale(transScale, transScale);
+      ctx.globalAlpha = transAlpha;
+      ctx.translate(-px, -py);
+    }
+
+    // 1. Paper Card Drop Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+    ctx.beginPath();
+    ctx.ellipse(px + 1, py + 2, 8, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Folded Papercraft Wanderer (Mononoke Cloak + Chihiro Obi)
+    // Dark Indigo/Jade Paper Cloak
+    ctx.fillStyle = '#1e2636';
+    ctx.beginPath();
+    ctx.moveTo(px, py - 20 + bob);
+    ctx.lineTo(px + 7, py - 4 + bob);
+    ctx.lineTo(px - 7, py - 4 + bob);
+    ctx.closePath();
+    ctx.fill();
+
+    // Central Paper Fold Crease
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px, py - 20 + bob);
+    ctx.lineTo(px, py - 4 + bob);
+    ctx.stroke();
+
+    // Red Obi Sash / Ribbon
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(px - 5, py - 11 + bob, 10, 2.5);
+
+    // Fluttering Ribbon End
+    const ribbon = Math.sin(animTime * 6) * 3;
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(px - 2, py - 10 + bob);
+    ctx.lineTo(px - 6 + ribbon, py - 6 + bob);
+    ctx.stroke();
+
+    const fVec = this.getFacingVector();
+
+    // Paper Cutout Mask / Face (Spirit White)
+    ctx.fillStyle = '#f8fafc';
+    ctx.beginPath();
+    const faceX = px + fVec.x * 1.2;
+    const faceY = py - 18 + bob + fVec.y * 0.8;
+    ctx.arc(faceX, faceY, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Glowing Cyan Spirit Eyes (subtly shifted toward 8-way facing direction)
+    if (this.direction !== 'up') {
+      ctx.fillStyle = '#2dd4bf';
+      const eyeBaseX = faceX + fVec.x * 1.2;
+      const eyeBaseY = faceY + fVec.y * 0.4;
+      if (this.direction === 'left' || this.direction === 'up-left') {
+        ctx.fillRect(eyeBaseX - 2.8, eyeBaseY - 1, 1.4, 2);
+        ctx.fillRect(eyeBaseX - 0.7, eyeBaseY - 1, 1.2, 2);
+      } else if (this.direction === 'right' || this.direction === 'up-right') {
+        ctx.fillRect(eyeBaseX - 0.5, eyeBaseY - 1, 1.2, 2);
+        ctx.fillRect(eyeBaseX + 1.4, eyeBaseY - 1, 1.4, 2);
+      } else {
+        // Down, down-left, down-right
+        ctx.fillRect(eyeBaseX - 2, eyeBaseY - 1, 1.5, 2);
+        ctx.fillRect(eyeBaseX + 0.8, eyeBaseY - 1, 1.5, 2);
+      }
+    }
+
+    // 3. Handheld Paper Lantern on Bamboo Pole (Held during Dusk & Night AND always Underground in Caves)
+    const isUnderground = (this.game && this.game.currentDimension === 'caves') ||
+      (this.map && this.map.biome && typeof this.map.biome === 'string' && (this.map.biome.includes('Tiefenhöhlen') || this.map.biome.includes('Grotte') || this.map.biome.includes('Höhle')));
+    const showLantern = (nightFactor > 0.1) || isUnderground;
+    const effectiveIntensity = isUnderground ? 1.0 : nightFactor;
+
+    if (showLantern) {
+      const poleSide = this.direction.includes('left') ? -1 : 1;
+      const poleX = px + poleSide * 7;
+      const poleY = py - 13 + bob;
+      ctx.strokeStyle = '#a16207'; // Bamboo pole
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(px + poleSide * 2, py - 8 + bob);
+      ctx.lineTo(poleX, poleY);
+      ctx.stroke();
+
+      // Swaying Paper Lantern
+      const lSway = (this.isMoving ? Math.sin(animTime * 12) * 2.5 : 0);
+      const lanX = poleX + lSway;
+      const lanY = poleY + 5;
+
+      const fScale = 1 + Math.sin(animTime * 15) * 0.15;
+
+      // Soft ambient lantern aura
+      ctx.fillStyle = `rgba(251, 146, 60, ${0.35 * effectiveIntensity})`;
+      ctx.beginPath();
+      ctx.arc(lanX, lanY, 7.5 * fScale, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Paper lantern body (Warm Orange-Red)
+      ctx.fillStyle = `rgba(234, 88, 12, ${effectiveIntensity})`;
+      ctx.beginPath();
+      ctx.arc(lanX, lanY, 4.2 * fScale, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glowing incandescent filament core (Bright Gold)
+      ctx.fillStyle = `rgba(254, 240, 138, ${effectiveIntensity})`;
+      ctx.beginPath();
+      ctx.arc(lanX, lanY, 2.2 * fScale, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Wooden caps on top and bottom of paper lantern
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(lanX - 1.5, lanY - 4.5 * fScale, 3, 1);
+      ctx.fillRect(lanX - 1.5, lanY + 3.5 * fScale, 3, 1);
+    }
+
+    // 4. COMBAT WEAPONS & ABILITY RENDERING
+
+    // 4a. Sword & Melee Attack Rendering
+    if (this.melee.charging) {
+      const facingRight = this.direction.includes('right');
+      const swordSide = facingRight ? 1 : -1;
+      const hiltX = px + swordSide * 5;
+      const hiltY = py - 14 + bob;
+      const chargeProg = Math.min(1.0, this.melee.chargeTimer / COMBAT_CONFIG.SPIN_CHARGE_TIME);
+
+      // Sword Hilt
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(hiltX, hiltY);
+      ctx.lineTo(hiltX + swordSide * 2, hiltY - 4);
+      ctx.stroke();
+
+      // Gleaming silver paper blade (turns glowing cyan when fully charged)
+      ctx.strokeStyle = chargeProg >= 1.0 ? '#38bdf8' : '#e2e8f0';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(hiltX + swordSide * 2, hiltY - 4);
+      ctx.lineTo(hiltX + swordSide * 5, hiltY - 18);
+      ctx.stroke();
+
+      // Gleam spark at blade tip
+      ctx.fillStyle = chargeProg >= 1.0 ? '#fef08a' : '#38bdf8';
+      ctx.fillRect(hiltX + swordSide * 5 - 1.5, hiltY - 19.5, 3, 3);
+    } else if (this.melee.swingProgress < 1.0 && this.melee.swingType) {
+      const swProg = this.melee.swingProgress;
+      const swAngle = this.getFacingAngle();
+
+      ctx.save();
+      ctx.translate(px, py - 10 + bob);
+
+      if (this.melee.swingType === 'thrust') {
+        ctx.rotate(swAngle);
+        // Linear thrust motion: shoots forward quickly, holds pose, then retracts
+        const thrustExtend = Math.sin(swProg * Math.PI) * 16;
+        const swordLen = 22;
+
+        // Thrust Speed Lines around blade
+        ctx.strokeStyle = 'rgba(254, 240, 138, 0.65)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(thrustExtend, -4);
+        ctx.lineTo(thrustExtend + swordLen + 6, -4);
+        ctx.moveTo(thrustExtend, 4);
+        ctx.lineTo(thrustExtend + swordLen + 6, 4);
+        ctx.stroke();
+
+        // Glowing white / silver blade
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2.8;
+        ctx.beginPath();
+        ctx.moveTo(4 + thrustExtend, 0);
+        ctx.lineTo(4 + thrustExtend + swordLen, 0);
+        ctx.stroke();
+
+        // Sharp golden arrowhead spear tip
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.moveTo(4 + thrustExtend + swordLen + 5, 0);
+        ctx.lineTo(4 + thrustExtend + swordLen - 4, -3);
+        ctx.lineTo(4 + thrustExtend + swordLen - 2, 0);
+        ctx.lineTo(4 + thrustExtend + swordLen - 4, 3);
+        ctx.closePath();
+        ctx.fill();
+
+        // Red lacquered grip
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(2 + thrustExtend, -1.5, 3, 3);
+      } else {
+        // Slashes 1 & 2: Curved sweeping blade
+        ctx.rotate(swAngle + (swProg - 0.5) * (this.melee.swingType === 'slash2' ? -1.8 : 1.8));
+
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.moveTo(4, 0);
+        ctx.lineTo(18, 0);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ef4444'; // Red grip wrap
+        ctx.fillRect(2, -1.5, 3, 3);
+      }
+      ctx.restore();
+    }
+
+    // 4a2. 360 Spin Attack Whirling Twin Blades
+    if (this.melee.isSpinning) {
+      const spinAngle = animTime * 32;
+      ctx.save();
+      ctx.translate(px, py - 10 + bob);
+      for (let s = 0; s < 2; s++) {
+        const curAngle = spinAngle + s * Math.PI;
+        ctx.save();
+        ctx.rotate(curAngle);
+
+        // Radiant Cyan Blade
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 3.0;
+        ctx.beginPath();
+        ctx.moveTo(6, 0);
+        ctx.lineTo(26, 0);
+        ctx.stroke();
+
+        // Glowing white cutting edge
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.lineTo(28, 0);
+        ctx.stroke();
+
+        // Sharp tip
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(30, 0);
+        ctx.lineTo(24, -3.5);
+        ctx.lineTo(24, 3.5);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    // 4b. Bow & Arrow Aiming
+    if (this.ranged.charging) {
+      const bowAngle = this.getFacingAngle();
+
+      ctx.save();
+      ctx.translate(px, py - 10 + bob);
+      ctx.rotate(bowAngle);
+
+      // Curved Bamboo Bow
+      ctx.strokeStyle = '#a16207';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(8, 0, 10, -Math.PI * 0.35, Math.PI * 0.35);
+      ctx.stroke();
+
+      // Pulled Bowstring
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(8 + Math.cos(-Math.PI * 0.35) * 10, Math.sin(-Math.PI * 0.35) * 10);
+      ctx.lineTo(2, 0);
+      ctx.lineTo(8 + Math.cos(Math.PI * 0.35) * 10, Math.sin(Math.PI * 0.35) * 10);
+      ctx.stroke();
+
+      // Nocked Paper Arrow
+      ctx.strokeStyle = (this.ranged.chargeTimer >= COMBAT_CONFIG.ARROW_CHARGE_TIME) ? '#38bdf8' : '#cbd5e1';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(2, 0);
+      ctx.lineTo(16, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    // 4c. Translucent Shimmering Bubble Shield (Smash Bros / Zelda Style)
+    if (this.shield.active) {
+      const sRadius = 14 + (this.shield.energy / 100) * 8;
+      const sPulse = Math.sin(animTime * 10) * 0.6;
+      const rad = sRadius + sPulse;
+
+      const sGrad = ctx.createRadialGradient(px, py - 10 + bob, rad * 0.2, px, py - 10 + bob, rad);
+      const isLow = this.shield.energy < 25;
+      if (isLow) {
+        sGrad.addColorStop(0, 'rgba(239, 68, 68, 0.08)');
+        sGrad.addColorStop(0.7, 'rgba(239, 68, 68, 0.35)');
+        sGrad.addColorStop(1, 'rgba(254, 202, 202, 0.88)');
+      } else {
+        sGrad.addColorStop(0, 'rgba(56, 189, 248, 0.08)');
+        sGrad.addColorStop(0.68, 'rgba(14, 165, 233, 0.35)');
+        sGrad.addColorStop(1, 'rgba(224, 242, 254, 0.85)');
+      }
+
+      ctx.fillStyle = sGrad;
+      ctx.beginPath();
+      ctx.arc(px, py - 10 + bob, rad, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hexagonal origami shield facet seams
+      ctx.strokeStyle = isLow ? 'rgba(248, 113, 113, 0.85)' : 'rgba(186, 230, 253, 0.85)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      for (let h = 0; h < 6; h++) {
+        const hAngle = animTime * 1.5 + (h / 6) * Math.PI * 2;
+        const hx = px + Math.cos(hAngle) * rad;
+        const hy = py - 10 + bob + Math.sin(hAngle) * rad;
+        if (h === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+
+    // 4d. Stun Stars on Shield Break
+    if (this.shield.broken && this.shield.stunTimer > 0) {
+      for (let st = 0; st < 3; st++) {
+        const stAngle = animTime * 8 + (st / 3) * Math.PI * 2;
+        const stX = px + Math.cos(stAngle) * 9;
+        const stY = py - 26 + bob + Math.sin(stAngle) * 3;
+        ctx.fillStyle = '#facc15';
+        ctx.fillRect(stX - 1.5, stY - 1.5, 3, 3);
+      }
+    }
+
+    // 4e. Dash Ghost Trails
+    for (const ghost of this.dash.ghosts) {
+      ctx.save();
+      ctx.globalAlpha = ghost.alpha * 0.45;
+      ctx.fillStyle = '#67e8f9';
+      ctx.beginPath();
+      ctx.ellipse(ghost.x, ghost.y - ghost.elevY - 10, 7, 11, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+}
+
+
+// --- camera.js ---
+
+class Camera {
+  constructor(viewportWidth, viewportHeight) {
+    this.x = 0;
+    this.y = 0;
+    this.viewportWidth = viewportWidth;
+    this.viewportHeight = viewportHeight;
+    this.zoom = 3.0; // 3x zoom for crisp 16px pixel art
+
+    this.mapWidth = MAP_WIDTH;
+    this.mapHeight = MAP_HEIGHT;
+    this.worldWidth = MAP_WIDTH * TILE_SIZE;
+    this.worldHeight = MAP_HEIGHT * TILE_SIZE;
+  }
+
+  setWorldBounds(widthInTiles, heightInTiles) {
+    this.mapWidth = widthInTiles;
+    this.mapHeight = heightInTiles;
+    this.worldWidth = widthInTiles * TILE_SIZE;
+    this.worldHeight = heightInTiles * TILE_SIZE;
+  }
+
+  resize(width, height) {
+    this.viewportWidth = width;
+    this.viewportHeight = height;
+  }
+
+  follow(targetX, targetY) {
+    const viewW = this.viewportWidth / this.zoom;
+    const viewH = this.viewportHeight / this.zoom;
+
+    if (this.worldWidth <= viewW) {
+      this.x = (this.worldWidth - viewW) / 2;
+    } else {
+      const maxX = this.worldWidth - viewW;
+      this.x = Math.max(0, Math.min(targetX - viewW / 2, maxX));
+    }
+
+    if (this.worldHeight <= viewH) {
+      this.y = (this.worldHeight - viewH) / 2;
+    } else {
+      const maxY = this.worldHeight - viewH;
+      this.y = Math.max(0, Math.min(targetY - viewH / 2, maxY));
+    }
+  }
+
+  shake(amount = 4.0, duration = 0.15) {
+    this.shakeAmount = amount;
+    this.shakeDuration = duration;
+    this.shakeTimer = duration;
+  }
+
+  update(dt) {
+    if (this.shakeTimer > 0) {
+      this.shakeTimer -= dt;
+      const prog = Math.max(0, this.shakeTimer / this.shakeDuration);
+      const mag = this.shakeAmount * prog;
+      this.offsetX = (Math.random() - 0.5) * 2 * mag;
+      this.offsetY = (Math.random() - 0.5) * 2 * mag;
+    } else {
+      this.offsetX = 0;
+      this.offsetY = 0;
+    }
+  }
+
+  apply(ctx) {
+    ctx.save();
+    ctx.scale(this.zoom, this.zoom);
+    ctx.translate(-Math.round(this.x + (this.offsetX || 0)), -Math.round(this.y + (this.offsetY || 0)));
+  }
+
+  release(ctx) {
+    ctx.restore();
+  }
+
+  getVisibleTileBounds() {
+    const mw = this.mapWidth || MAP_WIDTH;
+    const mh = this.mapHeight || MAP_HEIGHT;
+    const startX = Math.max(0, Math.floor(this.x / TILE_SIZE) - 1);
+    const startY = Math.max(0, Math.floor(this.y / TILE_SIZE) - 1);
+    const endX = Math.min(mw, Math.ceil((this.x + this.viewportWidth / this.zoom) / TILE_SIZE) + 2);
+    const endY = Math.min(mh, Math.ceil((this.y + this.viewportHeight / this.zoom) / TILE_SIZE) + 2);
+
+    return { startX, startY, endX, endY };
+  }
+}
+
+
+// --- minimap.js ---
+
+class Minimap {
+  constructor(canvasElement, map) {
+    this.canvas = canvasElement;
+    this.ctx = this.canvas.getContext('2d');
+    this.ctx.imageSmoothingEnabled = false;
+    this.map = map;
+
+    this.scaleX = this.canvas.width / MAP_WIDTH;
+    this.scaleY = this.canvas.height / MAP_HEIGHT;
+
+    this.bgCanvas = document.createElement('canvas');
+    this.bgCanvas.width = this.canvas.width;
+    this.bgCanvas.height = this.canvas.height;
+    this.bgCtx = this.bgCanvas.getContext('2d');
+    this.bgCtx.imageSmoothingEnabled = false;
+
+    this.renderStaticBackground();
+  }
+
+  setMap(map, dimension = 'overworld') {
+    this.map = map;
+    this.dimension = dimension;
+    this.scaleX = this.canvas.width / this.map.width;
+    this.scaleY = this.canvas.height / this.map.height;
+    this.updateHUD();
+    this.renderStaticBackground();
+  }
+
+  updateHUD() {
+    const header = document.getElementById('minimap-header');
+    const legend = document.getElementById('minimap-legend');
+    if (!header || !legend) return;
+
+    if (this.dimension === 'clouds') {
+      header.textContent = 'MINIMAP - 🌸 WOLKENREICH';
+      legend.innerHTML = `
+        <span class="legend-item"><i class="dot" style="background:#f472b6;"></i> Wolke</span>
+        <span class="legend-item"><i class="dot" style="background:#facc15;"></i> Brücke</span>
+        <span class="legend-item"><i class="dot" style="background:#130a24;"></i> Himmel</span>
+        <span class="legend-item"><i class="dot" style="background:#fbbf24;"></i> Schrein</span>
+      `;
+    } else if (this.dimension === 'caves') {
+      const cName = this.map.name || 'HÖHLENWELT';
+      header.textContent = `MINIMAP - 🪨 ${cName.toUpperCase()}`;
+      legend.innerHTML = `
+        <span class="legend-item"><i class="dot" style="background:#334155;"></i> Fels</span>
+        <span class="legend-item"><i class="dot" style="background:#0ea5e9;"></i> See</span>
+        <span class="legend-item"><i class="dot" style="background:#fef08a;"></i> Ausgang</span>
+        <span class="legend-item"><i class="dot" style="background:#f97316;"></i> Fackel</span>
+        <span class="legend-item"><i class="dot" style="background:#fbbf24;"></i> Schrein</span>
+      `;
+    } else {
+      header.textContent = 'MINIMAP - 🗺️ OBERWELT';
+      legend.innerHTML = `
+        <span class="legend-item"><i class="dot grass"></i> Gras</span>
+        <span class="legend-item"><i class="dot desert"></i> Wüste</span>
+        <span class="legend-item"><i class="dot snow"></i> Schnee</span>
+        <span class="legend-item"><i class="dot swamp"></i> Sumpf</span>
+        <span class="legend-item"><i class="dot void"></i> Leere</span>
+      `;
+    }
+  }
+
+  renderStaticBackground() {
+    this.bgCtx.fillStyle = '#050508';
+    this.bgCtx.fillRect(0, 0, this.bgCanvas.width, this.bgCanvas.height);
+
+    for (let y = 0; y < this.map.height; y++) {
+      for (let x = 0; x < this.map.width; x++) {
+        const tile = this.map.getGroundTile(x, y);
+        const props = TILE_PROPS[tile];
+        let color = props ? props.minimapColor : '#222';
+
+        // Biome-spezifische Farbgebung in Höhlen
+        if (tile === 17) { // TILES.CAVE_WALL
+          const theme = this.map.getTheme ? this.map.getTheme(x, y) : 'main';
+          if (theme === 'snow') color = '#0c4a6e';
+          else if (theme === 'void') color = '#1a052e';
+          else if (theme === 'forest') color = '#14381a';
+          else if (theme === 'desert') color = '#5c2406';
+          else if (theme === 'swamp') color = '#1a2619';
+          else if (theme === 'crystal') color = '#1e1b4b';
+          else color = '#0f172a';
+        } else if (tile === 16) { // TILES.CAVE_FLOOR
+          const theme = this.map.getTheme ? this.map.getTheme(x, y) : 'main';
+          if (theme === 'snow') color = '#38bdf8';
+          else if (theme === 'void') color = '#6b21a8';
+          else if (theme === 'forest') color = '#15803d';
+          else if (theme === 'desert') color = '#b45309';
+          else if (theme === 'swamp') color = '#3f6212';
+          else if (theme === 'crystal') color = '#334155';
+          else color = '#334155';
+        } else if (tile === 18) { // TILES.CAVE_WATER
+          const theme = this.map.getTheme ? this.map.getTheme(x, y) : 'main';
+          if (theme === 'void') color = '#4c1d95';
+          else if (theme === 'swamp') color = '#047857';
+          else color = '#06b6d4';
+        }
+
+        this.bgCtx.fillStyle = color;
+        this.bgCtx.fillRect(
+          Math.floor(x * this.scaleX),
+          Math.floor(y * this.scaleY),
+          Math.ceil(this.scaleX) + 1,
+          Math.ceil(this.scaleY) + 1
+        );
+
+        // Canopy overlay
+        if (this.map.getCanopyTile && this.map.getCanopyTile(x, y) === CANOPY.TREE_CROWN) {
+          this.bgCtx.fillStyle = '#16481e';
+          this.bgCtx.fillRect(
+            Math.floor(x * this.scaleX),
+            Math.floor(y * this.scaleY),
+            Math.ceil(this.scaleX) + 1,
+            Math.ceil(this.scaleY) + 1
+          );
+        }
+
+        // Elevation tinting on minimap (plateaus lighter, holes darker)
+        const elev = this.map.getElevation ? this.map.getElevation(x, y) : 0;
+        if (elev > 0) {
+          this.bgCtx.fillStyle = elev === 1 ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.35)';
+          this.bgCtx.fillRect(
+            Math.floor(x * this.scaleX),
+            Math.floor(y * this.scaleY),
+            Math.ceil(this.scaleX) + 1,
+            Math.ceil(this.scaleY) + 1
+          );
+        } else if (elev < 0) {
+          this.bgCtx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+          this.bgCtx.fillRect(
+            Math.floor(x * this.scaleX),
+            Math.floor(y * this.scaleY),
+            Math.ceil(this.scaleX) + 1,
+            Math.ceil(this.scaleY) + 1
+          );
+        }
+
+        // Ramp indicator dot on minimap
+        if (this.map.getRamp && this.map.getRamp(x, y) !== 0) {
+          this.bgCtx.fillStyle = '#fbbf24';
+          this.bgCtx.fillRect(
+            Math.floor(x * this.scaleX),
+            Math.floor(y * this.scaleY),
+            Math.ceil(this.scaleX),
+            Math.ceil(this.scaleY)
+          );
+        }
+
+        // Shrine indicator (Golden Diamond)
+        if (this.map.objects && this.map.objects[y] && this.map.objects[y][x] === 15) {
+          this.bgCtx.fillStyle = '#facc15';
+          this.bgCtx.fillRect(
+            Math.floor(x * this.scaleX) - 1,
+            Math.floor(y * this.scaleY) - 1,
+            3,
+            3
+          );
+        }
+
+        // Trampoline indicator (Pink Dot)
+        if (this.map.objects && this.map.objects[y] && this.map.objects[y][x] === 14) {
+          this.bgCtx.fillStyle = '#f472b6';
+          this.bgCtx.fillRect(
+            Math.floor(x * this.scaleX),
+            Math.floor(y * this.scaleY),
+            2,
+            2
+          );
+        }
+
+        // Torch indicator in caves (Fiery Orange Dot)
+        if (this.map.objects && this.map.objects[y] && this.map.objects[y][x] === 20) {
+          this.bgCtx.fillStyle = '#f97316';
+          this.bgCtx.fillRect(
+            Math.floor(x * this.scaleX),
+            Math.floor(y * this.scaleY),
+            2,
+            2
+          );
+        }
+      }
+    }
+
+    // Draw individual tree markers on minimap
+    if (this.map.trees && this.map.trees.length > 0) {
+      for (const tree of this.map.trees) {
+        const mx = Math.floor((tree.x / TILE_SIZE) * this.scaleX);
+        const my = Math.floor((tree.y / TILE_SIZE) * this.scaleY);
+        let color = '#195420';
+        if (tree.type === 2) color = '#0f3818';
+        else if (tree.type === 4) color = '#e07a9e';
+        else if (tree.type === 5) color = '#d97706';
+        else if (tree.type === 6) color = '#b8d8ec';
+        else if (tree.type === 7) color = '#344528';
+        else if (tree.type === 8) color = '#78a638';
+
+        this.bgCtx.fillStyle = color;
+        this.bgCtx.fillRect(mx - 1, my - 1, 2, 2);
+      }
+    }
+  }
+
+  render(player, camera) {
+    // 0. Clear canvas
+    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 1. Pre-rendered terrain
+    this.ctx.drawImage(this.bgCanvas, 0, 0);
+
+    // 2. Camera Viewport Box
+    const viewW = (camera.viewportWidth / camera.zoom) / TILE_SIZE * this.scaleX;
+    const viewH = (camera.viewportHeight / camera.zoom) / TILE_SIZE * this.scaleY;
+    const viewX = (camera.x / TILE_SIZE) * this.scaleX;
+    const viewY = (camera.y / TILE_SIZE) * this.scaleY;
+
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(viewX, viewY, viewW, viewH);
+
+    // 3. Player Marker
+    const pX = (player.x / TILE_SIZE) * this.scaleX;
+    const pY = (player.y / TILE_SIZE) * this.scaleY;
+
+    this.ctx.fillStyle = '#ff2a55';
+    this.ctx.beginPath();
+    this.ctx.arc(pX, pY, 3, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    this.ctx.strokeStyle = '#ffffff';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    this.ctx.arc(pX, pY, 4, 0, Math.PI * 2);
+    this.ctx.stroke();
+  }
+}
+
+
+// --- touchControls.js ---
+class TouchControls {
+  constructor(gameInput, onButtonPress = null) {
+    this.input = gameInput;
+    this.onButtonPress = onButtonPress;
+
+    // Ensure input state objects exist
+    if (!this.input.joystick) {
+      this.input.joystick = { x: 0, y: 0, active: false };
+    }
+    if (!this.input.buttons) {
+      this.input.buttons = { A: false, B: false, X: false, Y: false };
+    }
+
+    if (typeof document !== 'undefined') {
+      this.container = document.getElementById('touch-controls');
+      this.joystickZone = document.getElementById('touch-joystick-zone');
+      this.joystickBase = document.getElementById('touch-joystick-base');
+      this.joystickKnob = document.getElementById('touch-joystick-knob');
+      this.buttonsZone = document.getElementById('touch-buttons-zone');
+      this.rotateOverlay = document.getElementById('rotate-device-overlay');
+    } else {
+      this.container = null;
+      this.joystickZone = null;
+      this.joystickBase = null;
+      this.joystickKnob = null;
+      this.buttonsZone = null;
+      this.rotateOverlay = null;
+    }
+
+    this.joystickTouchId = null;
+    this.baseRect = null;
+    this.maxRadius = 45; // Max pixel deflection from center
+    this.deadZone = 0.12; // Ignore minor thumb trembling
+
+    this.isTouchDevice = false;
+
+    this.initDetection();
+    this.initJoystick();
+    this.initButtons();
+    this.initOrientationCheck();
+  }
+
+  initDetection() {
+    if (typeof window === 'undefined') return;
+
+    // Detect touch capability
+    this.isTouchDevice = Boolean(
+      'ontouchstart' in window ||
+      (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
+      (typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches)
+    );
+
+    if (this.isTouchDevice && this.container) {
+      this.container.classList.remove('hidden');
+      if (typeof document !== 'undefined') {
+        const hint = document.getElementById('controls-hint');
+        if (hint) hint.style.display = 'none';
+      }
+    }
+
+    // Dynamic reveal on first touch anywhere
+    if (typeof window.addEventListener === 'function') {
+      window.addEventListener('touchstart', () => {
+        if (!this.isTouchDevice) {
+          this.isTouchDevice = true;
+          if (this.container) this.container.classList.remove('hidden');
+          if (typeof document !== 'undefined') {
+            const hint = document.getElementById('controls-hint');
+            if (hint) hint.style.display = 'none';
+          }
+        }
+      }, { once: true, passive: true });
+    }
+  }
+
+  initJoystick() {
+    if (!this.joystickZone || !this.joystickBase || !this.joystickKnob) return;
+    if (typeof this.joystickZone.addEventListener !== 'function') return;
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+
+    const updateBaseRect = () => {
+      this.baseRect = this.joystickBase.getBoundingClientRect();
+    };
+
+    // Touch Start
+    this.joystickZone.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (this.joystickTouchId !== null) return; // Already tracking a finger
+
+      updateBaseRect();
+      const touch = e.changedTouches[0];
+      this.joystickTouchId = touch.identifier;
+
+      this.processJoystickMove(touch.clientX, touch.clientY);
+    }, { passive: false });
+
+    // Touch Move
+    window.addEventListener('touchmove', (e) => {
+      if (this.joystickTouchId === null) return;
+
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const touch = e.changedTouches[i];
+        if (touch.identifier === this.joystickTouchId) {
+          e.preventDefault();
+          this.processJoystickMove(touch.clientX, touch.clientY);
+          break;
+        }
+      }
+    }, { passive: false });
+
+    // Touch End / Cancel
+    const endJoystick = (e) => {
+      if (this.joystickTouchId === null) return;
+
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === this.joystickTouchId) {
+          this.resetJoystick();
+          break;
+        }
+      }
+    };
+
+    window.addEventListener('touchend', endJoystick, { passive: true });
+    window.addEventListener('touchcancel', endJoystick, { passive: true });
+
+    // Desktop mouse fallback for testing
+    let isMouseDown = false;
+    this.joystickZone.addEventListener('mousedown', (e) => {
+      isMouseDown = true;
+      updateBaseRect();
+      this.processJoystickMove(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isMouseDown) return;
+      this.processJoystickMove(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isMouseDown) {
+        isMouseDown = false;
+        this.resetJoystick();
+      }
+    });
+  }
+
+  processJoystickMove(clientX, clientY) {
+    if (!this.baseRect) {
+      this.baseRect = this.joystickBase.getBoundingClientRect();
+    }
+
+    const centerX = this.baseRect.left + this.baseRect.width / 2;
+    const centerY = this.baseRect.top + this.baseRect.height / 2;
+
+    let deltaX = clientX - centerX;
+    let deltaY = clientY - centerY;
+
+    const distance = Math.hypot(deltaX, deltaY);
+
+    if (distance > this.maxRadius) {
+      deltaX = (deltaX / distance) * this.maxRadius;
+      deltaY = (deltaY / distance) * this.maxRadius;
+    }
+
+    // Visuellen Joystick-Knauf versetzen
+    this.joystickKnob.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+
+    // Normalisierter Richtungsvektor (-1 bis 1)
+    const normDist = Math.min(1.0, distance / this.maxRadius);
+    if (normDist < this.deadZone) {
+      this.input.joystick.x = 0;
+      this.input.joystick.y = 0;
+      this.input.joystick.active = false;
+    } else {
+      this.input.joystick.x = deltaX / this.maxRadius;
+      this.input.joystick.y = deltaY / this.maxRadius;
+      this.input.joystick.active = true;
+    }
+  }
+
+  resetJoystick() {
+    this.joystickTouchId = null;
+    this.joystickKnob.style.transform = 'translate(0px, 0px)';
+    this.input.joystick.x = 0;
+    this.input.joystick.y = 0;
+    this.input.joystick.active = false;
+  }
+
+  initButtons() {
+    if (!this.buttonsZone || typeof this.buttonsZone.querySelectorAll !== 'function') return;
+
+    const buttons = this.buttonsZone.querySelectorAll('.touch-btn');
+    if (!buttons || !buttons.forEach) return;
+
+    buttons.forEach((btn) => {
+      const action = btn.getAttribute('data-action');
+      if (!btn.addEventListener) return;
+
+      const press = (e) => {
+        if (e) e.preventDefault();
+        if (btn.classList && btn.classList.add) btn.classList.add('active');
+        this.input.buttons[action] = true;
+        if (this.onButtonPress) {
+          this.onButtonPress(action, true);
+        }
+      };
+
+      const release = (e) => {
+        if (e) e.preventDefault();
+        if (btn.classList && btn.classList.remove) btn.classList.remove('active');
+        this.input.buttons[action] = false;
+        if (this.onButtonPress) {
+          this.onButtonPress(action, false);
+        }
+      };
+
+      btn.addEventListener('touchstart', press, { passive: false });
+      btn.addEventListener('touchend', release, { passive: false });
+      btn.addEventListener('touchcancel', release, { passive: false });
+
+      // Mouse support for testing
+      btn.addEventListener('mousedown', press);
+      btn.addEventListener('mouseup', release);
+      btn.addEventListener('mouseleave', release);
+    });
+  }
+
+  initOrientationCheck() {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+
+    const checkOrientation = () => {
+      const isPortrait = window.innerHeight > window.innerWidth;
+      if (this.rotateOverlay && this.rotateOverlay.classList) {
+        if (isPortrait && this.isTouchDevice) {
+          this.rotateOverlay.classList.remove('hidden');
+        } else {
+          this.rotateOverlay.classList.add('hidden');
+        }
+      }
+    };
+
+    window.addEventListener('resize', checkOrientation);
+    window.addEventListener('orientationchange', checkOrientation);
+    checkOrientation();
+  }
+}
+
+
+// --- combat.js ---
+
+class CombatManager {
+  constructor(game) {
+    this.game = game;
+    this.flyingArrows = [];
+    this.stuckArrows = [];
+    this.slashEffects = [];
+    this.hitSparks = [];
+    this.floatingTexts = [];
+
+    // Training Dummies for target practice & feedback
+    this.dummies = [];
+    this.initTrainingDummies();
+  }
+
+  initTrainingDummies() {
+    // 3 Straw & Paper Training Dummies positioned right in front of the overworld spawn (30, 45)
+    this.dummies = [
+      { id: 1, x: 26 * TILE_SIZE + 8, y: 43 * TILE_SIZE + 8, startX: 26 * TILE_SIZE + 8, startY: 43 * TILE_SIZE + 8, vx: 0, vy: 0, wobble: 0, wobbleTimer: 0, hitTimer: 0, hp: 100 },
+      { id: 2, x: 25 * TILE_SIZE + 8, y: 45 * TILE_SIZE + 8, startX: 25 * TILE_SIZE + 8, startY: 45 * TILE_SIZE + 8, vx: 0, vy: 0, wobble: 0, wobbleTimer: 0, hitTimer: 0, hp: 100 },
+      { id: 3, x: 26 * TILE_SIZE + 8, y: 47 * TILE_SIZE + 8, startX: 26 * TILE_SIZE + 8, startY: 47 * TILE_SIZE + 8, vx: 0, vy: 0, wobble: 0, wobbleTimer: 0, hitTimer: 0, hp: 100 }
+    ];
+  }
+
+  fireArrow(startX, startY, dirX, dirY, isCharged = false) {
+    const angle = Math.atan2(dirY, dirX);
+    const speed = isCharged ? COMBAT_CONFIG.ARROW_CHARGED_SPEED : COMBAT_CONFIG.ARROW_SPEED;
+    const maxRange = isCharged ? COMBAT_CONFIG.ARROW_CHARGED_RANGE : COMBAT_CONFIG.ARROW_RANGE;
+
+    this.flyingArrows.push({
+      x: startX,
+      y: startY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      angle,
+      distTraveled: 0,
+      maxRange,
+      isCharged,
+      speed,
+      trailTimer: 0
+    });
+
+    // Muzzle wind puff
+    for (let i = 0; i < (isCharged ? 10 : 5); i++) {
+      const spread = (Math.random() - 0.5) * 0.8;
+      const pSpeed = Math.random() * 40 + 20;
+      this.hitSparks.push({
+        x: startX + Math.cos(angle) * 8,
+        y: startY + Math.sin(angle) * 8,
+        vx: Math.cos(angle + spread) * pSpeed,
+        vy: Math.sin(angle + spread) * pSpeed,
+        color: isCharged ? '#38bdf8' : '#f8fafc',
+        size: Math.random() * 2 + 1,
+        life: 0.25,
+        maxLife: 0.25
+      });
+    }
+  }
+
+  addSlashEffect(type, x, y, angle, radius = 28) {
+    let duration = 0.22;
+    if (type === 'spin') duration = 0.32;
+    if (type === 'thrust') duration = 0.32; // Longer duration for powerful lingering thrust
+
+    this.slashEffects.push({
+      type,
+      x,
+      y,
+      angle,
+      radius,
+      timer: 0,
+      duration
+    });
+
+    // Air gust & paper spark particles
+    const sparkCount = type === 'spin' ? 24 : (type === 'thrust' ? 22 : 9);
+    for (let i = 0; i < sparkCount; i++) {
+      let pAngle;
+      if (type === 'spin') {
+        pAngle = (i / sparkCount) * Math.PI * 2;
+      } else if (type === 'thrust') {
+        pAngle = angle + (Math.random() - 0.5) * 0.4;
+      } else {
+        pAngle = angle + (Math.random() - 0.5) * 1.0;
+      }
+
+      const pSpeed = type === 'thrust' ? (Math.random() * 140 + 60) : (Math.random() * 80 + 40);
+      this.hitSparks.push({
+        x: x + Math.cos(pAngle) * (radius * 0.5),
+        y: y + Math.sin(pAngle) * (radius * 0.5),
+        vx: Math.cos(pAngle) * pSpeed,
+        vy: Math.sin(pAngle) * pSpeed,
+        color: type === 'spin' ? '#67e8f9' : (type === 'thrust' ? (Math.random() > 0.4 ? '#fef08a' : '#f59e0b') : '#ffffff'),
+        size: Math.random() * 2.5 + 1.2,
+        life: 0.32,
+        maxLife: 0.32
+      });
+    }
+  }
+
+  checkMeleeHits(hitbox) {
+    // Check collision with training dummies
+    let hitAny = false;
+    for (const dummy of this.dummies) {
+      if (this.game.currentDimension !== 'overworld') continue;
+
+      const dx = dummy.x - hitbox.x;
+      const dy = dummy.y - hitbox.y;
+      const dist = Math.hypot(dx, dy);
+
+      let inRange = false;
+      if (hitbox.type === 'spin') {
+        inRange = dist <= (hitbox.radius + 10);
+      } else if (hitbox.type === 'thrust') {
+        // Forward piercing cone / capsule
+        const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
+        const sideDist = Math.abs(-dx * Math.sin(hitbox.angle) + dy * Math.cos(hitbox.angle));
+        inRange = (forwardDot > 0 && forwardDot <= hitbox.range && sideDist <= (hitbox.width || 22));
+      } else {
+        // Slash arc (~60 degree cone in front)
+        const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
+        const angleDiff = Math.abs(Math.atan2(dy, dx) - hitbox.angle);
+        const normAngleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+        inRange = (dist <= hitbox.radius && Math.abs(normAngleDiff) <= 0.85);
+      }
+
+      if (inRange) {
+        hitAny = true;
+        this.applyHitToDummy(dummy, hitbox);
+      }
+    }
+
+    // Heavy thrust or spin attack camera shake impact
+    if (hitAny && this.game && this.game.camera) {
+      if (hitbox.type === 'thrust') {
+        this.game.camera.shake(4.2, 0.16);
+      } else if (hitbox.type === 'spin') {
+        this.game.camera.shake(3.8, 0.15);
+      }
+    }
+
+    return hitAny;
+  }
+
+  applyHitToDummy(dummy, hitbox) {
+    const isThrust = (hitbox.type === 'thrust');
+    const isSpin = (hitbox.type === 'spin');
+    dummy.hitTimer = (isThrust || isSpin) ? 0.32 : 0.2;
+    dummy.wobbleTimer = (isThrust || isSpin) ? 0.75 : 0.5;
+
+    // Knockback
+    const kb = hitbox.knockback || 80;
+    const angle = isSpin ? Math.atan2(dummy.y - hitbox.y, dummy.x - hitbox.x) : hitbox.angle;
+    dummy.vx += Math.cos(angle) * kb;
+    dummy.vy += Math.sin(angle) * kb;
+
+    // Wobble angular direction
+    dummy.wobble = (Math.cos(angle) > 0 ? 1 : -1) * (isThrust ? 0.65 : (isSpin ? 0.55 : 0.45));
+
+    // Hit impact sparks (Smash Bros style impact burst)
+    const sparkCount = (isThrust || isSpin) ? 22 : 12;
+    for (let i = 0; i < sparkCount; i++) {
+      const spAngle = isThrust ? (angle + (Math.random() - 0.5) * 1.2) : (Math.random() * Math.PI * 2);
+      const spSpeed = (isThrust || isSpin) ? (Math.random() * 150 + 70) : (Math.random() * 90 + 30);
+      this.hitSparks.push({
+        x: dummy.x,
+        y: dummy.y - 8,
+        vx: Math.cos(spAngle) * spSpeed,
+        vy: Math.sin(spAngle) * spSpeed,
+        color: isThrust ? (Math.random() > 0.4 ? '#ef4444' : '#facc15') : (isSpin ? '#38bdf8' : '#f59e0b'),
+        size: Math.random() * 3 + (isThrust ? 2.0 : 1.5),
+        life: isThrust ? 0.38 : 0.32,
+        maxLife: isThrust ? 0.38 : 0.32
+      });
+    }
+
+    // Damage / Impact label
+    const label = isThrust ? '💥 KRÄFTIGER STICH!' : (isSpin ? '🌀 45 WIRBEL!' : 'TREFFER!');
+    this.floatingTexts.push({
+      text: label,
+      x: dummy.x,
+      y: dummy.y - 20,
+      timer: 0,
+      duration: (isThrust || isSpin) ? 0.75 : 0.55,
+      color: isThrust ? '#ef4444' : (isSpin ? '#38bdf8' : '#fef08a')
+    });
+  }
+
+  update(dt) {
+    const map = this.game.map;
+    const player = this.game.player;
+
+    // 1. Update Flying Arrows
+    for (let i = this.flyingArrows.length - 1; i >= 0; i--) {
+      const arrow = this.flyingArrows[i];
+      const stepX = arrow.vx * dt;
+      const stepY = arrow.vy * dt;
+      arrow.x += stepX;
+      arrow.y += stepY;
+      arrow.distTraveled += arrow.speed * dt;
+
+      // Trailing speed particles
+      arrow.trailTimer += dt;
+      if (arrow.trailTimer >= 0.02) {
+        arrow.trailTimer = 0;
+        this.hitSparks.push({
+          x: arrow.x,
+          y: arrow.y,
+          vx: -arrow.vx * 0.05 + (Math.random() - 0.5) * 10,
+          vy: -arrow.vy * 0.05 + (Math.random() - 0.5) * 10,
+          color: arrow.isCharged ? 'rgba(56, 189, 248, 0.7)' : 'rgba(255, 255, 255, 0.45)',
+          size: arrow.isCharged ? 2.5 : 1.5,
+          life: 0.2,
+          maxLife: 0.2
+        });
+      }
+
+      // Check dummy hit
+      let hitDummy = false;
+      if (this.game.currentDimension === 'overworld') {
+        for (const dummy of this.dummies) {
+          if (Math.hypot(dummy.x - arrow.x, dummy.y - 6 - arrow.y) <= 12) {
+            this.applyHitToDummy(dummy, {
+              angle: arrow.angle,
+              knockback: arrow.isCharged ? 160 : 80,
+              type: arrow.isCharged ? 'thrust' : 'slash1'
+            });
+            hitDummy = true;
+            break;
+          }
+        }
+      }
+
+      // Check solid wall / obstacle collision
+      const tX = Math.floor(arrow.x / TILE_SIZE);
+      const tY = Math.floor(arrow.y / TILE_SIZE);
+      const hitWall = map.isSolid ? map.isSolid(tX, tY) : false;
+
+      if (hitDummy || hitWall || arrow.distTraveled >= arrow.maxRange) {
+        // Arrow sticks in the ground!
+        this.stuckArrows.push({
+          x: arrow.x,
+          y: arrow.y,
+          angle: arrow.angle,
+          quiverTimer: 0.35,
+          canCollect: true
+        });
+
+        // Dust / impact puff
+        for (let s = 0; s < 6; s++) {
+          const spAngle = Math.random() * Math.PI * 2;
+          this.hitSparks.push({
+            x: arrow.x,
+            y: arrow.y,
+            vx: Math.cos(spAngle) * (Math.random() * 25 + 10),
+            vy: Math.sin(spAngle) * (Math.random() * 25 + 10),
+            color: 'rgba(212, 212, 216, 0.65)',
+            size: Math.random() * 2 + 1,
+            life: 0.22,
+            maxLife: 0.22
+          });
+        }
+
+        this.flyingArrows.splice(i, 1);
+      }
+    }
+
+    // 2. Update Stuck Arrows (quiver animation & player pickup)
+    for (let i = this.stuckArrows.length - 1; i >= 0; i--) {
+      const stuck = this.stuckArrows[i];
+      if (stuck.quiverTimer > 0) {
+        stuck.quiverTimer -= dt;
+      }
+
+      // Pickup check by player
+      if (stuck.canCollect) {
+        const pDist = Math.hypot(player.x - stuck.x, player.y - stuck.y);
+        if (pDist <= COMBAT_CONFIG.ARROW_PICKUP_RADIUS) {
+          if (player.ranged.ammo < COMBAT_CONFIG.MAX_AMMO) {
+            player.ranged.ammo++;
+
+            // Shiny green/gold pickup sparkles
+            for (let p = 0; p < 8; p++) {
+              const pAngle = Math.random() * Math.PI * 2;
+              this.hitSparks.push({
+                x: stuck.x,
+                y: stuck.y - 4,
+                vx: Math.cos(pAngle) * (Math.random() * 35 + 15),
+                vy: Math.sin(pAngle) * (Math.random() * 35 + 15),
+                color: '#4ade80',
+                size: Math.random() * 2 + 1.5,
+                life: 0.3,
+                maxLife: 0.3
+              });
+            }
+
+            this.floatingTexts.push({
+              text: '+1 Pfeil 🏹',
+              x: stuck.x,
+              y: stuck.y - 10,
+              timer: 0,
+              duration: 0.5,
+              color: '#86efac'
+            });
+
+            this.stuckArrows.splice(i, 1);
+            continue;
+          }
+        }
+      }
+    }
+
+    // 3. Update Slash Effects
+    for (let i = this.slashEffects.length - 1; i >= 0; i--) {
+      const slash = this.slashEffects[i];
+      slash.timer += dt;
+      if (slash.timer >= slash.duration) {
+        this.slashEffects.splice(i, 1);
+      }
+    }
+
+    // 4. Update Sparks / Particles
+    for (let i = this.hitSparks.length - 1; i >= 0; i--) {
+      const sp = this.hitSparks[i];
+      sp.x += sp.vx * dt;
+      sp.y += sp.vy * dt;
+      sp.life -= dt;
+      if (sp.life <= 0) {
+        this.hitSparks.splice(i, 1);
+      }
+    }
+
+    // 5. Update Floating Texts
+    for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+      const ft = this.floatingTexts[i];
+      ft.timer += dt;
+      ft.y -= dt * 25; // Drift upwards
+      if (ft.timer >= ft.duration) {
+        this.floatingTexts.splice(i, 1);
+      }
+    }
+
+    // 6. Update Training Dummies (physics slide & return spring)
+    if (this.game.currentDimension === 'overworld') {
+      for (const dummy of this.dummies) {
+        dummy.x += dummy.vx * dt;
+        dummy.y += dummy.vy * dt;
+
+        // Friction
+        dummy.vx *= Math.pow(0.08, dt);
+        dummy.vy *= Math.pow(0.08, dt);
+
+        // Slow elastic pull back to start position
+        dummy.vx += (dummy.startX - dummy.x) * 1.5 * dt;
+        dummy.vy += (dummy.startY - dummy.y) * 1.5 * dt;
+
+        if (dummy.hitTimer > 0) dummy.hitTimer -= dt;
+        if (dummy.wobbleTimer > 0) {
+          dummy.wobbleTimer -= dt;
+          dummy.wobble = Math.sin(dummy.wobbleTimer * 20) * 0.35 * (dummy.wobbleTimer / 0.5);
+        } else {
+          dummy.wobble = 0;
+        }
+      }
+    }
+  }
+
+  // ==========================================================================
+  // RENDERING
+  // ==========================================================================
+
+  render(ctx, bounds, t) {
+    this.renderStuckArrows(ctx);
+    this.renderTrainingDummies(ctx, t);
+    this.renderFlyingArrows(ctx);
+    this.renderSlashEffects(ctx);
+    this.renderSparks(ctx);
+    this.renderFloatingTexts(ctx);
+  }
+
+  renderStuckArrows(ctx) {
+    for (const stuck of this.stuckArrows) {
+      ctx.save();
+      ctx.translate(stuck.x, stuck.y);
+
+      let wobble = 0;
+      if (stuck.quiverTimer > 0) {
+        wobble = Math.sin(stuck.quiverTimer * 35) * 0.3 * (stuck.quiverTimer / 0.35);
+      }
+      ctx.rotate(stuck.angle + wobble);
+
+      // Shadow in ground
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.fillRect(-6, 2, 8, 1.5);
+
+      // Wooden Shaft sticking into ground
+      ctx.strokeStyle = '#a16207';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-10, 0);
+      ctx.lineTo(2, 0);
+      ctx.stroke();
+
+      // Paper Fletching (White feathers)
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.moveTo(-10, -2.5);
+      ctx.lineTo(-6, 0);
+      ctx.lineTo(-10, 2.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Collectible pulse halo
+      const pulse = Math.sin(performance.now() * 0.006 + stuck.x) * 0.2 + 0.8;
+      ctx.fillStyle = `rgba(134, 239, 172, ${0.35 * pulse})`;
+      ctx.beginPath();
+      ctx.arc(-4, 0, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  renderFlyingArrows(ctx) {
+    for (const arrow of this.flyingArrows) {
+      ctx.save();
+      ctx.translate(arrow.x, arrow.y);
+      ctx.rotate(arrow.angle);
+
+      // Speed streak lines behind arrow
+      ctx.strokeStyle = arrow.isCharged ? 'rgba(56, 189, 248, 0.55)' : 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(-22, -1);
+      ctx.lineTo(-10, -1);
+      ctx.moveTo(-20, 1);
+      ctx.lineTo(-8, 1);
+      ctx.stroke();
+
+      // Wooden Shaft
+      ctx.strokeStyle = arrow.isCharged ? '#0284c7' : '#92400e';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(-10, 0);
+      ctx.lineTo(4, 0);
+      ctx.stroke();
+
+      // Paper Fletching Feathers
+      ctx.fillStyle = arrow.isCharged ? '#38bdf8' : '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(-10, -2.5);
+      ctx.lineTo(-6, 0);
+      ctx.lineTo(-10, 2.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Arrowhead (Steel / Charged Cyan Point)
+      ctx.fillStyle = arrow.isCharged ? '#e0f2fe' : '#e2e8f0';
+      ctx.beginPath();
+      ctx.moveTo(7, 0);
+      ctx.lineTo(3, -2.5);
+      ctx.lineTo(3, 2.5);
+      ctx.closePath();
+      ctx.fill();
+
+      // Charged Arrow Gleam
+      if (arrow.isCharged) {
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+        ctx.beginPath();
+        ctx.arc(4, 0, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  renderSlashEffects(ctx) {
+    for (const slash of this.slashEffects) {
+      const progress = slash.timer / slash.duration;
+      const alpha = 1.0 - progress;
+
+      ctx.save();
+      ctx.translate(slash.x, slash.y);
+
+      if (slash.type === 'spin') {
+        // 360 Degree Whirling Cyclone & Shockwave Ring (Zelda Spin Attack)
+        const curRadius = slash.radius * (0.75 + progress * 0.45);
+
+        // Outer expanding air vacuum ring
+        ctx.lineWidth = 2 * alpha;
+        ctx.strokeStyle = `rgba(186, 230, 253, ${alpha * 0.6})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius * 1.3, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Primary glowing cyan blade circle
+        ctx.lineWidth = 5 * alpha;
+        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha * 0.95})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Bright white sharp cutting rim
+        ctx.lineWidth = 2.2 * alpha;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Dual swirling whirlwind spiral blades
+        ctx.lineWidth = 3.0 * alpha;
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.92})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius * 0.78, progress * Math.PI * 5, progress * Math.PI * 5 + Math.PI * 1.4);
+        ctx.stroke();
+
+        ctx.strokeStyle = `rgba(103, 232, 249, ${alpha * 0.85})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius * 0.6, -progress * Math.PI * 5, -progress * Math.PI * 5 + Math.PI * 1.4);
+        ctx.stroke();
+      }
+      else if (slash.type === 'thrust') {
+        // Linear Forward Powerful Thrust Blade & Dual Sonic Shockwave
+        ctx.rotate(slash.angle);
+        const curLen = slash.radius * (0.68 + progress * 0.55);
+
+        // 1. Dual Shockwave Pressure Rings
+        // Outer cyan air pressure wave
+        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha * 0.75})`;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(curLen * 0.5, 0, 16 * (0.6 + progress * 0.8), -Math.PI * 0.48, Math.PI * 0.48);
+        ctx.stroke();
+
+        // Inner intense white sonic boom shockwave cone
+        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
+        ctx.lineWidth = 3.0;
+        ctx.beginPath();
+        ctx.arc(curLen * 0.72, 0, 13 * (0.5 + progress * 0.7), -Math.PI * 0.42, Math.PI * 0.42);
+        ctx.stroke();
+
+        // 2. Heavy Piercing Golden Spear Blade
+        // Outer radiant golden aura
+        ctx.fillStyle = `rgba(254, 240, 138, ${alpha * 0.92})`;
+        ctx.beginPath();
+        ctx.moveTo(curLen + 8, 0);
+        ctx.lineTo(curLen - 24, -7);
+        ctx.lineTo(curLen - 18, 0);
+        ctx.lineTo(curLen - 24, 7);
+        ctx.closePath();
+        ctx.fill();
+
+        // Inner glowing white core
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(curLen + 8, 0);
+        ctx.lineTo(curLen - 20, -3.5);
+        ctx.lineTo(curLen - 15, 0);
+        ctx.lineTo(curLen - 20, 3.5);
+        ctx.closePath();
+        ctx.fill();
+
+        // Diamond tip gleam star
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.fillRect(curLen + 6, -1.5, 3, 3);
+
+        // 3. Piercing Speed Streaks (4 speed lines whistling alongside)
+        ctx.strokeStyle = `rgba(245, 158, 11, ${alpha * 0.75})`;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(curLen * 0.15, -7.5);
+        ctx.lineTo(curLen + 3, -7.5);
+        ctx.moveTo(curLen * 0.15, 7.5);
+        ctx.lineTo(curLen + 3, 7.5);
+        ctx.moveTo(curLen * 0.35, -3.8);
+        ctx.lineTo(curLen + 9, -3.8);
+        ctx.moveTo(curLen * 0.35, 3.8);
+        ctx.lineTo(curLen + 9, 3.8);
+        ctx.stroke();
+      }
+      else {
+        // Radial Slash 1 & 2 (Curved Crescent Paper Blade Swoosh)
+        ctx.rotate(slash.angle);
+        const flip = slash.type === 'slash2' ? -1 : 1;
+        const curRadius = slash.radius * (0.75 + progress * 0.35);
+
+        // Crescent Blade Arc (~70 degree paper crescent)
+        ctx.fillStyle = `rgba(240, 249, 255, ${alpha * 0.85})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius, -0.6 * flip, 0.6 * flip, flip < 0);
+        ctx.arc(0, 0, curRadius - 8, 0.6 * flip, -0.6 * flip, flip > 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Sharp luminous cutting edge
+        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius, -0.65 * flip, 0.65 * flip, flip < 0);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  renderTrainingDummies(ctx, t) {
+    if (this.game.currentDimension !== 'overworld') return;
+
+    for (const dummy of this.dummies) {
+      const dx = Math.round(dummy.x);
+      const dy = Math.round(dummy.y);
+
+      ctx.save();
+      ctx.translate(dx, dy);
+      ctx.rotate(dummy.wobble);
+
+      // Drop shadow
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(0, 3, 7, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Wooden Center Post
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(-2, -18, 4, 20);
+
+      // Crossbar support
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-8, -12, 16, 3);
+
+      // Straw & Burlap Dummy Torso (Woven Papercraft Texture)
+      ctx.fillStyle = dummy.hitTimer > 0 ? '#fef08a' : '#d97706';
+      ctx.beginPath();
+      ctx.ellipse(0, -10, 6, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Straw Head
+      ctx.fillStyle = dummy.hitTimer > 0 ? '#ffffff' : '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(0, -18, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Painted Red Target Rings on chest
+      ctx.strokeStyle = '#dc2626';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(0, -10, 4, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.arc(0, -10, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rope bindings (Rope sash)
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(-4, -6, 8, 1.5);
+
+      ctx.restore();
+    }
+  }
+
+  renderSparks(ctx) {
+    for (const sp of this.hitSparks) {
+      const alpha = sp.life / sp.maxLife;
+      ctx.fillStyle = sp.color;
+      ctx.globalAlpha = alpha;
+      ctx.fillRect(sp.x, sp.y, sp.size, sp.size);
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  renderFloatingTexts(ctx) {
+    ctx.save();
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.lineWidth = 2.5;
+
+    for (const ft of this.floatingTexts) {
+      const alpha = 1.0 - (ft.timer / ft.duration);
+      ctx.strokeStyle = `rgba(0, 0, 0, ${alpha * 0.8})`;
+      ctx.fillStyle = ft.color;
+      ctx.globalAlpha = alpha;
+      ctx.strokeText(ft.text, ft.x, ft.y);
+      ctx.fillText(ft.text, ft.x, ft.y);
+    }
+
+    ctx.restore();
+  }
+}
+
+
+// --- game.js ---
+
+class Game {
+  constructor() {
+    this.canvas = document.getElementById('gameCanvas');
+    this.ctx = this.canvas.getContext('2d');
+    this.minimapCanvas = document.getElementById('minimapCanvas');
+
+    this.input = {
+      keys: {},
+      joystick: { x: 0, y: 0, active: false },
+      buttons: { A: false, B: false, X: false, Y: false },
+      mouseLeft: false,
+      mouseRight: false
+    };
+
+    this.touchControls = new TouchControls(this.input, (action, isDown) => this.handleTouchButton(action, isDown));
+    this.combat = new CombatManager(this);
+
+    // Multi-Dimension Maps & Core Systems
+    this.overworldMap = new WorldMap();
+    this.cloudMap = new CloudMap();
+    this.caves = {
+      main_complex: new CaveMap('main_complex'),
+      sub_crystal: new CaveMap('sub_crystal'),
+      forest_grotto: new CaveMap('forest_grotto'),
+      snow_grotto: new CaveMap('snow_grotto'),
+      void_grotto: new CaveMap('void_grotto')
+    };
+
+    this.map = this.overworldMap;
+    this.currentDimension = DIMENSIONS.OVERWORLD;
+    this.activeSubCave = null;
+
+    this.spriteManager = new SpriteManager();
+    this.player = new Player(this.map.spawnPoint.x, this.map.spawnPoint.y, this.map, this);
+    this.camera = new Camera(window.innerWidth, window.innerHeight);
+    this.minimap = new Minimap(this.minimapCanvas, this.map);
+
+    // Day-Night Cycle System (Start at 18:30 = Golden Twilight & Lantern Awakening)
+    this.gameTime = 18.5; // Hours: 0.0 - 24.0
+    this.timeSpeed = 0.04; // Smooth progression (~10 mins per full 24h cycle)
+
+    // Ambient Environmental Particles (Day Clouds & Night Spirits/Embers)
+    this.ambientParticles = [];
+    this.initAmbientParticles();
+
+    // HUD Elements
+    this.biomeNameEl = document.getElementById('biome-name');
+    this.speedStatEl = document.getElementById('speed-stat');
+    this.deathStatEl = document.getElementById('death-stat');
+    this.posStatEl = document.getElementById('pos-stat');
+    this.deathOverlay = document.getElementById('death-overlay');
+
+    // Day/Night HUD Elements
+    this.timeDisplayEl = document.getElementById('time-display');
+    this.timeBarFillEl = document.getElementById('time-bar-fill');
+    this.lanternStatusEl = document.getElementById('lantern-status-hint');
+    this.timePanelEl = document.getElementById('time-panel');
+
+    this.lastTime = 0;
+    this.animTime = 0;
+
+    this.initEvents();
+    this.resize();
+    this.start();
+  }
+
+  initAmbientParticles() {
+    this.ambientParticles = [];
+    const worldW = this.map.width * TILE_SIZE;
+    const worldH = this.map.height * TILE_SIZE;
+
+    // 1. Daytime / Twilight Sakura & Leaf Petals
+    for (let i = 0; i < 45; i++) {
+      this.ambientParticles.push({
+        type: 'petal',
+        x: Math.random() * worldW,
+        y: Math.random() * worldH,
+        vx: (Math.random() - 0.2) * 20,
+        vy: Math.random() * 14 + 10,
+        swaySpeed: Math.random() * 2 + 1,
+        swayOffset: Math.random() * Math.PI * 2,
+        size: Math.random() * 2 + 2,
+        color: Math.random() > 0.4 ? 'rgba(244, 114, 182, 0.7)' : 'rgba(110, 231, 183, 0.65)'
+      });
+    }
+
+    // 2. Nighttime Floating Ofuda (Paper Talismans with Red Seals)
+    for (let i = 0; i < 20; i++) {
+      this.ambientParticles.push({
+        type: 'ofuda',
+        x: Math.random() * worldW,
+        y: Math.random() * worldH,
+        vx: (Math.random() - 0.3) * 16,
+        vy: Math.random() * 10 + 6,
+        rot: Math.random() * Math.PI,
+        rotSpeed: (Math.random() - 0.5) * 2,
+        swaySpeed: Math.random() * 1.5 + 0.8,
+        swayOffset: Math.random() * Math.PI * 2
+      });
+    }
+
+    // 3. Nighttime Golden Firefly Embers
+    for (let i = 0; i < 35; i++) {
+      this.ambientParticles.push({
+        type: 'firefly',
+        x: Math.random() * worldW,
+        y: Math.random() * worldH,
+        vx: (Math.random() - 0.5) * 12,
+        vy: -Math.random() * 15 - 5, // Rising upwards
+        swaySpeed: Math.random() * 3 + 2,
+        swayOffset: Math.random() * Math.PI * 2,
+        size: Math.random() * 1.5 + 1.2
+      });
+    }
+  }
+
+  updateAmbientParticles(dt) {
+    const t = this.animTime;
+    const worldW = this.map.width * TILE_SIZE;
+    const worldH = this.map.height * TILE_SIZE;
+
+    for (const p of this.ambientParticles) {
+      p.y += p.vy * dt;
+      p.x += (p.vx + Math.sin(t * p.swaySpeed + p.swayOffset) * 12) * dt;
+
+      if (p.type === 'ofuda') {
+        p.rot += p.rotSpeed * dt;
+      }
+
+      if (p.y > worldH) {
+        p.y = 0;
+        p.x = Math.random() * worldW;
+      } else if (p.y < 0) {
+        p.y = worldH;
+        p.x = Math.random() * worldW;
+      }
+      if (p.x < 0) p.x = worldW;
+      if (p.x > worldW) p.x = 0;
+    }
+  }
+
+  cycleTime() {
+    // Immediate toggle between Day (12:00), Sunset (18:30), and Spirit Night (22:00)
+    if (this.gameTime >= 6.5 && this.gameTime < 16.0) {
+      this.gameTime = 18.5; // Jump to Sunset
+    } else if (this.gameTime >= 16.0 && this.gameTime < 20.5) {
+      this.gameTime = 22.0; // Jump to Night
+    } else {
+      this.gameTime = 11.5; // Jump to Day
+    }
+    this.updateHUD();
+  }
+
+  initEvents() {
+    window.addEventListener('resize', () => this.resize());
+
+    window.addEventListener('keydown', (e) => {
+      this.input.keys[e.code] = true;
+      if (e.repeat) return; // Prevent OS keyboard auto-repeat from resetting charge timers!
+
+      if (e.code === 'KeyT') {
+        this.cycleTime();
+      }
+      if (e.code === 'KeyR') {
+        this.player.respawn();
+      }
+      if (e.code === 'Space') {
+        e.preventDefault();
+        this.player.triggerDash();
+      }
+      if (e.code === 'KeyJ') {
+        this.player.startMelee();
+      }
+      if (e.code === 'KeyK') {
+        this.player.setShield(true);
+      }
+      if (e.code === 'KeyL' || e.code === 'KeyF') {
+        this.player.startRanged();
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      this.input.keys[e.code] = false;
+      if (e.code === 'KeyJ') {
+        this.player.releaseMelee();
+      }
+      if (e.code === 'KeyK') {
+        this.player.setShield(false);
+      }
+      if (e.code === 'KeyL' || e.code === 'KeyF') {
+        this.player.releaseRanged();
+      }
+    });
+
+    if (this.canvas) {
+      this.canvas.addEventListener('mousedown', (e) => {
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const screenX = (e.clientX - rect.left) * scaleX;
+        const screenY = (e.clientY - rect.top) * scaleY;
+        const zoom = this.camera ? this.camera.zoom : 1;
+        const camX = this.camera ? this.camera.x : 0;
+        const camY = this.camera ? this.camera.y : 0;
+        const mWorldX = screenX / zoom + camX;
+        const mWorldY = screenY / zoom + camY;
+        const mdx = mWorldX - this.player.x;
+        const mdy = mWorldY - (this.player.y - 10);
+        if (Math.hypot(mdx, mdy) > 12) {
+          this.player.setDirectionFromVector(mdx, mdy);
+        }
+
+        if (e.button === 0) {
+          this.input.mouseLeft = true;
+          this.player.startMelee();
+        }
+        if (e.button === 2) {
+          this.input.mouseRight = true;
+          this.player.setShield(true);
+        }
+      });
+
+      window.addEventListener('mouseup', (e) => {
+        if (e.button === 0) {
+          this.input.mouseLeft = false;
+          this.player.releaseMelee();
+        }
+        if (e.button === 2) {
+          this.input.mouseRight = false;
+          this.player.setShield(false);
+        }
+      });
+
+      this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
+    if (this.timePanelEl) {
+      this.timePanelEl.addEventListener('click', () => this.cycleTime());
+    }
+  }
+
+  handleTouchButton(action, isDown) {
+    if (this.input.joystick && this.input.joystick.active) {
+      this.player.setDirectionFromVector(this.input.joystick.x, this.input.joystick.y);
+    }
+    if (action === 'A') {
+      // Dash (Sprung nach vorn)
+      if (isDown) this.player.triggerDash();
+    } else if (action === 'B') {
+      // Schwert (Melee: Kombo & Wirbel)
+      if (isDown) this.player.startMelee();
+      else this.player.releaseMelee();
+    } else if (action === 'X') {
+      // Bogen (Range: Pfeil & Bogen)
+      if (isDown) this.player.startRanged();
+      else this.player.releaseRanged();
+    } else if (action === 'Y') {
+      // Schild (Blaue Schutzblase)
+      this.player.setShield(isDown);
+    }
+  }
+
+  resize() {
+    this.canvas.width = window.innerWidth;
+    this.canvas.height = window.innerHeight;
+    this.ctx.imageSmoothingEnabled = false;
+    this.camera.resize(this.canvas.width, this.canvas.height);
+
+    if (!this.canopyCanvas) {
+      this.canopyCanvas = document.createElement('canvas');
+      this.canopyCtx = this.canopyCanvas.getContext('2d');
+    }
+    this.canopyCanvas.width = this.canvas.width;
+    this.canopyCanvas.height = this.canvas.height;
+    this.canopyCtx.imageSmoothingEnabled = false;
+  }
+
+  switchDimension(targetDim, targetX, targetY) {
+    if (targetDim === 'overworld') {
+      this.map = this.overworldMap;
+      this.currentDimension = DIMENSIONS.OVERWORLD;
+      this.activeSubCave = null;
+    } else if (targetDim === 'clouds') {
+      this.map = this.cloudMap;
+      this.currentDimension = DIMENSIONS.CLOUDS;
+      this.activeSubCave = null;
+    } else if (this.caves[targetDim]) {
+      this.map = this.caves[targetDim];
+      this.currentDimension = DIMENSIONS.CAVES;
+      this.activeSubCave = targetDim;
+    }
+
+    this.player.map = this.map;
+    this.player.x = targetX;
+    this.player.y = targetY;
+    this.player.lastTransitionTile = {
+      x: Math.floor(targetX / TILE_SIZE),
+      y: Math.floor(targetY / TILE_SIZE)
+    };
+    this.camera.setWorldBounds(this.map.width, this.map.height);
+    this.camera.follow(targetX, targetY);
+    this.minimap.setMap(this.map, this.currentDimension);
+    this.updateHUD();
+  }
+
+  start() {
+    this.lastTime = performance.now();
+    requestAnimationFrame((time) => this.loop(time));
+  }
+
+  loop(currentTime) {
+    const dt = Math.min((currentTime - this.lastTime) / 1000, 0.1);
+    this.lastTime = currentTime;
+    this.animTime += dt;
+
+    this.update(dt);
+    this.render();
+
+    requestAnimationFrame((time) => this.loop(time));
+  }
+
+  update(dt) {
+    // 1. Advance Day-Night Clock
+    this.gameTime = (this.gameTime + dt * this.timeSpeed) % 24;
+
+    this.spriteManager.update(dt);
+    this.player.update(dt, this.input);
+    if (this.combat) this.combat.update(dt);
+    this.camera.follow(this.player.x, this.player.y);
+    this.camera.update(dt);
+    this.updateAmbientParticles(dt);
+
+    this.updateHUD();
+    this.updateCombatUI();
+  }
+
+  getDayNightFactors() {
+    const t = this.gameTime;
+
+    // Sunlight: peak at 12h, zero between 20h and 05h
+    let sunlight = 0;
+    if (t >= 6.0 && t <= 18.0) {
+      sunlight = Math.sin(((t - 6.0) / 12.0) * Math.PI);
+    }
+
+    // Sunset factor: peak around 18.0 - 19.5
+    let sunset = 0;
+    if (t >= 16.5 && t <= 20.0) {
+      sunset = Math.sin(((t - 16.5) / 3.5) * Math.PI);
+    }
+
+    // Night factor: 1.0 during 20.5 - 04.5
+    let night = 0;
+    if (t >= 20.0 || t <= 5.5) {
+      if (t >= 20.0) night = Math.min(1.0, (t - 20.0) / 1.5);
+      else if (t <= 5.5) night = Math.max(0.0, 1.0 - (t - 4.0) / 1.5);
+    }
+
+    return { sunlight, sunset, night };
+  }
+
+  updateHUD() {
+    const tileX = Math.floor(this.player.x / TILE_SIZE);
+    const tileY = Math.floor(this.player.y / TILE_SIZE);
+    const currentBiome = this.map.getBiome(tileX, tileY);
+
+    if (this.biomeNameEl) {
+      let worldPrefix = '';
+      if (this.currentDimension === DIMENSIONS.CLOUDS) {
+        worldPrefix = '☁️ [Wolkenreich] ';
+        this.biomeNameEl.style.color = '#f472b6';
+        this.biomeNameEl.textContent = worldPrefix + (this.map.name || 'Rosa Wolkenmeer');
+      } else if (this.currentDimension === DIMENSIONS.CAVES) {
+        worldPrefix = '🪨 [Höhlenwelt] ';
+        const cTheme = this.map.getTheme ? this.map.getTheme(tileX, tileY) : 'main';
+        if (cTheme === 'snow') this.biomeNameEl.style.color = '#38bdf8';
+        else if (cTheme === 'void') this.biomeNameEl.style.color = '#c084fc';
+        else if (cTheme === 'forest') this.biomeNameEl.style.color = '#4ade80';
+        else if (cTheme === 'desert') this.biomeNameEl.style.color = '#fbbf24';
+        else if (cTheme === 'swamp') this.biomeNameEl.style.color = '#a3e635';
+        else if (cTheme === 'crystal') this.biomeNameEl.style.color = '#818cf8';
+        else this.biomeNameEl.style.color = '#cbd5e1';
+
+        this.biomeNameEl.textContent = worldPrefix + (this.map.name || currentBiome);
+      } else {
+        if (currentBiome.includes('Leere')) {
+          this.biomeNameEl.style.color = '#e066ff';
+        } else if (currentBiome.includes('Wüste')) {
+          this.biomeNameEl.style.color = '#ffda73';
+        } else if (currentBiome.includes('Schnee')) {
+          this.biomeNameEl.style.color = '#aee1f7';
+        } else if (currentBiome.includes('Sumpf')) {
+          this.biomeNameEl.style.color = '#8bc34a';
+        } else {
+          this.biomeNameEl.style.color = '#55e6a5';
+        }
+        this.biomeNameEl.textContent = currentBiome;
+      }
+    }
+
+    if (this.speedStatEl) {
+      if (this.player.speedMod < 0.5) {
+        this.speedStatEl.textContent = '35% (Treibsand!)';
+        this.speedStatEl.style.color = '#ff9800';
+      } else if (this.player.isSprinting && this.player.isMoving) {
+        this.speedStatEl.textContent = '150% (Sprint)';
+        this.speedStatEl.style.color = '#38bdf8';
+      } else {
+        this.speedStatEl.textContent = '100%';
+        this.speedStatEl.style.color = '#55e6a5';
+      }
+    }
+
+    if (this.deathStatEl) this.deathStatEl.textContent = this.player.deathCount;
+    if (this.posStatEl) {
+      const elev = this.player.elevation;
+      const elevText = elev === 0 ? 'Boden (0)' : (elev > 0 ? `Podest +${elev}` : `Loch ${elev}`);
+      const shrinesFound = this.player.discoveredShrines ? this.player.discoveredShrines.size : 0;
+      this.posStatEl.textContent = `X: ${tileX}, Y: ${tileY} | ${elevText} | ⛩️ Schreine: ${shrinesFound}`;
+    }
+
+    if (this.deathOverlay) {
+      if (this.player.isDead) this.deathOverlay.classList.remove('hidden');
+      else this.deathOverlay.classList.add('hidden');
+    }
+
+    // Time-of-Day HUD Update
+    if (this.timeDisplayEl) {
+      const hours = Math.floor(this.gameTime);
+      const minutes = Math.floor((this.gameTime % 1) * 60);
+      const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+
+      const { sunlight, sunset, night } = this.getDayNightFactors();
+      let icon = '☀️ Tag';
+      let col = '#38bdf8';
+      let lanternText = 'Lampions aus';
+      let lanternCol = '#94a3b8';
+
+      if (night > 0.3) {
+        icon = '🌙 Geisternacht';
+        col = '#818cf8';
+        lanternText = '🏮 Lampions an';
+        lanternCol = '#fbbf24';
+      } else if (sunset > 0.2 || (this.gameTime >= 17 && this.gameTime <= 20)) {
+        icon = '🏮 Dämmerung';
+        col = '#f59e0b';
+        lanternText = '🏮 Lampions an';
+        lanternCol = '#f59e0b';
+      } else if (this.gameTime < 6.5) {
+        icon = '🌅 Morgengrauen';
+        col = '#f472b6';
+        lanternText = 'Lampions aus';
+      }
+
+      if (this.currentDimension === DIMENSIONS.CAVES) {
+        lanternText = '🏮 Höhlenlampe an';
+        lanternCol = '#fbbf24';
+      }
+
+      this.timeDisplayEl.textContent = `${timeStr} ${icon}`;
+      this.timeDisplayEl.style.color = col;
+
+      if (this.timeBarFillEl) {
+        this.timeBarFillEl.style.width = `${(this.gameTime / 24) * 100}%`;
+      }
+      if (this.lanternStatusEl) {
+        this.lanternStatusEl.textContent = lanternText;
+        this.lanternStatusEl.style.color = lanternCol;
+      }
+    }
+  }
+
+  updateCombatUI() {
+    // 1. Update Ammo counters
+    const ammoEl = document.getElementById('ammo-count');
+    if (ammoEl && this.player && this.player.ranged) {
+      ammoEl.textContent = this.player.ranged.ammo;
+    }
+    const ammoStatEl = document.getElementById('ammo-stat');
+    if (ammoStatEl && this.player && this.player.ranged) {
+      ammoStatEl.textContent = `${this.player.ranged.ammo} / 30`;
+    }
+
+    // 2. Update Shield meter & status
+    const shieldFillEl = document.getElementById('shield-meter-fill');
+    if (shieldFillEl && this.player && this.player.shield) {
+      const pct = Math.max(0, Math.min(100, (this.player.shield.energy / 100) * 100));
+      shieldFillEl.style.width = `${pct}%`;
+      if (this.player.shield.broken) {
+        shieldFillEl.className = 'broken';
+      } else if (pct < 30) {
+        shieldFillEl.className = 'warning';
+      } else if (!this.player.shield.active && pct < 100) {
+        if (this.player.shield.rechargeDelay > 0) {
+          shieldFillEl.className = 'paused';
+        } else {
+          shieldFillEl.className = 'recharging';
+        }
+      } else {
+        shieldFillEl.className = '';
+      }
+    }
+    const shieldStatEl = document.getElementById('shield-stat');
+    if (shieldStatEl && this.player && this.player.shield) {
+      if (this.player.shield.broken) {
+        const pct = Math.round(this.player.shield.energy);
+        if (this.player.shield.stunTimer > 0) {
+          shieldStatEl.textContent = 'ZERBROCHEN (Stun!)';
+        } else {
+          shieldStatEl.textContent = `ZERBROCHEN (Lädt: ${pct}%)`;
+        }
+        shieldStatEl.style.color = '#ef4444';
+      } else {
+        const pct = Math.round(this.player.shield.energy);
+        if (this.player.shield.rechargeDelay > 0 && pct < 100) {
+          shieldStatEl.textContent = `${pct}% (1s Pause...)`;
+          shieldStatEl.style.color = '#f59e0b';
+        } else {
+          shieldStatEl.textContent = `${pct}%`;
+          shieldStatEl.style.color = pct < 30 ? '#ef4444' : '#38bdf8';
+        }
+      }
+    }
+  }
+
+  // ==========================================================================
+  // DARK GHIBLI 2.5D PAPERCRAFT RENDERING ENGINE (Mononoke + Chihiro Hybrid)
+  // ==========================================================================
+  render() {
+    const t = this.animTime;
+
+    if (this.currentDimension === DIMENSIONS.CLOUDS) {
+      this.renderCloudDimension(this.camera.getVisibleTileBounds(), t);
+    } else if (this.currentDimension === DIMENSIONS.CAVES) {
+      this.renderCaveDimension(this.camera.getVisibleTileBounds(), t);
+    } else {
+      const { sunlight, sunset, night } = this.getDayNightFactors();
+
+      // 1. Clear Viewport (Midnight Cardboard Base)
+      this.ctx.fillStyle = '#0f1322';
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+      // 2. Camera Transform
+      this.camera.apply(this.ctx);
+
+      const bounds = this.camera.getVisibleTileBounds();
+
+      // 3. LAYER 1: 2.5D Layered Paper Ground Tiles (Cardstock sheets & cut bevels)
+      this.renderPaperGroundTiles(bounds, sunlight, sunset, night, t);
+
+      // 4. LAYER 2: Sunken Riverbed with flowing paper wave ribbons
+      this.renderPaperWaterRibbons(bounds, t);
+
+      // 5. LAYER 3: Red Lacquered Paper Bridges
+      this.renderPaperBridges(bounds);
+
+      // 6. LAYER 4: Dynamic Warm Lantern Light Cones (Twilight & Night)
+      if (night > 0.05 || sunset > 0.05) {
+        this.renderLanternLightCones(bounds, t, night, sunset);
+      }
+
+      // 7. LAYER 5: Ground Props (Origami Boulders, Stone Lanterns, Paper Mushrooms, Trampolines, Cave Entrances, Shrines)
+      this.renderGroundProps(bounds, t, night);
+
+      // 8. LAYER 6: Y-Sorted Entities (Scalloped Paper Trees, Kodama Spirits, Player)
+      this.renderYSortedEntities(bounds, t, night);
+
+      // Combat layer: flying arrows, slashes, hit effects, floating texts, training dummies
+      if (this.combat) {
+        this.combat.render(this.ctx, bounds, t);
+      }
+
+      // 9. LAYER 7: Dense Forest Canopy Roof with Circular Vision Cutout around Player
+      this.renderForestCanopy(bounds, t);
+
+      // 10. LAYER 8: Ambient Environmental Particles (Day Clouds, Night Ofuda, Fireflies)
+      this.renderEnvironmentalAtmosphere(bounds, t, sunlight, night);
+
+      this.camera.release(this.ctx);
+
+      // 11. LAYER 9: Global Ambient Day/Night Lighting Wash & Forest Shade
+      this.renderGlobalLightingWash(sunlight, sunset, night);
+    }
+
+    // 12. Screen Overlay: Floating Shrine Discovery Banner
+    if (this.player.shrineMessage) {
+      this.renderShrineBanner(this.player.shrineMessage);
+    }
+
+    // 13. LAYER 10: Minimap
+    this.minimap.render(this.player, this.camera);
+  }
+
+  renderPaperGroundTiles(bounds, sunlight, sunset, night, t) {
+    const ts = TILE_SIZE;
+    const startY = Math.max(0, bounds.startY - 2);
+    const endY = Math.min(this.map.height, bounds.endY + 2);
+    const startX = Math.max(0, bounds.startX - 1);
+    const endX = Math.min(this.map.width, bounds.endX + 1);
+
+    // ========================================================================
+    // PASS 1: Base ground cardstock surfaces & animated biome textures
+    // ========================================================================
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const tile = this.map.getGroundTile(x, y);
+        const elev = this.map.getElevation(x, y);
+        const px = x * ts;
+        const py = y * ts;
+        const surfaceY = py - elev * ELEVATION_PIXEL_OFFSET;
+
+        let baseCol = '#224434'; // Mononoke Jade Cardstock (Grass)
+        let isElevated = true;
+
+        if (tile === TILES.DIRT) {
+          baseCol = '#382d24';
+        } else if (tile === TILES.SAND) {
+          baseCol = '#dfb867'; // Warm golden desert sand
+        } else if (tile === TILES.QUICKSAND) {
+          baseCol = '#6b4317'; // Treibsand: sunken dark amber mud
+          isElevated = false;
+        } else if (tile === TILES.SNOW) {
+          baseCol = '#5f758c'; // Frosted Lavender Cardstock
+        } else if (tile === TILES.SWAMP_GROUND) {
+          baseCol = '#1c2e22'; // Swamp Moss Paper
+        } else if (tile === TILES.WATER || tile === TILES.SWAMP_WATER) {
+          baseCol = '#0c1620'; // Sunken Cut Riverbed
+          isElevated = false;
+        } else if (tile === TILES.VOID_GROUND) {
+          baseCol = '#221236'; // Solid deep obsidian twilight cardstock
+        } else if (tile === TILES.VOID_LAKE) {
+          baseCol = '#030008'; // Das Leerenmeer: endloser kosmischer Schlund
+          isElevated = false;
+        } else if (tile === TILES.BRIDGE_H || tile === TILES.BRIDGE_V) {
+          baseCol = '#4d1e1c';
+        }
+
+        // Base card tile surface
+        this.ctx.fillStyle = baseCol;
+        this.ctx.fillRect(px, surfaceY, ts, ts);
+
+        // Elevation-based shading ("heller nach oben, dunkler nach unten"):
+        if (elev === ELEVATION.LEVEL_2) {
+          // Level +2: deutlich heller & leuchtender
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.24)';
+          this.ctx.fillRect(px, surfaceY, ts, ts);
+        } else if (elev === ELEVATION.LEVEL_1) {
+          // Level +1: spürbar heller
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+          this.ctx.fillRect(px, surfaceY, ts, ts);
+        } else if (elev === ELEVATION.HOLE) {
+          // Level -1 (Loch): deutlich dunkler / tief abgesenkt
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+          this.ctx.fillRect(px, surfaceY, ts, ts);
+        }
+
+        // 2.5D Physical Cardstock Thickness & Highlights
+        if (isElevated && elev >= 0) {
+          // Top cut edge highlight bevel (extra crisp for higher tiers)
+          const bevelAlpha = elev === ELEVATION.LEVEL_2 ? 'rgba(255, 255, 255, 0.38)' : 'rgba(255, 255, 255, 0.20)';
+          this.ctx.fillStyle = bevelAlpha;
+          this.ctx.fillRect(px, surfaceY, ts, 1.8);
+
+          // Bottom edge shadow when neighbor to South is at same or higher elevation
+          const elevS = (y + 1 < this.map.height) ? this.map.getElevation(x, y + 1) : elev;
+          if (elevS >= elev) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            this.ctx.fillRect(px, surfaceY + ts - 2, ts, 2);
+          }
+        }
+
+        // --- SPECIAL TERRAIN DETAILS (Rendered relative to surfaceY) ---
+        // 1. WÜSTENSAND DETAILS (Windrippeln, Dünenkämme, Quarzglitzer)
+        if (tile === TILES.SAND) {
+          const dune = Math.sin(x * 0.45 + y * 0.85);
+          if (dune > 0.4) {
+            this.ctx.fillStyle = '#f3d88c'; // Lichter Dünenkamm
+            this.ctx.fillRect(px + 1, surfaceY + 4, 14, 1.5);
+            this.ctx.fillRect(px + 4, surfaceY + 11, 10, 1.5);
+          } else if (dune < -0.4) {
+            this.ctx.fillStyle = '#c89943'; // Warmer Schattensaum der Düne
+            this.ctx.fillRect(px + 2, surfaceY + 6, 12, 1);
+            this.ctx.fillRect(px + 1, surfaceY + 13, 13, 1);
+          }
+          // Feine Sandkörnchen
+          if ((x * 23 + y * 37) % 7 === 0) {
+            this.ctx.fillStyle = '#fff4ce';
+            this.ctx.fillRect(px + 5, surfaceY + 7, 1.5, 1.5);
+          } else if ((x * 19 + y * 29) % 9 === 0) {
+            this.ctx.fillStyle = '#b78330';
+            this.ctx.fillRect(px + 10, surfaceY + 3, 1.5, 1.5);
+          }
+        }
+
+        // 2. TREIBSAND (Wirbelnder Mahlstrom, Schlickkrater, Blubberblasen)
+        else if (tile === TILES.QUICKSAND) {
+          // Krater-Innenschatten (abgesenkt)
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          this.ctx.fillRect(px, surfaceY, ts, 2);
+          this.ctx.fillRect(px, surfaceY, 2, ts);
+
+          // Dynamischer Wirbel
+          const gcx = 28 * ts + 8;
+          const gcy = 72 * ts + 8;
+          const gdx = (px + 8) - gcx;
+          const gdy = (surfaceY + 8) - gcy;
+          const dist = Math.hypot(gdx, gdy);
+          const angle = Math.atan2(gdy, gdx) + dist * 0.08 - t * 2.8;
+          const swirl = Math.sin(angle * 3.5);
+
+          if (swirl > 0.3) {
+            this.ctx.fillStyle = '#a6762f';
+            this.ctx.fillRect(px + 2, surfaceY + 4, 12, 2);
+          } else if (swirl < -0.3) {
+            this.ctx.fillStyle = '#452608';
+            this.ctx.fillRect(px + 3, surfaceY + 9, 10, 2);
+          }
+
+          // Aufsteigende Schlickblasen
+          const bubblePhase = Math.sin(t * 3.5 + x * 7 + y * 11);
+          if (bubblePhase > 0.65) {
+            this.ctx.fillStyle = '#d49b42';
+            this.ctx.fillRect(px + 7, surfaceY + 6, 2, 2);
+            this.ctx.fillStyle = '#fff0ba';
+            this.ctx.fillRect(px + 7, surfaceY + 6, 1, 1);
+          }
+        }
+
+        // 3. SOLID VOID GROUND (Fester Leerenboden)
+        else if (tile === TILES.VOID_GROUND) {
+          if ((x * 17 + y * 23) % 7 === 0) {
+            this.ctx.fillStyle = 'rgba(192, 132, 252, 0.85)';
+            this.ctx.fillRect(px + 6, surfaceY + 6, 2, 2);
+          } else if ((x * 13 + y * 31) % 9 === 0) {
+            this.ctx.fillStyle = 'rgba(147, 51, 234, 0.6)';
+            this.ctx.fillRect(px + 3, surfaceY + 10, 3, 1);
+          }
+        }
+
+        // 4. LEERENMEER (Tödlicher kosmischer Abgrund)
+        else if (tile === TILES.VOID_LAKE) {
+          const vcx = 112 * ts + 8;
+          const vcy = 62 * ts + 8;
+          const vdx = (px + 8) - vcx;
+          const vdy = (surfaceY + 8) - vcy;
+          const vdist = Math.hypot(vdx, vdy);
+          const vAngle = Math.atan2(vdy, vdx) + vdist * 0.06 - t * 1.8;
+          const vWave = Math.sin(vAngle * 3.0 + vdist * 0.1);
+
+          if (vWave > 0.35) {
+            this.ctx.fillStyle = 'rgba(126, 34, 206, 0.45)';
+            this.ctx.fillRect(px + 2, surfaceY + 5, 12, 2);
+          } else if (vWave < -0.35) {
+            this.ctx.fillStyle = 'rgba(88, 28, 135, 0.35)';
+            this.ctx.fillRect(px + 3, surfaceY + 9, 10, 2);
+          }
+
+          const spark = Math.sin(t * 4.5 + x * 13 + y * 19);
+          if (spark > 0.72) {
+            this.ctx.fillStyle = 'rgba(232, 121, 249, 0.9)';
+            this.ctx.fillRect(px + 6, surfaceY + 7, 2, 2);
+          }
+
+          const neighbors = this.map.getNeighbors(x, y);
+          const hasSolidNeighbor = (
+            neighbors.N !== TILES.VOID_LAKE ||
+            neighbors.S !== TILES.VOID_LAKE ||
+            neighbors.W !== TILES.VOID_LAKE ||
+            neighbors.E !== TILES.VOID_LAKE
+          );
+
+          if (hasSolidNeighbor) {
+            const glowPulse = Math.sin(t * 4.0 + (x + y) * 0.5) * 0.2 + 0.8;
+            this.ctx.fillStyle = `rgba(192, 132, 252, ${0.75 * glowPulse})`;
+            if (neighbors.N !== TILES.VOID_LAKE) this.ctx.fillRect(px, surfaceY, ts, 2.5);
+            if (neighbors.S !== TILES.VOID_LAKE) this.ctx.fillRect(px, surfaceY + ts - 2.5, ts, 2.5);
+            if (neighbors.W !== TILES.VOID_LAKE) this.ctx.fillRect(px, surfaceY, 2.5, ts);
+            if (neighbors.E !== TILES.VOID_LAKE) this.ctx.fillRect(px + ts - 2.5, surfaceY, 2.5, ts);
+
+            this.ctx.fillStyle = `rgba(244, 114, 182, ${0.9 * glowPulse})`;
+            if (neighbors.N !== TILES.VOID_LAKE) this.ctx.fillRect(px + 2, surfaceY, ts - 4, 1);
+            if (neighbors.S !== TILES.VOID_LAKE) this.ctx.fillRect(px + 2, surfaceY + ts - 1, ts - 4, 1);
+            if (neighbors.W !== TILES.VOID_LAKE) this.ctx.fillRect(px, surfaceY + 2, 1, ts - 4);
+            if (neighbors.E !== TILES.VOID_LAKE) this.ctx.fillRect(px + ts - 1, surfaceY + 2, 1, ts - 4);
+          }
+        }
+      }
+    }
+
+    // ========================================================================
+    // PASS 2: 2.5D Physical Cardstock Cliffs, Slopes / Ramps, and Depth Shadows
+    // ========================================================================
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const tile = this.map.getGroundTile(x, y);
+        const elev = this.map.getElevation(x, y);
+        const ramp = this.map.getRamp(x, y);
+        const px = x * ts;
+        const py = y * ts;
+        const surfaceY = py - elev * ELEVATION_PIXEL_OFFSET;
+
+        // 1. DIRECTIONAL RAMPS (Folded paper ramps with wooden/stone steps)
+        if (ramp !== RAMPS.NONE) {
+          this.renderRampTile(px, surfaceY, ramp, elev, tile);
+        }
+
+        // 2. INNER RIM SHADOWS FOR HOLES (-1)
+        if (elev === ELEVATION.HOLE) {
+          const elevN = (y - 1 >= 0) ? this.map.getElevation(x, y - 1) : 0;
+          const elevW = (x - 1 >= 0) ? this.map.getElevation(x - 1, y) : 0;
+          const elevE = (x + 1 < this.map.width) ? this.map.getElevation(x + 1, y) : 0;
+          const elevS = (y + 1 < this.map.height) ? this.map.getElevation(x, y + 1) : 0;
+
+          // Massiv verstärkte Innenschatten im Loch
+          if (elevN > ELEVATION.HOLE) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+            this.ctx.fillRect(px, surfaceY, ts, 3.5);
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            this.ctx.fillRect(px, surfaceY + 3.5, ts, 2.5);
+          }
+          if (elevW > ELEVATION.HOLE) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+            this.ctx.fillRect(px, surfaceY, 3.5, ts);
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+            this.ctx.fillRect(px + 3.5, surfaceY, 2, ts);
+          }
+          if (elevE > ELEVATION.HOLE) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+            this.ctx.fillRect(px + ts - 3.5, surfaceY, 3.5, ts);
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+            this.ctx.fillRect(px + ts - 5.5, surfaceY, 2, ts);
+          }
+          if (elevS > ELEVATION.HOLE) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            this.ctx.fillRect(px, surfaceY + ts - 3, ts, 3);
+          }
+          // Pit cracks and dark pebbles at bottom of hole
+          if ((x * 19 + y * 29) % 4 === 0) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            this.ctx.fillRect(px + 4, surfaceY + 7, 4, 2.5);
+          }
+        }
+
+        // 3. SOUTH-FACING PHYSICAL CLIFF FACES (Abbrüche nach Süden)
+        const elevS = (y + 1 < this.map.height) ? this.map.getElevation(x, y + 1) : elev;
+        const rampS = (y + 1 < this.map.height) ? this.map.getRamp(x, y + 1) : RAMPS.NONE;
+
+        if (elev > elevS && rampS !== RAMPS.UP_NORTH && ramp !== RAMPS.UP_SOUTH) {
+          const cliffH = (elev - elevS) * ELEVATION_PIXEL_OFFSET;
+          const cliffTopY = surfaceY + ts;
+          const cliffBottomY = cliffTopY + cliffH;
+
+          // Biome-specific cliff face palette (hoher Kontrast & Plastizität)
+          let cliffBase = '#20160f';
+          let cliffLine = '#352518';
+          let cliffHighlight = 'rgba(255, 255, 255, 0.22)';
+
+          if (tile === TILES.SAND || tile === TILES.QUICKSAND) {
+            cliffBase = '#8a5e1d'; cliffLine = '#664512'; cliffHighlight = '#ffd98c';
+          } else if (tile === TILES.SNOW) {
+            cliffBase = '#2c3947'; cliffLine = '#1f2933'; cliffHighlight = '#94a9bf';
+          } else if (tile === TILES.VOID_GROUND || tile === TILES.VOID_LAKE) {
+            cliffBase = '#110620'; cliffLine = '#230b3d'; cliffHighlight = '#d8b4fe';
+          } else if (tile === TILES.SWAMP_GROUND || tile === TILES.SWAMP_WATER) {
+            cliffBase = '#0e1710'; cliffLine = '#080d09'; cliffHighlight = '#344e39';
+          }
+
+          // Main vertical cut cliff wall
+          this.ctx.fillStyle = cliffBase;
+          this.ctx.fillRect(px, cliffTopY, ts, cliffH);
+
+          // Oberste Schnittkante: Glänzendes Lichtband
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+          this.ctx.fillRect(px, cliffTopY - 1.5, ts, 1.5);
+
+          // Scharfe dunkle Schnittrille (Incision) zwischen Oberfläche und Wand
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+          this.ctx.fillRect(px, cliffTopY, ts, 1.5);
+
+          // Cardboard layered core striations
+          this.ctx.fillStyle = cliffLine;
+          this.ctx.fillRect(px, cliffTopY + Math.floor(cliffH * 0.45), ts, 1.5);
+          this.ctx.fillStyle = cliffHighlight;
+          this.ctx.fillRect(px, cliffTopY + Math.floor(cliffH * 0.45) + 1.5, ts, 1);
+
+          if (cliffH >= 14) {
+            this.ctx.fillStyle = cliffLine;
+            this.ctx.fillRect(px, cliffTopY + Math.floor(cliffH * 0.75), ts, 1.5);
+            this.ctx.fillStyle = cliffHighlight;
+            this.ctx.fillRect(px, cliffTopY + Math.floor(cliffH * 0.75) + 1.5, ts, 1);
+          }
+
+          // Vertical cut cardstock tooth marks
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+          this.ctx.fillRect(px + 4, cliffTopY, 1.2, cliffH);
+          this.ctx.fillRect(px + 11, cliffTopY, 1.2, cliffH);
+
+          // Void crystal veins in cliff
+          if (tile === TILES.VOID_GROUND || tile === TILES.VOID_LAKE) {
+            this.ctx.fillStyle = 'rgba(192, 132, 252, 0.85)';
+            this.ctx.fillRect(px + 3, cliffTopY + 2, 4, 1.2);
+            this.ctx.fillRect(px + 9, cliffTopY + 4, 3, 1.2);
+          }
+
+          // Fetter, gestufter Schlagschatten auf den unteren Boden (Contact Drop Shadow)
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.52)';
+          this.ctx.fillRect(px, cliffBottomY, ts, 2.5);
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+          this.ctx.fillRect(px, cliffBottomY + 2.5, ts, 2.5);
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.14)';
+          this.ctx.fillRect(px, cliffBottomY + 5, ts, 2);
+        }
+
+        // 4. NORTH-FACING CLIFF EDGES (Scharfe obere Pappkante)
+        const elevN = (y - 1 >= 0) ? this.map.getElevation(x, y - 1) : elev;
+        const rampN = (y - 1 >= 0) ? this.map.getRamp(x, y - 1) : RAMPS.NONE;
+
+        if (elev > elevN && ramp !== RAMPS.UP_NORTH && rampN !== RAMPS.UP_SOUTH) {
+          // Starkes, leuchtendes Lichtband an der Oberkante des Podests
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+          this.ctx.fillRect(px, surfaceY, ts, 2);
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          this.ctx.fillRect(px, surfaceY + 2, ts, 1);
+
+          // Schattenwurf nach Norden auf das tiefere Terrain
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+          this.ctx.fillRect(px, surfaceY - 3, ts, 3);
+        }
+
+        // 5. WEST-FACING CLIFF DROPS (Schattenkante links)
+        const elevW = (x - 1 >= 0) ? this.map.getElevation(x - 1, y) : elev;
+        const rampW = (x - 1 >= 0) ? this.map.getRamp(x - 1, y) : RAMPS.NONE;
+
+        if (elev > elevW && ramp !== RAMPS.UP_WEST && rampW !== RAMPS.UP_EAST) {
+          const diffW = (elev - elevW) * ELEVATION_PIXEL_OFFSET;
+          // Dunkle Schnittkante auf dem Podest
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+          this.ctx.fillRect(px, surfaceY, 2.5, ts);
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+          this.ctx.fillRect(px + 2.5, surfaceY, 1.5, ts);
+
+          // Ausgeprägter Schlagschatten auf das westliche Nachbarfeld
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          this.ctx.fillRect(px - 3.5, surfaceY + diffW, 3.5, ts);
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+          this.ctx.fillRect(px - 6, surfaceY + diffW, 2.5, ts);
+        }
+
+        // 6. EAST-FACING CLIFF DROPS (Lichtkante rechts)
+        const elevE = (x + 1 < this.map.width) ? this.map.getElevation(x + 1, y) : elev;
+        const rampE = (x + 1 < this.map.width) ? this.map.getRamp(x + 1, y) : RAMPS.NONE;
+
+        if (elev > elevE && ramp !== RAMPS.UP_EAST && rampE !== RAMPS.UP_WEST) {
+          const diffE = (elev - elevE) * ELEVATION_PIXEL_OFFSET;
+          // Helle Schnittkante auf dem Podest
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+          this.ctx.fillRect(px + ts - 2.5, surfaceY, 2.5, ts);
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+          this.ctx.fillRect(px + ts - 3.5, surfaceY, 1, ts);
+
+          // Ausgeprägter Schlagschatten auf das östliche Nachbarfeld
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+          this.ctx.fillRect(px + ts, surfaceY + diffE, 3.5, ts);
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+          this.ctx.fillRect(px + ts + 3.5, surfaceY + diffE, 2.5, ts);
+        }
+      }
+    }
+  }
+
+  renderRampTile(px, surfaceY, ramp, elev, tile) {
+    const ts = TILE_SIZE;
+
+    // Biome-specific materials for ramps
+    let plankCol = '#6b492b';
+    let plankLight = '#9e6d42';
+    let plankDark = '#3d2514';
+    let railCol = '#26160a';
+    let accentCol = '#fbbf24'; // Warm glowing golden step marker
+
+    if (tile === TILES.SAND || tile === TILES.QUICKSAND) {
+      plankCol = '#c99642'; plankLight = '#f0be6b'; plankDark = '#785018'; railCol = '#472f0b'; accentCol = '#ffffff';
+    } else if (tile === TILES.SNOW) {
+      plankCol = '#56697d'; plankLight = '#8da6bf'; plankDark = '#2d3844'; railCol = '#1a222b'; accentCol = '#bfdbfe';
+    } else if (tile === TILES.VOID_GROUND || tile === TILES.VOID_LAKE) {
+      plankCol = '#3b185e'; plankLight = '#732fb8'; plankDark = '#1a082b'; railCol = '#0d0217'; accentCol = '#e879f9';
+    } else if (tile === TILES.SWAMP_GROUND || tile === TILES.SWAMP_WATER) {
+      plankCol = '#374730'; plankLight = '#58734d'; plankDark = '#1b2418'; railCol = '#0f140e'; accentCol = '#bbf7d0';
+    }
+
+    // Outer dark framing border
+    this.ctx.fillStyle = railCol;
+    this.ctx.fillRect(px, surfaceY, ts, ts);
+
+    // Inner ramp base fill
+    this.ctx.fillStyle = plankCol;
+    this.ctx.fillRect(px + 1, surfaceY + 1, ts - 2, ts - 2);
+
+    if (ramp === RAMPS.UP_NORTH) {
+      // Slopes UP towards North
+      // Folded paper side rails
+      this.ctx.fillStyle = railCol;
+      this.ctx.fillRect(px, surfaceY, 2.5, ts);
+      this.ctx.fillRect(px + ts - 2.5, surfaceY, 2.5, ts);
+
+      // Side rail highlights
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      this.ctx.fillRect(px + 2.5, surfaceY, 1, ts);
+      this.ctx.fillRect(px + ts - 3.5, surfaceY, 1, ts);
+
+      // 4 Stepped Planks / Rungs
+      for (let i = 0; i < 4; i++) {
+        const ry = surfaceY + i * 4;
+        this.ctx.fillStyle = plankLight;
+        this.ctx.fillRect(px + 2.5, ry, ts - 5, 1.5);
+        this.ctx.fillStyle = plankDark;
+        this.ctx.fillRect(px + 2.5, ry + 1.5, ts - 5, 1.5);
+      }
+
+      // Corner post studs
+      this.ctx.fillStyle = '#0f0804';
+      this.ctx.fillRect(px, surfaceY, 3, 3);
+      this.ctx.fillRect(px + ts - 3, surfaceY, 3, 3);
+      this.ctx.fillRect(px, surfaceY + ts - 3, 3, 3);
+      this.ctx.fillRect(px + ts - 3, surfaceY + ts - 3, 3, 3);
+
+      // Large luminous upward step chevron
+      this.ctx.fillStyle = accentCol;
+      this.ctx.fillRect(px + 7, surfaceY + 2, 2, 2);
+      this.ctx.fillRect(px + 5, surfaceY + 4, 6, 1.5);
+    } else if (ramp === RAMPS.UP_SOUTH) {
+      // Slopes UP towards South
+      this.ctx.fillStyle = railCol;
+      this.ctx.fillRect(px, surfaceY, 2.5, ts);
+      this.ctx.fillRect(px + ts - 2.5, surfaceY, 2.5, ts);
+
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      this.ctx.fillRect(px + 2.5, surfaceY, 1, ts);
+      this.ctx.fillRect(px + ts - 3.5, surfaceY, 1, ts);
+
+      for (let i = 0; i < 4; i++) {
+        const ry = surfaceY + i * 4;
+        this.ctx.fillStyle = plankLight;
+        this.ctx.fillRect(px + 2.5, ry, ts - 5, 1.5);
+        this.ctx.fillStyle = plankDark;
+        this.ctx.fillRect(px + 2.5, ry + 1.5, ts - 5, 1.5);
+      }
+
+      this.ctx.fillStyle = '#0f0804';
+      this.ctx.fillRect(px, surfaceY, 3, 3);
+      this.ctx.fillRect(px + ts - 3, surfaceY, 3, 3);
+      this.ctx.fillRect(px, surfaceY + ts - 3, 3, 3);
+      this.ctx.fillRect(px + ts - 3, surfaceY + ts - 3, 3, 3);
+
+      this.ctx.fillStyle = accentCol;
+      this.ctx.fillRect(px + 5, surfaceY + 10.5, 6, 1.5);
+      this.ctx.fillRect(px + 7, surfaceY + 12, 2, 2);
+    } else if (ramp === RAMPS.UP_WEST) {
+      // Slopes UP towards West
+      this.ctx.fillStyle = railCol;
+      this.ctx.fillRect(px, surfaceY, ts, 2.5);
+      this.ctx.fillRect(px, surfaceY + ts - 2.5, ts, 2.5);
+
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      this.ctx.fillRect(px, surfaceY + 2.5, ts, 1);
+      this.ctx.fillRect(px + ts - 3.5, surfaceY, 1, ts);
+
+      for (let i = 0; i < 4; i++) {
+        const rx = px + i * 4;
+        this.ctx.fillStyle = plankLight;
+        this.ctx.fillRect(rx, surfaceY + 2.5, 1.5, ts - 5);
+        this.ctx.fillStyle = plankDark;
+        this.ctx.fillRect(rx + 1.5, surfaceY + 2.5, 1.5, ts - 5);
+      }
+
+      this.ctx.fillStyle = '#0f0804';
+      this.ctx.fillRect(px, surfaceY, 3, 3);
+      this.ctx.fillRect(px + ts - 3, surfaceY, 3, 3);
+      this.ctx.fillRect(px, surfaceY + ts - 3, 3, 3);
+      this.ctx.fillRect(px + ts - 3, surfaceY + ts - 3, 3, 3);
+
+      this.ctx.fillStyle = accentCol;
+      this.ctx.fillRect(px + 2, surfaceY + 7, 2, 2);
+      this.ctx.fillRect(px + 4, surfaceY + 5, 1.5, 6);
+    } else if (ramp === RAMPS.UP_EAST) {
+      // Slopes UP towards East
+      this.ctx.fillStyle = railCol;
+      this.ctx.fillRect(px, surfaceY, ts, 2.5);
+      this.ctx.fillRect(px, surfaceY + ts - 2.5, ts, 2.5);
+
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      this.ctx.fillRect(px, surfaceY + 2.5, ts, 1);
+      this.ctx.fillRect(px + ts - 3.5, surfaceY, 1, ts);
+
+      for (let i = 0; i < 4; i++) {
+        const rx = px + i * 4;
+        this.ctx.fillStyle = plankLight;
+        this.ctx.fillRect(rx, surfaceY + 2.5, 1.5, ts - 5);
+        this.ctx.fillStyle = plankDark;
+        this.ctx.fillRect(rx + 1.5, surfaceY + 2.5, 1.5, ts - 5);
+      }
+
+      this.ctx.fillStyle = '#0f0804';
+      this.ctx.fillRect(px, surfaceY, 3, 3);
+      this.ctx.fillRect(px + ts - 3, surfaceY, 3, 3);
+      this.ctx.fillRect(px, surfaceY + ts - 3, 3, 3);
+      this.ctx.fillRect(px + ts - 3, surfaceY + ts - 3, 3, 3);
+
+      this.ctx.fillStyle = accentCol;
+      this.ctx.fillRect(px + 12, surfaceY + 7, 2, 2);
+      this.ctx.fillRect(px + 10.5, surfaceY + 5, 1.5, 6);
+    }
+  }
+
+  renderPaperWaterRibbons(bounds, t) {
+    const ts = TILE_SIZE;
+    for (let y = bounds.startY; y < bounds.endY; y++) {
+      for (let x = bounds.startX; x < bounds.endX; x++) {
+        const tile = this.map.getGroundTile(x, y);
+        if (tile === TILES.WATER || tile === TILES.SWAMP_WATER) {
+          const px = x * ts;
+          const py = y * ts;
+          const wave = Math.sin((x * 0.4 + y * 0.2) - t * 2.2);
+          if (wave > 0.45) {
+            this.ctx.fillStyle = tile === TILES.WATER
+              ? 'rgba(94, 234, 212, 0.45)' // Cyan paper ribbon
+              : 'rgba(52, 211, 153, 0.35)'; // Mossy paper ribbon
+            this.ctx.fillRect(px + 2, py + 6, 12, 1.5);
+          }
+        }
+      }
+    }
+  }
+
+  renderPaperBridges(bounds) {
+    const ts = TILE_SIZE;
+    for (let y = bounds.startY; y < bounds.endY; y++) {
+      for (let x = bounds.startX; x < bounds.endX; x++) {
+        const tile = this.map.getGroundTile(x, y);
+        if (tile === TILES.BRIDGE_H || tile === TILES.BRIDGE_V) {
+          const px = x * ts;
+          const py = y * ts;
+
+          // Red lacquered bridge plank
+          this.ctx.fillStyle = '#b91c1c';
+          this.ctx.fillRect(px, py, ts, ts);
+
+          // Wood planks
+          this.ctx.fillStyle = '#7f1d1d';
+          this.ctx.fillRect(px, py, ts, 1);
+          this.ctx.fillRect(px, py + ts - 2, ts, 2);
+
+          // Golden lacquered studs
+          this.ctx.fillStyle = '#fbbf24';
+          this.ctx.fillRect(px + 2, py + 2, 2, 2);
+          this.ctx.fillRect(px + ts - 4, py + 2, 2, 2);
+        }
+      }
+    }
+  }
+
+  renderLanternLightCones(bounds, t, night, sunset) {
+    const intensity = Math.max(night * 1.0, sunset * 0.6);
+    if (intensity <= 0.01) return;
+
+    // 1. Hanging tree lanterns
+    const visibleTrees = this.map.getVisibleTrees(bounds);
+    for (const tree of visibleTrees) {
+      if (!tree.hasLantern) continue;
+
+      const tTileX = Math.floor(tree.x / TILE_SIZE);
+      const tTileY = Math.floor(tree.y / TILE_SIZE);
+      const tElev = this.map.getElevation(tTileX, tTileY);
+
+      const lx = tree.x + 8;
+      const ly = tree.y - 12 - tElev * ELEVATION_PIXEL_OFFSET;
+      const fPulse = Math.sin(t * 7 + tree.x) * 2;
+      const radius = (48 + fPulse);
+
+      const grad = this.ctx.createRadialGradient(lx, ly, 3, lx, ly, radius);
+      grad.addColorStop(0, `rgba(254, 240, 138, ${0.36 * intensity})`); // Warm gold core
+      grad.addColorStop(0.4, `rgba(249, 115, 22, ${0.18 * intensity})`); // Reddish-amber mid
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      this.ctx.fillStyle = grad;
+      this.ctx.beginPath();
+      this.ctx.arc(lx, ly, radius, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
+    // 1b. Hängende Lampions im dichten Blätterdach
+    const canopyCrowns = this.map.getVisibleCanopyCrowns(bounds);
+    for (const crown of canopyCrowns) {
+      if (!crown.hasLantern) continue;
+
+      const cTileX = Math.floor(crown.x / TILE_SIZE);
+      const cTileY = Math.floor(crown.y / TILE_SIZE);
+      const cElev = this.map.getElevation(cTileX, cTileY);
+
+      const lx = crown.x + 8;
+      const ly = crown.y + 12 - cElev * ELEVATION_PIXEL_OFFSET;
+      const fPulse = Math.sin(t * 7 + crown.x) * 2;
+      const radius = (48 + fPulse);
+
+      const grad = this.ctx.createRadialGradient(lx, ly, 3, lx, ly, radius);
+      grad.addColorStop(0, `rgba(254, 240, 138, ${0.36 * intensity})`);
+      grad.addColorStop(0.4, `rgba(249, 115, 22, ${0.18 * intensity})`);
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+      this.ctx.fillStyle = grad;
+      this.ctx.beginPath();
+      this.ctx.arc(lx, ly, radius, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
+    // 2. Stone Lanterns (Tōrō) along paths & bridge
+    for (let y = bounds.startY; y < bounds.endY; y++) {
+      for (let x = bounds.startX; x < bounds.endX; x++) {
+        if (this.map.getObjectTile(x, y) === OBJECTS.STONE_TORO) {
+          const elev = this.map.getElevation(x, y);
+          const lx = x * TILE_SIZE + 8;
+          const ly = y * TILE_SIZE + 8 - elev * ELEVATION_PIXEL_OFFSET;
+          const fPulse = Math.sin(t * 9 + x) * 1.5;
+          const radius = (52 + fPulse);
+
+          const grad = this.ctx.createRadialGradient(lx, ly, 4, lx, ly, radius);
+          grad.addColorStop(0, `rgba(254, 240, 138, ${0.4 * intensity})`);
+          grad.addColorStop(0.5, `rgba(234, 88, 12, ${0.2 * intensity})`);
+          grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+          this.ctx.fillStyle = grad;
+          this.ctx.beginPath();
+          this.ctx.arc(lx, ly, radius, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+      }
+    }
+
+    // 3. Player's Handheld Lantern (illuminates surroundings on movement)
+    const plx = this.player.x + 6;
+    const ply = this.player.y - 8 - Math.round(this.player.visualElevation * ELEVATION_PIXEL_OFFSET);
+    const pPulse = Math.sin(t * 12) * 2;
+    const pRadius = (68 + pPulse);
+
+    const pGrad = this.ctx.createRadialGradient(plx, ply, 4, plx, ply, pRadius);
+    pGrad.addColorStop(0, `rgba(254, 240, 138, ${0.42 * intensity})`);
+    pGrad.addColorStop(0.45, `rgba(249, 115, 22, ${0.2 * intensity})`);
+    pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    this.ctx.fillStyle = pGrad;
+    this.ctx.beginPath();
+    this.ctx.arc(plx, ply, pRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+
+  renderGroundProps(bounds, t, night) {
+    const ts = TILE_SIZE;
+
+    const startY = Math.max(0, bounds.startY - 1);
+    const endY = Math.min(this.map.height, bounds.endY + 2);
+    const startX = Math.max(0, bounds.startX - 1);
+    const endX = Math.min(this.map.width, bounds.endX + 1);
+
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const obj = this.map.getObjectTile(x, y);
+        if (obj === OBJECTS.NONE) continue;
+        const elev = this.map.getElevation(x, y);
+        const px = x * ts;
+        const py = y * ts - elev * ELEVATION_PIXEL_OFFSET;
+
+        // 1. Stone Lantern (Tōrō)
+        if (obj === OBJECTS.STONE_TORO) {
+          // Drop shadow
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+          this.ctx.fillRect(px + 2, py + 12, 12, 4);
+
+          // Base & pillar
+          this.ctx.fillStyle = '#475569';
+          this.ctx.fillRect(px + 5, py + 4, 6, 10);
+          this.ctx.fillStyle = '#334155';
+          this.ctx.fillRect(px + 3, py + 12, 10, 3);
+
+          // Lantern fire chamber (warm glow at night)
+          this.ctx.fillStyle = night > 0.1 ? '#fef08a' : '#1e293b';
+          this.ctx.fillRect(px + 5, py + 6, 6, 4);
+
+          // Pagoda roof cap
+          this.ctx.fillStyle = '#1e293b';
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 1, py + 5);
+          this.ctx.lineTo(px + 8, py + 1);
+          this.ctx.lineTo(px + 15, py + 5);
+          this.ctx.closePath();
+          this.ctx.fill();
+        }
+
+        // 2. Torii Shrine Gate
+        else if (obj === OBJECTS.TORII_GATE) {
+          // Red lacquered gate pillars
+          this.ctx.fillStyle = '#dc2626';
+          this.ctx.fillRect(px + 1, py - 6, 3, 22);
+          this.ctx.fillRect(px + 12, py - 6, 3, 22);
+
+          // Top crossbeams
+          this.ctx.fillStyle = '#b91c1c';
+          this.ctx.fillRect(px - 2, py - 8, 20, 3);
+          this.ctx.fillStyle = '#0f172a'; // Black lintel
+          this.ctx.fillRect(px - 4, py - 11, 24, 3);
+        }
+
+        // 3. Origami Boulders
+        else if (obj === OBJECTS.ROCK_STONE || obj === OBJECTS.ROCK_ICE || obj === OBJECTS.ROCK_VOID) {
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          this.ctx.fillRect(px + 2, py + 8, 12, 6);
+
+          let lightFacet = '#4b5563';
+          let darkFacet = '#374151';
+          if (obj === OBJECTS.ROCK_ICE) {
+            lightFacet = '#93c5fd'; darkFacet = '#60a5fa';
+          } else if (obj === OBJECTS.ROCK_VOID) {
+            lightFacet = '#a855f7'; darkFacet = '#6b21a8';
+          }
+
+          // Light facet
+          this.ctx.fillStyle = lightFacet;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 2, py + 12);
+          this.ctx.lineTo(px + 8, py + 4);
+          this.ctx.lineTo(px + 8, py + 12);
+          this.ctx.closePath();
+          this.ctx.fill();
+
+          // Shadow facet
+          this.ctx.fillStyle = darkFacet;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 8, py + 4);
+          this.ctx.lineTo(px + 14, py + 12);
+          this.ctx.lineTo(px + 8, py + 12);
+          this.ctx.closePath();
+          this.ctx.fill();
+
+          // Paper crease fold
+          this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+          this.ctx.lineWidth = 1;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 8, py + 4);
+          this.ctx.lineTo(px + 8, py + 12);
+          this.ctx.stroke();
+        }
+
+        // 4. Paper Mushrooms
+        else if (obj === OBJECTS.MUSHROOM || obj === OBJECTS.MUSHROOM_BROWN) {
+          this.ctx.fillStyle = '#f8fafc';
+          this.ctx.fillRect(px + 7, py + 8, 2, 6);
+          this.ctx.fillStyle = obj === OBJECTS.MUSHROOM ? '#ef4444' : '#b45309';
+          this.ctx.beginPath();
+          this.ctx.arc(px + 8, py + 7, 5, Math.PI, 0);
+          this.ctx.fill();
+        }
+
+        // 5. Paper Bushes & Flowers
+        else if (obj === OBJECTS.BUSH || obj === OBJECTS.FOREST_FLOWERS || obj === OBJECTS.FERN) {
+          this.ctx.fillStyle = '#1e382b';
+          this.ctx.beginPath();
+          this.ctx.arc(px + 8, py + 8, 5, 0, Math.PI * 2);
+          this.ctx.fill();
+          if (obj === OBJECTS.FOREST_FLOWERS) {
+            this.ctx.fillStyle = '#fbcfe8';
+            this.ctx.fillRect(px + 7, py + 7, 2, 2);
+          }
+        }
+
+        // 6. Desert Cacti
+        else if (obj === OBJECTS.CACTUS) {
+          this.ctx.fillStyle = '#1e3a29';
+          this.ctx.fillRect(px + 6, py + 2, 4, 12);
+          this.ctx.fillRect(px + 2, py + 5, 4, 4);
+          this.ctx.fillRect(px + 10, py + 7, 4, 4);
+        }
+
+        // 7. Bambus-Trampolin (Zum Wolkenreich)
+        else if (obj === OBJECTS.TRAMPOLINE) {
+          // Drop shadow
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          this.ctx.beginPath();
+          this.ctx.ellipse(px + 8, py + 12, 7, 3.5, 0, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          // 4 Bamboo legs
+          this.ctx.strokeStyle = '#a16207';
+          this.ctx.lineWidth = 1.5;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 3, py + 6);  this.ctx.lineTo(px + 2, py + 14);
+          this.ctx.moveTo(px + 13, py + 6); this.ctx.lineTo(px + 14, py + 14);
+          this.ctx.stroke();
+
+          // Bouncy coiled springs
+          this.ctx.strokeStyle = '#f59e0b';
+          this.ctx.lineWidth = 1.2;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 4, py + 7);  this.ctx.lineTo(px + 4, py + 11);
+          this.ctx.moveTo(px + 12, py + 7); this.ctx.lineTo(px + 12, py + 11);
+          this.ctx.stroke();
+
+          // Springy Canvas Pad (Pink bouncy disc)
+          const isNear = Math.hypot(this.player.x - (px + 8), this.player.y - (py + 8)) < 24;
+          const bouncePulse = isNear ? Math.sin(t * 12) * 1.5 : 0;
+
+          this.ctx.fillStyle = '#db2777'; // Dark pink frame
+          this.ctx.beginPath();
+          this.ctx.ellipse(px + 8, py + 6 + bouncePulse, 7, 3.5, 0, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          this.ctx.fillStyle = '#f472b6'; // Vibrant pink surface
+          this.ctx.beginPath();
+          this.ctx.ellipse(px + 8, py + 5.5 + bouncePulse, 5.5, 2.5, 0, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          // Spiral star flower in center
+          this.ctx.fillStyle = '#fef08a';
+          this.ctx.fillRect(px + 7, py + 5 + bouncePulse, 2, 2);
+        }
+
+        // 8. Höhlenschlund (Cave Entrance in Hole)
+        else if (obj === OBJECTS.CAVE_ENTRANCE) {
+          // Deep dark cave chasm pit
+          this.ctx.fillStyle = '#05070d';
+          this.ctx.beginPath();
+          this.ctx.ellipse(px + 8, py + 8, 7, 5, 0, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          // Stone rim
+          this.ctx.strokeStyle = '#334155';
+          this.ctx.lineWidth = 1.5;
+          this.ctx.beginPath();
+          this.ctx.ellipse(px + 8, py + 8, 7.5, 5.5, 0, 0, Math.PI * 2);
+          this.ctx.stroke();
+
+          // Swirling cave darkness smoke
+          const sAngle = t * 2.5;
+          const smokeX = px + 8 + Math.cos(sAngle) * 3;
+          const smokeY = py + 8 + Math.sin(sAngle) * 2;
+          this.ctx.fillStyle = 'rgba(71, 85, 105, 0.45)';
+          this.ctx.beginPath();
+          this.ctx.arc(smokeX, smokeY, 2.5, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+
+        // 9. Uralter Schrein (Overworld)
+        else if (obj === OBJECTS.SHRINE) {
+          this.renderShrine(px, py, t, 'overworld');
+        }
+      }
+    }
+  }
+
+  renderYSortedEntities(bounds, t, night) {
+    const renderList = [];
+
+    // Player
+    const playerElev = this.player.visualElevation;
+    const playerSortY = this.player.y - playerElev * ELEVATION_PIXEL_OFFSET;
+    renderList.push({
+      sortY: playerSortY,
+      isPlayer: true
+    });
+
+    // Paper Trees
+    const visibleTrees = this.map.getVisibleTrees(bounds);
+    for (const tree of visibleTrees) {
+      const tTileX = Math.floor(tree.x / TILE_SIZE);
+      const tTileY = Math.floor(tree.y / TILE_SIZE);
+      const treeElev = this.map.getElevation(tTileX, tTileY);
+      const treeSortY = tree.y - treeElev * ELEVATION_PIXEL_OFFSET;
+      renderList.push({
+        sortY: treeSortY,
+        isPlayer: false,
+        isTree: true,
+        tree,
+        treeElev
+      });
+    }
+
+    // Kodama Forest Spirits
+    const visibleKodamas = this.map.getVisibleKodamas(bounds);
+    for (const kodama of visibleKodamas) {
+      const kTileX = Math.floor(kodama.x / TILE_SIZE);
+      const kTileY = Math.floor(kodama.y / TILE_SIZE);
+      const kElev = this.map.getElevation(kTileX, kTileY);
+      const kSortY = kodama.y - kElev * ELEVATION_PIXEL_OFFSET;
+      renderList.push({
+        sortY: kSortY,
+        isPlayer: false,
+        isKodama: true,
+        kodama,
+        kElev
+      });
+    }
+
+    // Sort back-to-front by visual screen Y
+    renderList.sort((a, b) => a.sortY - b.sortY);
+
+    for (const item of renderList) {
+      if (item.isPlayer) {
+        this.player.render(this.ctx, this.spriteManager, t, night);
+      } else if (item.isTree) {
+        this.renderPaperTree(item.tree, t, night, item.treeElev);
+      } else if (item.isKodama) {
+        this.renderKodamaSpirit(item.kodama, t, night, item.kElev);
+      }
+    }
+  }
+
+  renderPaperTree(tree, t, night, treeElev = 0) {
+    const sway = Math.sin(t * 1.6 + tree.x * 0.08) * 1.8;
+    const tx = tree.x;
+    const ty = tree.y - treeElev * ELEVATION_PIXEL_OFFSET;
+
+    // Paper card drop shadow
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+    this.ctx.beginPath();
+    this.ctx.ellipse(tx, ty, 15, 6, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Cut cardstock trunk
+    this.ctx.fillStyle = '#3a2b1e';
+    this.ctx.beginPath();
+    this.ctx.moveTo(tx - 3, ty);
+    this.ctx.lineTo(tx - 2, ty - 16);
+    this.ctx.lineTo(tx + 2, ty - 16);
+    this.ctx.lineTo(tx + 3, ty);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    const cx = tx + sway;
+    const cy = ty - 26;
+
+    this.drawPaperTreeCrown(this.ctx, cx, cy, tree.type, 17, t, tree.hasLantern, night);
+  }
+
+  drawPaperTreeCrown(ctx, cx, cy, type, radius = 17, t = 0, hasLantern = false, night = 0) {
+    const scale = radius / 17;
+
+    // Palette per tree type
+    let col1 = '#183426';
+    let col2 = '#264e3a';
+    let col3 = '#366d51';
+
+    if (type === TREES.SNOWY_PINE) {
+      col1 = '#475569'; col2 = '#64748b'; col3 = '#cbd5e1';
+    } else if (type === TREES.SWAMP_WILLOW) {
+      col1 = '#1f291e'; col2 = '#2d3d2a'; col3 = '#42573d';
+    } else if (type === TREES.BLOSSOM) {
+      col1 = '#831843'; col2 = '#be185d'; col3 = '#f472b6';
+    } else if (type === TREES.AUTUMN) {
+      col1 = '#7c2d12'; col2 = '#c2410c'; col3 = '#fb923c';
+    } else if (type === TREES.BIRCH) {
+      col1 = '#204428'; col2 = '#3a6e46'; col3 = '#65a773';
+    }
+
+    // Scalloped Paper Foliage Layers with Drop Shadows
+    // Layer 1 (Back paper leaf with drop shadow)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.arc(cx + 2 * scale, cy + 3 * scale, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = col1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Layer 2 (Middle paper leaf with drop shadow)
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.beginPath();
+    ctx.arc(cx - 3 * scale, cy - 1 * scale, 13 * scale, 0, Math.PI * 2);
+    ctx.arc(cx + 4 * scale, cy, 12 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = col2;
+    ctx.beginPath();
+    ctx.arc(cx - 4 * scale, cy - 2 * scale, 13 * scale, 0, Math.PI * 2);
+    ctx.arc(cx + 4 * scale, cy - 1 * scale, 12 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Layer 3 (Top paper highlight disc with fine cut edge)
+    ctx.fillStyle = col3;
+    ctx.beginPath();
+    ctx.arc(cx - 2 * scale, cy - 6 * scale, 8 * scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Papercraft center pin / brad
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.fillRect(cx - 1, cy - 6 * scale, 2, 2);
+
+    // HANGING RED/AMBER PAPER LANTERN (If this tree has a lantern)
+    if (hasLantern) {
+      const lSway = Math.sin(t * 3.0 + cx * 0.2) * 2;
+      const lx = cx + 9 * scale + lSway;
+      const ly = cy + 12 * scale;
+
+      // Hanging wire
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx + 7 * scale, cy);
+      ctx.lineTo(lx, ly - 6);
+      ctx.stroke();
+
+      // Red paper lantern body
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(lx - 4, ly - 6, 8, 10, 2) : ctx.rect(lx - 4, ly - 6, 8, 10);
+      ctx.fill();
+
+      // Glowing core (illuminates at night & sunset)
+      if (night > 0.05 || this.gameTime >= 17) {
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(lx - 2, ly - 3, 4, 4);
+      }
+
+      // Black / Gold caps
+      ctx.fillStyle = '#181021';
+      ctx.fillRect(lx - 5, ly - 7, 10, 2);
+      ctx.fillRect(lx - 5, ly + 4, 10, 2);
+
+      // Hanging tassel
+      ctx.strokeStyle = '#ea580c';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(lx, ly + 6);
+      ctx.lineTo(lx, ly + 10);
+      ctx.stroke();
+    }
+  }
+
+  renderKodamaSpirit(kodama, t, night, kElev = 0) {
+    const kx = kodama.x;
+    // Gentle floating bob
+    const ky = (kodama.y - kElev * ELEVATION_PIXEL_OFFSET) + Math.sin(t * 2.5 + kodama.floatOffset) * 3;
+    const tilt = Math.sin(t * kodama.tiltSpeed + kodama.tiltOffset) * 0.25;
+
+    this.ctx.save();
+    this.ctx.translate(kx, ky);
+    this.ctx.rotate(tilt);
+
+    // Drop shadow
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    this.ctx.beginPath();
+    this.ctx.ellipse(1, 10, 4, 2, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Body
+    this.ctx.fillStyle = '#f1f5f9';
+    this.ctx.fillRect(-1.5, 3, 3, 6);
+
+    // Head
+    this.ctx.beginPath();
+    this.ctx.ellipse(0, 0, 5, 4.5, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // 3 Dark Hollow Dots: 2 Eyes and 1 Mouth
+    this.ctx.fillStyle = '#0f172a';
+    this.ctx.beginPath();
+    this.ctx.arc(-2, -1, 1, 0, Math.PI * 2);
+    this.ctx.arc(2, -1, 1, 0, Math.PI * 2);
+    this.ctx.arc(0, 2, 1.2, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Ethereal cyan glow aura at night
+    if (night > 0.1) {
+      this.ctx.fillStyle = `rgba(94, 234, 212, ${0.25 * night})`;
+      this.ctx.beginPath();
+      this.ctx.arc(0, 0, 10, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+
+    this.ctx.restore();
+  }
+
+  renderEnvironmentalAtmosphere(bounds, t, sunlight, night) {
+    const startX = bounds.startX * TILE_SIZE;
+    const endX = bounds.endX * TILE_SIZE;
+    const startY = bounds.startY * TILE_SIZE;
+    const endY = bounds.endY * TILE_SIZE;
+
+    // 1. Daytime Translucent Cloud Shadows drifting lazily across the paper world
+    if (sunlight > 0.1) {
+      for (let c = 0; c < 4; c++) {
+        const cloudX = ((c * 500 + t * 18) % (this.map.width * TILE_SIZE + 400)) - 200;
+        const cloudY = 200 + c * 350;
+        this.ctx.fillStyle = `rgba(30, 50, 60, ${0.08 * sunlight})`;
+        this.ctx.beginPath();
+        this.ctx.ellipse(cloudX, cloudY, 140, 70, 0.2, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+    }
+
+    // 2. Ambient Particles (Petals, Ofuda Talismans, Fireflies)
+    for (const p of this.ambientParticles) {
+      if (p.x < startX || p.x > endX || p.y < startY || p.y > endY) continue;
+
+      if (p.type === 'petal') {
+        this.ctx.fillStyle = p.color;
+        this.ctx.beginPath();
+        this.ctx.ellipse(p.x, p.y, p.size, p.size * 0.5, Math.sin(t + p.swayOffset), 0, Math.PI * 2);
+        this.ctx.fill();
+      } else if (p.type === 'ofuda' && night > 0.05) {
+        // White paper talisman with red seal
+        this.ctx.save();
+        this.ctx.translate(p.x, p.y);
+        this.ctx.rotate(p.rot);
+        this.ctx.fillStyle = `rgba(248, 250, 252, ${night * 0.85})`;
+        this.ctx.fillRect(-3, -6, 6, 12);
+        this.ctx.fillStyle = `rgba(220, 38, 38, ${night * 0.85})`;
+        this.ctx.fillRect(-1.5, -3, 3, 6);
+        this.ctx.restore();
+      } else if (p.type === 'firefly' && night > 0.05) {
+        // Golden glowing ember
+        const pulse = Math.sin(t * 5 + p.swayOffset) * 0.3 + 0.7;
+        this.ctx.fillStyle = `rgba(251, 191, 36, ${pulse * night * 0.85})`;
+        this.ctx.beginPath();
+        this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        this.ctx.fill();
+      }
+    }
+  }
+
+  renderForestCanopy(bounds, t) {
+    if (!this.canopyCanvas || !this.canopyCtx) return;
+
+    const crowns = this.map.getVisibleCanopyCrowns(bounds);
+    if (crowns.length === 0) return;
+
+    const cCanvas = this.canopyCanvas;
+    const cCtx = this.canopyCtx;
+
+    // Offscreen Canvas leeren
+    cCtx.clearRect(0, 0, cCanvas.width, cCanvas.height);
+
+    // Exakte Kamera-Transformation anwenden
+    this.camera.apply(cCtx);
+
+    const { night } = this.getDayNightFactors();
+
+    // GROSSE BAUMKRONEN RENDERN (Genau dieselben wie die großen Bäume, > 1 Tile groß!)
+    for (const crown of crowns) {
+      const cTileX = Math.floor(crown.x / TILE_SIZE);
+      const cTileY = Math.floor(crown.y / TILE_SIZE);
+      const cElev = this.map.getElevation(cTileX, cTileY);
+
+      const sway = Math.sin(t * 1.6 + crown.x * 0.08) * 1.8;
+      const cx = crown.x + sway;
+      const cy = crown.y - cElev * ELEVATION_PIXEL_OFFSET;
+
+      this.drawPaperTreeCrown(cCtx, cx, cy, crown.type, crown.radius, t, crown.hasLantern, night);
+    }
+
+    // SICHTKREIS-CUTOUT UM DIE SPIELFIGUR ("nur um mich herum was sehe")
+    cCtx.save();
+    cCtx.globalCompositeOperation = 'destination-out';
+
+    const plx = this.player.x;
+    const ply = this.player.y - Math.round(this.player.visualElevation * ELEVATION_PIXEL_OFFSET);
+    const radius = PLAYER_CONFIG.CANOPY_REVEAL_RADIUS || 54;
+
+    // Runder, weich gefederter Ausstanz-Gradient
+    const revealGrad = cCtx.createRadialGradient(plx, ply, radius * 0.5, plx, ply, radius);
+    revealGrad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+    revealGrad.addColorStop(0.7, 'rgba(0, 0, 0, 0.95)');
+    revealGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    cCtx.fillStyle = revealGrad;
+    cCtx.beginPath();
+    cCtx.arc(plx, ply, radius, 0, Math.PI * 2);
+    cCtx.fill();
+    cCtx.restore();
+
+    this.camera.release(cCtx);
+
+    // Blätterschicht auf den Hauptcanvas übertragen
+    this.camera.release(this.ctx);
+    this.ctx.drawImage(cCanvas, 0, 0);
+    this.camera.apply(this.ctx);
+
+    // Weicher Blätterdach-Schattenring am Boden entlang der Schnittkante
+    const shadowGrad = this.ctx.createRadialGradient(plx, ply, radius * 0.65, plx, ply, radius * 1.15);
+    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    shadowGrad.addColorStop(0.75, 'rgba(10, 24, 16, 0.38)');
+    shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    this.ctx.fillStyle = shadowGrad;
+    this.ctx.beginPath();
+    this.ctx.arc(plx, ply, radius * 1.15, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+
+  renderGlobalLightingWash(sunlight, sunset, night) {
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+
+    // Sunset Golden Wash
+    if (sunset > 0.02) {
+      this.ctx.fillStyle = `rgba(251, 146, 60, ${sunset * 0.16})`;
+      this.ctx.fillRect(0, 0, w, h);
+    }
+
+    // Deep Mononoke Night Indigo Wash
+    if (night > 0.02) {
+      this.ctx.fillStyle = `rgba(18, 24, 48, ${night * 0.42})`;
+      this.ctx.fillRect(0, 0, w, h);
+    }
+
+    // Atmosphärischer Waldschatten, wenn der Spieler sich unter dem Blätterdach befindet
+    const pTileX = Math.floor(this.player.x / TILE_SIZE);
+    const pTileY = Math.floor(this.player.y / TILE_SIZE);
+    if (this.map.getCanopyTile(pTileX, pTileY) === CANOPY.TREE_CROWN) {
+      this.ctx.fillStyle = 'rgba(7, 20, 14, 0.26)';
+      this.ctx.fillRect(0, 0, w, h);
+    }
+
+    // Vignette for cinematic framing
+    const vig = this.ctx.createRadialGradient(w / 2, h / 2, w * 0.35, w / 2, h / 2, w * 0.75);
+    vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vig.addColorStop(1, 'rgba(0, 0, 0, 0.45)');
+    this.ctx.fillStyle = vig;
+    this.ctx.fillRect(0, 0, w, h);
+  }
+
+  // ==========================================================================
+  // CLOUD WORLD RENDERING (Rosa Wolken, Regenbogenbrücken & Schreine)
+  // ==========================================================================
+  renderCloudDimension(bounds, t) {
+    // 1. Ethereal pastel twilight sky gradient
+    const skyGrad = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
+    skyGrad.addColorStop(0, '#2b1b44');
+    skyGrad.addColorStop(0.5, '#4a2559');
+    skyGrad.addColorStop(1, '#6b2d5c');
+    this.ctx.fillStyle = skyGrad;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 2. Camera Transform
+    this.camera.apply(this.ctx);
+
+    const ts = TILE_SIZE;
+    const startY = Math.max(0, bounds.startY - 2);
+    const endY = Math.min(this.map.height, bounds.endY + 2);
+    const startX = Math.max(0, bounds.startX - 2);
+    const endX = Math.min(this.map.width, bounds.endX + 2);
+
+    // PASS 1: Pink Clouds & Rainbow Bridges
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const tile = this.map.getGroundTile(x, y);
+        const px = x * ts;
+        const py = y * ts;
+
+        if (tile === TILES.CLOUD_PINK) {
+          // Cloud drop shadow
+          this.ctx.fillStyle = 'rgba(23, 10, 36, 0.45)';
+          this.ctx.fillRect(px, py + 4, ts, ts);
+
+          // Base cloud cardstock (lush rose)
+          this.ctx.fillStyle = '#f472b6';
+          this.ctx.fillRect(px, py, ts, ts);
+
+          // Lighter soft pink top layer
+          this.ctx.fillStyle = '#fbcfe8';
+          this.ctx.fillRect(px + 1, py + 1, ts - 2, ts - 2);
+
+          // Fluffy cloud paper arcs & puffs
+          this.ctx.fillStyle = '#ffffff';
+          const puffAngle = (x * 17 + y * 23) % 4;
+          if (puffAngle === 0) {
+            this.ctx.fillRect(px + 3, py + 3, 4, 3);
+          } else if (puffAngle === 1) {
+            this.ctx.fillRect(px + 8, py + 4, 5, 2.5);
+          }
+
+          // Scalloped cloud edge highlight if neighbor is sky abyss
+          const nN = (y - 1 >= 0) ? this.map.getGroundTile(x, y - 1) : TILES.CLOUD_PINK;
+          const nS = (y + 1 < this.map.height) ? this.map.getGroundTile(x, y + 1) : TILES.CLOUD_PINK;
+          const nW = (x - 1 >= 0) ? this.map.getGroundTile(x - 1, y) : TILES.CLOUD_PINK;
+          const nE = (x + 1 < this.map.width) ? this.map.getGroundTile(x + 1, y) : TILES.CLOUD_PINK;
+
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+          if (nN === TILES.SKY_ABYSS) {
+            this.ctx.fillRect(px, py, ts, 2);
+          }
+          if (nS === TILES.SKY_ABYSS) {
+            this.ctx.fillRect(px, py + ts - 2, ts, 2);
+          }
+          if (nW === TILES.SKY_ABYSS) {
+            this.ctx.fillRect(px, py, 2, ts);
+          }
+          if (nE === TILES.SKY_ABYSS) {
+            this.ctx.fillRect(px + ts - 2, py, 2, ts);
+          }
+        }
+        else if (tile === TILES.RAINBOW_BRIDGE_H || tile === TILES.RAINBOW_BRIDGE_V) {
+          this.renderRainbowBridgeTile(px, py, tile === TILES.RAINBOW_BRIDGE_H, t, x, y);
+        }
+        else if (tile === TILES.SKY_ABYSS) {
+          // Twinkling stars in the sky abyss
+          if ((x * 19 + y * 31) % 13 === 0) {
+            const starTwinkle = Math.sin(t * 3.5 + x + y) * 0.3 + 0.7;
+            this.ctx.fillStyle = `rgba(254, 240, 138, ${starTwinkle * 0.75})`;
+            this.ctx.fillRect(px + 7, py + 7, 2, 2);
+          }
+        }
+      }
+    }
+
+    // PASS 2: Objects / Shrines in Cloud World
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const obj = this.map.getObjectTile(x, y);
+        if (obj === OBJECTS.SHRINE) {
+          this.renderShrine(x * ts, y * ts, t, 'cloud');
+        }
+      }
+    }
+
+    // PASS 3: Player
+    this.player.render(this.ctx, this.spriteManager, t, 0.4);
+
+    // Combat layer: flying arrows, slashes, hit effects, floating texts
+    if (this.combat) {
+      this.combat.render(this.ctx, bounds, t);
+    }
+
+    // PASS 4: Ambient floating cotton cloud puffs & rainbow sparkle particles
+    this.renderCloudAtmosphere(bounds, t);
+
+    this.camera.release(this.ctx);
+
+    // Cinematic soft cloud vignette
+    const vig = this.ctx.createRadialGradient(this.canvas.width / 2, this.canvas.height / 2, this.canvas.width * 0.4, this.canvas.width / 2, this.canvas.height / 2, this.canvas.width * 0.8);
+    vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    vig.addColorStop(1, 'rgba(35, 10, 45, 0.4)');
+    this.ctx.fillStyle = vig;
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+  }
+
+  renderRainbowBridgeTile(px, py, isHorizontal, t, tx, ty) {
+    const ts = TILE_SIZE;
+    const rainbowColors = [
+      '#f43f5e', // Rosa-Rot
+      '#fb923c', // Orange
+      '#facc15', // Goldgelb
+      '#4ade80', // Smaragdgrün
+      '#38bdf8', // Himmelblau
+      '#c084fc'  // Flieder
+    ];
+
+    // Drop shadow
+    this.ctx.fillStyle = 'rgba(23, 10, 36, 0.35)';
+    this.ctx.fillRect(px, py + 4, ts, ts);
+
+    // Glowing bridge aura
+    const pulse = Math.sin(t * 4 + (tx + ty) * 0.5) * 0.15 + 0.85;
+    this.ctx.fillStyle = `rgba(254, 240, 138, ${0.25 * pulse})`;
+    this.ctx.fillRect(px - 1, py - 1, ts + 2, ts + 2);
+
+    const stripeW = isHorizontal ? ts : (ts / rainbowColors.length);
+    const stripeH = isHorizontal ? (ts / rainbowColors.length) : ts;
+
+    for (let i = 0; i < rainbowColors.length; i++) {
+      this.ctx.fillStyle = rainbowColors[i];
+      if (isHorizontal) {
+        this.ctx.fillRect(px, py + i * stripeH, stripeW, stripeH);
+      } else {
+        this.ctx.fillRect(px + i * stripeW, py, stripeW, stripeH);
+      }
+    }
+
+    // Shimmering white light sheen moving across bridge
+    const sheenPos = ((t * 30 + tx * 8 + ty * 8) % 40) - 20;
+    if (Math.abs(sheenPos) < 10) {
+      this.ctx.fillStyle = `rgba(255, 255, 255, ${0.35 * (1 - Math.abs(sheenPos) / 10)})`;
+      this.ctx.fillRect(px, py, ts, ts);
+    }
+  }
+
+  renderCloudAtmosphere(bounds, t) {
+    // Drifting pastel cloud puffs
+    for (let i = 0; i < 18; i++) {
+      const px = ((i * 137 + t * 25) % (this.map.width * TILE_SIZE));
+      const py = ((i * 193 + Math.sin(t + i) * 20) % (this.map.height * TILE_SIZE));
+
+      this.ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+      this.ctx.beginPath();
+      this.ctx.arc(px, py, 6 + (i % 4) * 3, 0, Math.PI * 2);
+      this.ctx.fill();
+
+      // Rainbow star sparkle
+      if (i % 3 === 0) {
+        const starGlow = Math.sin(t * 5 + i) * 0.4 + 0.6;
+        this.ctx.fillStyle = `rgba(254, 240, 138, ${starGlow * 0.7})`;
+        this.ctx.fillRect(px + 4, py - 4, 2, 2);
+      }
+    }
+  }
+
+  // ==========================================================================
+  // CAVE WORLD RENDERING (Tiefenhöhlen, Unterirdischer See & Biome-Themen)
+  // ==========================================================================
+  renderCaveDimension(bounds, t) {
+    // 1. Deep Cavern Black Base
+    this.ctx.fillStyle = '#060810';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    // 2. Camera Transform
+    this.camera.apply(this.ctx);
+
+    const ts = TILE_SIZE;
+    const startY = Math.max(0, bounds.startY - 2);
+    const endY = Math.min(this.map.height, bounds.endY + 2);
+    const startX = Math.max(0, bounds.startX - 2);
+    const endX = Math.min(this.map.width, bounds.endX + 2);
+
+    // PASS 1: Ground Tiles (Biome-spezifische Felswände, Böden, Seen, Leitern)
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const tile = this.map.getGroundTile(x, y);
+        const px = x * ts;
+        const py = y * ts;
+        const theme = this.map.getTheme ? this.map.getTheme(x, y) : 'main';
+
+        if (tile === TILES.CAVE_WALL) {
+          if (theme === 'snow') {
+            // Glaziale Eiswand
+            this.ctx.fillStyle = '#0c4a6e';
+            this.ctx.fillRect(px, py, ts, ts);
+            this.ctx.fillStyle = '#38bdf8';
+            this.ctx.fillRect(px + 1, py + 1, ts - 2, 3);
+            if ((x * 17 + y * 29) % 3 === 0) {
+              this.ctx.fillStyle = '#075985';
+              this.ctx.fillRect(px + 3, py + 5, ts - 6, ts - 8);
+            }
+            if ((x * 13 + y * 19) % 2 === 0) {
+              this.ctx.fillStyle = '#bae6fd';
+              this.ctx.beginPath();
+              this.ctx.moveTo(px + 4, py + ts);
+              this.ctx.lineTo(px + 7, py + ts + 3);
+              this.ctx.lineTo(px + 10, py + ts);
+              this.ctx.fill();
+            }
+          } else if (theme === 'void') {
+            // Abyssisches Obsidian-Gestein
+            this.ctx.fillStyle = '#150524';
+            this.ctx.fillRect(px, py, ts, ts);
+            this.ctx.fillStyle = '#a855f7';
+            this.ctx.fillRect(px + 1, py + 1, ts - 2, 2.5);
+            if ((x * 17 + y * 29) % 3 === 0) {
+              this.ctx.fillStyle = '#2a0845';
+              this.ctx.fillRect(px + 3, py + 5, ts - 6, ts - 8);
+            }
+            if ((x * 31 + y * 47) % 5 === 0) {
+              const rGlow = Math.sin(t * 3 + x + y) * 0.3 + 0.7;
+              this.ctx.fillStyle = `rgba(232, 121, 249, ${rGlow * 0.8})`;
+              this.ctx.fillRect(px + 6, py + 6, 3, 3);
+            }
+          } else if (theme === 'forest') {
+            // Moosige Waldgesteinswand
+            this.ctx.fillStyle = '#14381a';
+            this.ctx.fillRect(px, py, ts, ts);
+            this.ctx.fillStyle = '#22c55e';
+            this.ctx.fillRect(px + 1, py + 1, ts - 2, 3);
+            if ((x * 17 + y * 29) % 3 === 0) {
+              this.ctx.fillStyle = '#0f2813';
+              this.ctx.fillRect(px + 3, py + 5, ts - 6, ts - 8);
+            }
+            if ((x * 19 + y * 37) % 3 === 0) {
+              this.ctx.strokeStyle = '#78350f';
+              this.ctx.lineWidth = 1.2;
+              this.ctx.beginPath();
+              this.ctx.moveTo(px + 5, py + 4);
+              this.ctx.lineTo(px + 4, py + 12);
+              this.ctx.stroke();
+            }
+          } else if (theme === 'desert') {
+            // Antiker Sandstein
+            this.ctx.fillStyle = '#78350f';
+            this.ctx.fillRect(px, py, ts, ts);
+            this.ctx.fillStyle = '#f59e0b';
+            this.ctx.fillRect(px + 1, py + 1, ts - 2, 3);
+            if ((x * 17 + y * 29) % 3 === 0) {
+              this.ctx.fillStyle = '#5c2406';
+              this.ctx.fillRect(px + 3, py + 5, ts - 6, ts - 8);
+            }
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+            this.ctx.fillRect(px + 2, py + 6, ts - 4, 1.2);
+            this.ctx.fillRect(px + 2, py + 10, ts - 4, 1.2);
+          } else if (theme === 'swamp') {
+            // Sumpf-Mergelstein
+            this.ctx.fillStyle = '#1c2818';
+            this.ctx.fillRect(px, py, ts, ts);
+            this.ctx.fillStyle = '#84cc16';
+            this.ctx.fillRect(px + 1, py + 1, ts - 2, 3);
+            if ((x * 17 + y * 29) % 3 === 0) {
+              this.ctx.fillStyle = '#111a0e';
+              this.ctx.fillRect(px + 3, py + 5, ts - 6, ts - 8);
+            }
+          } else if (theme === 'crystal') {
+            // Amethyst-Kristallwand
+            this.ctx.fillStyle = '#1e1b4b';
+            this.ctx.fillRect(px, py, ts, ts);
+            this.ctx.fillStyle = '#818cf8';
+            this.ctx.fillRect(px + 1, py + 1, ts - 2, 3);
+            if ((x * 17 + y * 29) % 3 === 0) {
+              this.ctx.fillStyle = '#312e81';
+              this.ctx.fillRect(px + 3, py + 5, ts - 6, ts - 8);
+            }
+          } else {
+            // Schieferwand
+            this.ctx.fillStyle = '#0f172a';
+            this.ctx.fillRect(px, py, ts, ts);
+            this.ctx.fillStyle = '#1e293b';
+            this.ctx.fillRect(px + 1, py + 1, ts - 2, 3);
+            if ((x * 17 + y * 29) % 3 === 0) {
+              this.ctx.fillStyle = '#090d16';
+              this.ctx.fillRect(px + 3, py + 5, ts - 6, ts - 8);
+            }
+          }
+        }
+        else if (tile === TILES.CAVE_FLOOR) {
+          if (theme === 'snow') {
+            this.ctx.fillStyle = '#155e75';
+            this.ctx.fillRect(px, py, ts, ts);
+            if ((x * 23 + y * 41) % 4 === 0) {
+              this.ctx.fillStyle = '#67e8f9';
+              this.ctx.fillRect(px + 4, py + 7, 3, 1.5);
+            } else if ((x * 19 + y * 31) % 6 === 0) {
+              this.ctx.fillStyle = '#e0f2fe';
+              this.ctx.fillRect(px + 8, py + 4, 1.5, 1.5);
+            }
+          } else if (theme === 'void') {
+            this.ctx.fillStyle = '#12071f';
+            this.ctx.fillRect(px, py, ts, ts);
+            if ((x * 23 + y * 41) % 4 === 0) {
+              this.ctx.fillStyle = '#7e22ce';
+              this.ctx.fillRect(px + 4, py + 6, 4, 1.5);
+            } else if ((x * 19 + y * 31) % 5 === 0) {
+              this.ctx.fillStyle = '#c084fc';
+              this.ctx.fillRect(px + 9, py + 3, 2, 1.5);
+            }
+          } else if (theme === 'forest') {
+            this.ctx.fillStyle = '#0f2e15';
+            this.ctx.fillRect(px, py, ts, ts);
+            if ((x * 23 + y * 41) % 4 === 0) {
+              this.ctx.fillStyle = '#16a34a';
+              this.ctx.fillRect(px + 4, py + 6, 3, 2);
+            } else if ((x * 19 + y * 31) % 5 === 0) {
+              this.ctx.fillStyle = '#4ade80';
+              this.ctx.fillRect(px + 8, py + 4, 1.5, 1.5);
+            }
+          } else if (theme === 'desert') {
+            this.ctx.fillStyle = '#451a03';
+            this.ctx.fillRect(px, py, ts, ts);
+            if ((x * 23 + y * 41) % 4 === 0) {
+              this.ctx.fillStyle = '#d97706';
+              this.ctx.fillRect(px + 4, py + 7, 4, 1.5);
+            } else if ((x * 19 + y * 31) % 5 === 0) {
+              this.ctx.fillStyle = '#f59e0b';
+              this.ctx.fillRect(px + 9, py + 3, 2, 1.5);
+            }
+          } else if (theme === 'swamp') {
+            this.ctx.fillStyle = '#141f13';
+            this.ctx.fillRect(px, py, ts, ts);
+            if ((x * 23 + y * 41) % 4 === 0) {
+              this.ctx.fillStyle = '#3f6212';
+              this.ctx.fillRect(px + 4, py + 7, 3, 2);
+            }
+          } else {
+            this.ctx.fillStyle = '#1e293b';
+            this.ctx.fillRect(px, py, ts, ts);
+            if ((x * 23 + y * 41) % 5 === 0) {
+              this.ctx.fillStyle = '#334155';
+              this.ctx.fillRect(px + 4, py + 7, 3, 1.5);
+            } else if ((x * 19 + y * 31) % 7 === 0) {
+              this.ctx.fillStyle = '#0f172a';
+              this.ctx.fillRect(px + 9, py + 3, 2, 2);
+            }
+          }
+        }
+        else if (tile === TILES.CAVE_WATER) {
+          let waterBase = '#07253b';
+          let waveCol1 = '#0ea5e9';
+          let waveCol2 = '#0369a1';
+          let sparkCol = 'rgba(45, 212, 191, ';
+
+          if (theme === 'snow') {
+            waterBase = '#0e7490';
+            waveCol1 = '#67e8f9';
+            waveCol2 = '#0891b2';
+            sparkCol = 'rgba(224, 242, 254, ';
+          } else if (theme === 'void') {
+            waterBase = '#2e1065';
+            waveCol1 = '#a855f7';
+            waveCol2 = '#581c87';
+            sparkCol = 'rgba(240, 171, 252, ';
+          } else if (theme === 'swamp') {
+            waterBase = '#064e3b';
+            waveCol1 = '#10b981';
+            waveCol2 = '#047857';
+            sparkCol = 'rgba(163, 230, 53, ';
+          }
+
+          this.ctx.fillStyle = waterBase;
+          this.ctx.fillRect(px, py, ts, ts);
+
+          const wave = Math.sin(t * 2.5 + x * 0.8 + y * 0.6);
+          if (wave > 0.3) {
+            this.ctx.fillStyle = waveCol1;
+            this.ctx.fillRect(px + 2, py + 5, 12, 1.8);
+          } else if (wave < -0.3) {
+            this.ctx.fillStyle = waveCol2;
+            this.ctx.fillRect(px + 3, py + 10, 10, 1.8);
+          }
+
+          if ((x * 37 + y * 59) % 6 === 0) {
+            const glow = Math.sin(t * 3.5 + x + y) * 0.3 + 0.7;
+            this.ctx.fillStyle = `${sparkCol}${glow * 0.85})`;
+            this.ctx.fillRect(px + 6, py + 6, 2, 2);
+          }
+        }
+        else if (tile === TILES.CAVE_HOLE_EXIT) {
+          // Shaft of golden sunlight from the hole above!
+          this.ctx.fillStyle = '#451a03';
+          this.ctx.fillRect(px, py, ts, ts);
+
+          const pulse = Math.sin(t * 3) * 0.15 + 0.85;
+          this.ctx.fillStyle = `rgba(254, 240, 138, ${0.4 * pulse})`;
+          this.ctx.beginPath();
+          this.ctx.arc(px + 8, py + 8, 9, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          this.ctx.fillStyle = '#fef08a';
+          this.ctx.beginPath();
+          this.ctx.arc(px + 8, py + 8, 4, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          // Wooden rope ladder dangling down
+          this.ctx.strokeStyle = '#92400e';
+          this.ctx.lineWidth = 1.2;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 4, py);
+          this.ctx.lineTo(px + 4, py + ts);
+          this.ctx.moveTo(px + 12, py);
+          this.ctx.lineTo(px + 12, py + ts);
+          this.ctx.moveTo(px + 4, py + 4);
+          this.ctx.lineTo(px + 12, py + 4);
+          this.ctx.moveTo(px + 4, py + 11);
+          this.ctx.lineTo(px + 12, py + 11);
+          this.ctx.stroke();
+        }
+        else if (tile === TILES.CAVE_LADDER_DOWN || tile === TILES.CAVE_LADDER_UP) {
+          // Shaft hole with ladder
+          this.ctx.fillStyle = '#090d16';
+          this.ctx.fillRect(px + 2, py + 2, 12, 12);
+
+          this.ctx.strokeStyle = '#cbd5e1';
+          this.ctx.lineWidth = 1.5;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 4, py);
+          this.ctx.lineTo(px + 4, py + ts);
+          this.ctx.moveTo(px + 12, py);
+          this.ctx.lineTo(px + 12, py + ts);
+          this.ctx.moveTo(px + 4, py + 4);
+          this.ctx.lineTo(px + 12, py + 4);
+          this.ctx.moveTo(px + 4, py + 8);
+          this.ctx.lineTo(px + 12, py + 8);
+          this.ctx.moveTo(px + 4, py + 12);
+          this.ctx.lineTo(px + 12, py + 12);
+          this.ctx.stroke();
+        }
+      }
+    }
+
+    // PASS 1b: Cave Light Cones (Warm ground illumination from Player Lantern, Torches, Sunlight Shafts, Shrines)
+    this.renderCaveLightCones(bounds, t);
+
+    // PASS 2: Objects in Cave (Stalagmites, Glow Crystals, Mushrooms, Shrines, Torches)
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const obj = this.map.getObjectTile(x, y);
+        const px = x * ts;
+        const py = y * ts;
+        const theme = this.map.getTheme ? this.map.getTheme(x, y) : 'main';
+
+        if (obj === OBJECTS.STALAGMITE || obj === OBJECTS.ROCK_ICE || obj === OBJECTS.ROCK_VOID) {
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+          this.ctx.fillRect(px + 3, py + 12, 10, 3);
+
+          let mainCol = '#334155';
+          let lightCol = '#475569';
+          if (theme === 'snow' || obj === OBJECTS.ROCK_ICE) {
+            mainCol = '#0284c7';
+            lightCol = '#7dd3fc';
+          } else if (theme === 'void' || obj === OBJECTS.ROCK_VOID) {
+            mainCol = '#581c87';
+            lightCol = '#c084fc';
+          } else if (theme === 'desert') {
+            mainCol = '#9a3412';
+            lightCol = '#f59e0b';
+          } else if (theme === 'forest') {
+            mainCol = '#166534';
+            lightCol = '#4ade80';
+          }
+
+          this.ctx.fillStyle = mainCol;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 2, py + 14);
+          this.ctx.lineTo(px + 8, py + 2);
+          this.ctx.lineTo(px + 14, py + 14);
+          this.ctx.closePath();
+          this.ctx.fill();
+
+          this.ctx.fillStyle = lightCol;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 8, py + 2);
+          this.ctx.lineTo(px + 14, py + 14);
+          this.ctx.lineTo(px + 8, py + 14);
+          this.ctx.closePath();
+          this.ctx.fill();
+        }
+        else if (obj === OBJECTS.GLOW_CRYSTAL) {
+          this.renderGlowCrystal(px, py, t, x, y, theme);
+        }
+        else if (obj === OBJECTS.CAVE_MUSHROOM_GLOW) {
+          this.renderCaveMushroom(px, py, t, x, y, theme);
+        }
+        else if (obj === OBJECTS.SHRINE) {
+          this.renderShrine(px, py, t, 'cave');
+        }
+        else if (obj === OBJECTS.TORCH) {
+          this.renderCaveTorch(px, py, t, x, y, theme);
+        }
+      }
+    }
+
+    // PASS 3: Player
+    this.player.render(this.ctx, this.spriteManager, t, 1.0);
+
+    // Combat layer: flying arrows, slashes, hit effects, floating texts
+    if (this.combat) {
+      this.combat.render(this.ctx, bounds, t);
+    }
+
+    // PASS 4: Ambient Atmosphere (Biome-spezifische Effekte)
+    this.renderCaveAtmosphere(bounds, t);
+
+    this.camera.release(this.ctx);
+
+    // PASS 5: Dynamic Cavern Darkness Mask with Lantern & Crystal Light Holes
+    this.renderCaveDarkness(bounds, t);
+  }
+
+  renderGlowCrystal(px, py, t, tx, ty, theme = 'main') {
+    let baseCol = '#38bdf8';
+    let lightCol = '#e0f2fe';
+
+    if (theme === 'snow') {
+      baseCol = '#38bdf8';
+      lightCol = '#f0fdfa';
+    } else if (theme === 'void') {
+      baseCol = '#a855f7';
+      lightCol = '#f5d0fe';
+    } else if (theme === 'desert') {
+      baseCol = '#f59e0b';
+      lightCol = '#fef08a';
+    } else if (theme === 'forest') {
+      baseCol = '#10b981';
+      lightCol = '#a7f3d0';
+    } else {
+      const isPurple = (tx + ty) % 2 === 0;
+      baseCol = isPurple ? '#c084fc' : '#38bdf8';
+      lightCol = isPurple ? '#f3e8ff' : '#e0f2fe';
+    }
+
+    const pulse = Math.sin(t * 3.5 + tx + ty) * 0.2 + 0.8;
+
+    // Glowing aura
+    this.ctx.save();
+    this.ctx.fillStyle = baseCol;
+    this.ctx.globalAlpha = 0.35 * pulse;
+    this.ctx.beginPath();
+    this.ctx.arc(px + 8, py + 8, 9, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.restore();
+
+    // Central crystal spike
+    this.ctx.fillStyle = baseCol;
+    this.ctx.beginPath();
+    this.ctx.moveTo(px + 8, py + 1);
+    this.ctx.lineTo(px + 12, py + 13);
+    this.ctx.lineTo(px + 4, py + 13);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Gleaming facet
+    this.ctx.fillStyle = lightCol;
+    this.ctx.beginPath();
+    this.ctx.moveTo(px + 8, py + 1);
+    this.ctx.lineTo(px + 8, py + 13);
+    this.ctx.lineTo(px + 5, py + 13);
+    this.ctx.closePath();
+    this.ctx.fill();
+  }
+
+  renderCaveMushroom(px, py, t, tx, ty, theme = 'main') {
+    let capCol = '#2dd4bf';
+    let capLight = '#99f6e4';
+    if (theme === 'swamp') {
+      capCol = '#84cc16';
+      capLight = '#bef264';
+    } else if (theme === 'void') {
+      capCol = '#c084fc';
+      capLight = '#f5d0fe';
+    }
+
+    const pulse = Math.sin(t * 3.0 + tx * 3 + ty * 5) * 0.2 + 0.8;
+    this.ctx.save();
+    this.ctx.fillStyle = capCol;
+    this.ctx.globalAlpha = 0.28 * pulse;
+    this.ctx.beginPath();
+    this.ctx.arc(px + 8, py + 8, 7, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.restore();
+
+    // Stem
+    this.ctx.fillStyle = '#cbd5e1';
+    this.ctx.fillRect(px + 7, py + 8, 2, 5);
+
+    // Glowing Cap
+    this.ctx.fillStyle = capCol;
+    this.ctx.beginPath();
+    this.ctx.arc(px + 8, py + 7, 4, Math.PI, 0);
+    this.ctx.fill();
+
+    this.ctx.fillStyle = capLight;
+    this.ctx.fillRect(px + 7, py + 6, 2, 1.5);
+  }
+
+  renderCaveAtmosphere(bounds, t) {
+    const centerTheme = this.map.getTheme ? this.map.getTheme(Math.floor(this.player.x / TILE_SIZE), Math.floor(this.player.y / TILE_SIZE)) : 'main';
+
+    if (centerTheme === 'snow') {
+      // Schnee- & Eisflocken in Eishöhlen
+      for (let i = 0; i < 20; i++) {
+        const sx = ((i * 89 + Math.sin(t * 1.5 + i) * 15) % (this.map.width * TILE_SIZE));
+        const sy = ((i * 127 + t * 25) % (this.map.height * TILE_SIZE));
+        this.ctx.fillStyle = 'rgba(224, 242, 254, 0.75)';
+        this.ctx.fillRect(sx, sy, 2, 2);
+      }
+    } else if (centerTheme === 'void') {
+      // Aufsteigende Astral-Seelenfunken in Leerenhöhlen
+      for (let i = 0; i < 20; i++) {
+        const vx = ((i * 101 + Math.cos(t * 2 + i) * 18) % (this.map.width * TILE_SIZE));
+        const vy = ((i * 139 - t * 30) % (this.map.height * TILE_SIZE) + (this.map.height * TILE_SIZE)) % (this.map.height * TILE_SIZE);
+        this.ctx.fillStyle = 'rgba(216, 180, 254, 0.75)';
+        this.ctx.fillRect(vx, vy, 2, 2);
+      }
+    } else if (centerTheme === 'forest') {
+      // Schwebende Moos- & Waldsporen
+      for (let i = 0; i < 18; i++) {
+        const fx = ((i * 79 + Math.sin(t * 2 + i) * 14) % (this.map.width * TILE_SIZE));
+        const fy = ((i * 113 + Math.cos(t * 1.5 + i) * 14) % (this.map.height * TILE_SIZE));
+        const pulse = Math.sin(t * 3 + i) * 0.3 + 0.7;
+        this.ctx.fillStyle = `rgba(74, 222, 128, ${pulse * 0.7})`;
+        this.ctx.fillRect(fx, fy, 2, 2);
+      }
+    } else {
+      // Höhlenwassertropfen von der Decke
+      for (let i = 0; i < 15; i++) {
+        const dropX = ((i * 73 + t * 4) % (this.map.width * TILE_SIZE));
+        const dropY = ((i * 109 + t * 65) % (this.map.height * TILE_SIZE));
+        this.ctx.fillStyle = 'rgba(56, 189, 248, 0.65)';
+        this.ctx.fillRect(dropX, dropY, 1.5, 3);
+      }
+    }
+  }
+
+  renderCaveTorch(px, py, t, tx, ty, theme = 'main') {
+    const seed = (tx * 17 + ty * 29);
+    const fBob = Math.sin(t * 16 + seed) * 1.2;
+    const fSway = Math.cos(t * 12 + seed) * 0.8;
+
+    // 1. Paper card drop shadow
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    this.ctx.beginPath();
+    this.ctx.ellipse(px + 8, py + 14, 5, 2.5, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // 2. Stone / Wooden stand base
+    this.ctx.fillStyle = theme === 'snow' ? '#1e293b' : '#334155';
+    this.ctx.fillRect(px + 5.5, py + 12, 5, 2.5);
+
+    // 3. Wooden post
+    this.ctx.fillStyle = '#78350f';
+    this.ctx.fillRect(px + 7, py + 5, 2, 8);
+
+    // 4. Metal bracket / sconce ring
+    this.ctx.fillStyle = '#94a3b8';
+    this.ctx.fillRect(px + 5.5, py + 4.5, 5, 2);
+
+    // 5. Flickering Torch Flame
+    const tipX = px + 8 + fSway;
+    const tipY = py - 2 + fBob;
+
+    // Outer fiery orange-red flame
+    this.ctx.fillStyle = '#ea580c';
+    this.ctx.beginPath();
+    this.ctx.moveTo(px + 5, py + 5);
+    this.ctx.quadraticCurveTo(px + 4, py + 1, tipX, tipY);
+    this.ctx.quadraticCurveTo(px + 12, py + 1, px + 11, py + 5);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Inner bright yellow flame
+    this.ctx.fillStyle = '#fef08a';
+    this.ctx.beginPath();
+    this.ctx.moveTo(px + 6.5, py + 5);
+    this.ctx.quadraticCurveTo(px + 6, py + 2.5, tipX, tipY + 2);
+    this.ctx.quadraticCurveTo(px + 9.5, py + 2.5, px + 9.5, py + 5);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // White-hot center spark
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.fillRect(px + 7, py + 3.5, 2, 2);
+
+    // Rising ember sparks
+    const sparkProg = ((t * 22 + seed) % 20);
+    const sparkY = py - sparkProg;
+    const sparkX = px + 8 + Math.sin(t * 4 + sparkY) * 3;
+    const sparkAlpha = Math.max(0, 1.0 - sparkProg / 20);
+    this.ctx.fillStyle = `rgba(254, 215, 170, ${sparkAlpha * 0.85})`;
+    this.ctx.fillRect(sparkX, sparkY, 1.5, 1.5);
+  }
+
+  renderCaveLightCones(bounds, t) {
+    const { startX, endX, startY, endY } = bounds;
+
+    // 1. Warm Player Lantern Fire Cone
+    const elevY = Math.round(this.player.visualElevation * ELEVATION_PIXEL_OFFSET);
+    const plx = this.player.x + 6;
+    const ply = this.player.y - 8 - elevY;
+    const pPulse = Math.sin(t * 9) * 3;
+    const pRadius = 94 + pPulse;
+
+    const pGrad = this.ctx.createRadialGradient(plx, ply, 6, plx, ply, pRadius);
+    pGrad.addColorStop(0, 'rgba(254, 240, 138, 0.48)');
+    pGrad.addColorStop(0.4, 'rgba(249, 115, 22, 0.24)');
+    pGrad.addColorStop(0.75, 'rgba(251, 146, 60, 0.08)');
+    pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    this.ctx.fillStyle = pGrad;
+    this.ctx.beginPath();
+    this.ctx.arc(plx, ply, pRadius, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // 2. Torches Light Cones
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const obj = this.map.getObjectTile(x, y);
+        if (obj === OBJECTS.TORCH) {
+          const tx = x * TILE_SIZE + 8;
+          const ty = y * TILE_SIZE + 5;
+          const fPulse = Math.sin(t * 14 + x * 7 + y * 13) * 3;
+          const tRadius = 76 + fPulse;
+
+          const tGrad = this.ctx.createRadialGradient(tx, ty, 4, tx, ty, tRadius);
+          tGrad.addColorStop(0, 'rgba(254, 240, 138, 0.46)');
+          tGrad.addColorStop(0.42, 'rgba(249, 115, 22, 0.22)');
+          tGrad.addColorStop(0.8, 'rgba(234, 88, 12, 0.07)');
+          tGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+          this.ctx.fillStyle = tGrad;
+          this.ctx.beginPath();
+          this.ctx.arc(tx, ty, tRadius, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+        else if (obj === OBJECTS.SHRINE) {
+          const sx = x * TILE_SIZE + 8;
+          const sy = y * TILE_SIZE + 8;
+          const sGrad = this.ctx.createRadialGradient(sx, sy, 8, sx, sy, 65);
+          sGrad.addColorStop(0, 'rgba(254, 240, 138, 0.38)');
+          sGrad.addColorStop(0.5, 'rgba(217, 119, 6, 0.16)');
+          sGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          this.ctx.fillStyle = sGrad;
+          this.ctx.beginPath();
+          this.ctx.arc(sx, sy, 65, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+      }
+    }
+
+    // 3. Sunlight Shafts from Cave Hole Exits
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        if (this.map.getGroundTile(x, y) === TILES.CAVE_HOLE_EXIT) {
+          const hx = x * TILE_SIZE + 8;
+          const hy = y * TILE_SIZE + 8;
+          const hGrad = this.ctx.createRadialGradient(hx, hy, 6, hx, hy, 58);
+          hGrad.addColorStop(0, 'rgba(254, 240, 138, 0.52)');
+          hGrad.addColorStop(0.45, 'rgba(250, 204, 21, 0.2)');
+          hGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          this.ctx.fillStyle = hGrad;
+          this.ctx.beginPath();
+          this.ctx.arc(hx, hy, 58, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+      }
+    }
+  }
+
+  renderCaveDarkness(bounds, t) {
+    // Fallback if no offscreen canvas available
+    if (!this.canopyCanvas || !this.canopyCtx) {
+      const elevY = Math.round(this.player.visualElevation * ELEVATION_PIXEL_OFFSET);
+      const screenX = Math.round((this.player.x - this.camera.x) * this.camera.zoom);
+      const screenY = Math.round((this.player.y - elevY - this.camera.y) * this.camera.zoom);
+      const grad = this.ctx.createRadialGradient(screenX, screenY, 40, screenX, screenY, 280);
+      grad.addColorStop(0, 'rgba(6, 8, 16, 0.05)');
+      grad.addColorStop(0.5, 'rgba(6, 8, 16, 0.55)');
+      grad.addColorStop(1, 'rgba(6, 8, 16, 0.95)');
+      this.ctx.fillStyle = grad;
+      this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      return;
+    }
+
+    const cCanvas = this.canopyCanvas;
+    const cCtx = this.canopyCtx;
+
+    // 1. Offscreen Canvas leeren
+    cCtx.clearRect(0, 0, cCanvas.width, cCanvas.height);
+
+    // 2. Volle Höhlen-Dunkelheit zeichnen
+    cCtx.fillStyle = 'rgba(5, 7, 15, 0.94)';
+    cCtx.fillRect(0, 0, cCanvas.width, cCanvas.height);
+
+    // 3. Kamera-Transformation für exakte Weltkoordinaten anwenden
+    this.camera.apply(cCtx);
+
+    // 4. Ausstanzung via destination-out (Licht-Löcher im Dunkelheits-Schleier)
+    cCtx.save();
+    cCtx.globalCompositeOperation = 'destination-out';
+
+    // 4a. Spieler-Höhlenlampe (Großer, sanft ausblendender Lichtkreis)
+    const elevY = Math.round(this.player.visualElevation * ELEVATION_PIXEL_OFFSET);
+    const plx = this.player.x + 6;
+    const ply = this.player.y - 8 - elevY;
+    const pRadius = 92 + Math.sin(t * 11) * 3;
+
+    const pGrad = cCtx.createRadialGradient(plx, ply, 14, plx, ply, pRadius);
+    pGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+    pGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.88)');
+    pGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.4)');
+    pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    cCtx.fillStyle = pGrad;
+    cCtx.beginPath();
+    cCtx.arc(plx, ply, pRadius, 0, Math.PI * 2);
+    cCtx.fill();
+
+    // 4b. Fackeln, Kristalle & Schreine im Sichtfeld
+    const { startX, endX, startY, endY } = bounds;
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const obj = this.map.getObjectTile(x, y);
+        if (obj === OBJECTS.TORCH) {
+          const tx = x * TILE_SIZE + 8;
+          const ty = y * TILE_SIZE + 5;
+          const fPulse = Math.sin(t * 14 + x * 7 + y * 13) * 3;
+          const tRadius = 74 + fPulse;
+
+          const tGrad = cCtx.createRadialGradient(tx, ty, 8, tx, ty, tRadius);
+          tGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          tGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.85)');
+          tGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.35)');
+          tGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          cCtx.fillStyle = tGrad;
+          cCtx.beginPath();
+          cCtx.arc(tx, ty, tRadius, 0, Math.PI * 2);
+          cCtx.fill();
+        }
+        else if (obj === OBJECTS.GLOW_CRYSTAL) {
+          const cx = x * TILE_SIZE + 8;
+          const cy = y * TILE_SIZE + 8;
+          const cPulse = Math.sin(t * 3.5 + x + y) * 2;
+          const cRadius = 46 + cPulse;
+
+          const cGrad = cCtx.createRadialGradient(cx, cy, 6, cx, cy, cRadius);
+          cGrad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
+          cGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.45)');
+          cGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          cCtx.fillStyle = cGrad;
+          cCtx.beginPath();
+          cCtx.arc(cx, cy, cRadius, 0, Math.PI * 2);
+          cCtx.fill();
+        }
+        else if (obj === OBJECTS.SHRINE) {
+          const sx = x * TILE_SIZE + 8;
+          const sy = y * TILE_SIZE + 8;
+          const sGrad = cCtx.createRadialGradient(sx, sy, 10, sx, sy, 65);
+          sGrad.addColorStop(0, 'rgba(0, 0, 0, 0.9)');
+          sGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.5)');
+          sGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          cCtx.fillStyle = sGrad;
+          cCtx.beginPath();
+          cCtx.arc(sx, sy, 65, 0, Math.PI * 2);
+          cCtx.fill();
+        }
+
+        // 4c. Lichtschächte von Oberwelt-Löchern
+        const tile = this.map.getGroundTile(x, y);
+        if (tile === TILES.CAVE_HOLE_EXIT) {
+          const hx = x * TILE_SIZE + 8;
+          const hy = y * TILE_SIZE + 8;
+          const hGrad = cCtx.createRadialGradient(hx, hy, 8, hx, hy, 56);
+          hGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          hGrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
+          hGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          cCtx.fillStyle = hGrad;
+          cCtx.beginPath();
+          cCtx.arc(hx, hy, 56, 0, Math.PI * 2);
+          cCtx.fill();
+        }
+      }
+    }
+
+    cCtx.restore();
+    this.camera.release(cCtx);
+
+    // 5. Dunkelheits-Maske über die Höhlenszene zeichnen
+    this.ctx.drawImage(cCanvas, 0, 0);
+  }
+
+  // ==========================================================================
+  // SHRINE & BANNER RENDERING (Seltene Shinto-Schreine in Höhlen & Wolken)
+  // ==========================================================================
+  renderShrine(px, py, t, theme = 'overworld') {
+    // Drop shadow
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    this.ctx.fillRect(px + 1, py + 11, 14, 5);
+
+    // Stone / Wood Pedestal
+    this.ctx.fillStyle = theme === 'cave' ? '#475569' : (theme === 'cloud' ? '#fce7f3' : '#78350f');
+    this.ctx.fillRect(px + 3, py + 8, 10, 6);
+    this.ctx.fillStyle = theme === 'cave' ? '#334155' : (theme === 'cloud' ? '#f472b6' : '#451a03');
+    this.ctx.fillRect(px + 1, py + 13, 14, 3);
+
+    // Wooden Shrine Cabinet
+    this.ctx.fillStyle = theme === 'cloud' ? '#fbcfe8' : '#b91c1c';
+    this.ctx.fillRect(px + 4, py + 1, 8, 8);
+
+    // Sacred Shimenawa Rope across front
+    this.ctx.fillStyle = '#fef08a';
+    this.ctx.fillRect(px + 3, py + 3, 10, 1.5);
+    // White paper zig-zag shide streamers
+    this.ctx.fillStyle = '#f8fafc';
+    this.ctx.fillRect(px + 5, py + 4.5, 1.5, 3);
+    this.ctx.fillRect(px + 9, py + 4.5, 1.5, 3);
+
+    // Pagoda Roof
+    this.ctx.fillStyle = theme === 'cloud' ? '#db2777' : '#0f172a';
+    this.ctx.beginPath();
+    this.ctx.moveTo(px, py + 2);
+    this.ctx.lineTo(px + 8, py - 4);
+    this.ctx.lineTo(px + 16, py + 2);
+    this.ctx.closePath();
+    this.ctx.fill();
+
+    // Floating Spirit Flame / Orb above shrine
+    const flameBob = Math.sin(t * 4 + px) * 2;
+    const flameY = py - 7 + flameBob;
+    const flameCol = theme === 'cloud' ? '#f472b6' : (theme === 'cave' ? '#38bdf8' : '#34d399');
+    this.ctx.fillStyle = flameCol;
+    this.ctx.beginPath();
+    this.ctx.arc(px + 8, flameY, 2.5, 0, Math.PI * 2);
+    this.ctx.fill();
+
+    // Soft flame aura
+    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    this.ctx.beginPath();
+    this.ctx.arc(px + 8, flameY, 1.2, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+
+  renderShrineBanner(msg) {
+    const w = Math.min(380, this.canvas.width - 40);
+    const h = 56;
+    const x = Math.round((this.canvas.width - w) / 2);
+    const y = 22;
+
+    this.ctx.save();
+    // Drop shadow
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    this.ctx.fillRect(x + 3, y + 4, w, h);
+
+    // Parchment card
+    this.ctx.fillStyle = '#1e1b2e';
+    this.ctx.fillRect(x, y, w, h);
+
+    // Gold trim border
+    this.ctx.strokeStyle = '#f59e0b';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(x + 2, y + 2, w - 4, h - 4);
+
+    // Header title
+    this.ctx.fillStyle = '#fcd34d';
+    this.ctx.font = 'bold 13px system-ui, sans-serif';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(msg.title, x + w / 2, y + 22);
+
+    // Subtitle / Shrine name
+    this.ctx.fillStyle = '#f8fafc';
+    this.ctx.font = '12px system-ui, sans-serif';
+    this.ctx.fillText(`${msg.name} (Gefunden: ${msg.total})`, x + w / 2, y + 41);
+
+    this.ctx.restore();
+  }
+}
+
+// Start Game on DOMContentLoaded
+window.addEventListener('DOMContentLoaded', () => {
+  new Game();
+});
+
+
+})();
