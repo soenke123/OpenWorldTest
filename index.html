@@ -134,6 +134,13 @@
           <span id="compact-xp-text" class="compact-stat-text">0 / 50</span>
         </div>
       </div>
+
+      <!-- Skill Button am Rand (Blinkt bei verfügbaren Skillpunkten) -->
+      <button id="skill-menu-btn" class="top-nav-btn skill-nav-btn hidden" title="Fähigkeiten & Skill-Menü (Taste C)">
+        <span class="skill-btn-icon">✨</span>
+        <span class="skill-btn-label">Skills</span>
+        <span id="skill-badge" class="skill-badge hidden">0</span>
+      </button>
     </div>
 
       <!-- Center Controls: Vollbild & Showroom -->
@@ -224,6 +231,90 @@
         <h2>IN DIE LEERE GESTÜRZT!</h2>
         <p>Der Abgrund hat dich verschlungen...</p>
         <span class="respawn-timer">Respawn wird ausgeführt...</span>
+      </div>
+    </div>
+
+    <!-- Skill Level-Up Modal -->
+    <div id="skill-modal" class="skill-modal-backdrop hidden">
+      <div class="skill-modal-dialog">
+        <div class="skill-modal-header">
+          <div class="skill-modal-title">
+            <span class="skill-header-icon">✨</span>
+            <span>Fähigkeiten & Skill-Menü</span>
+          </div>
+          <button id="skill-modal-close" class="skill-modal-close-btn" title="Schließen (Esc / C)">✕</button>
+        </div>
+
+        <div class="skill-modal-banner">
+          <span>Verfügbare Skillpunkte:</span>
+          <span id="skill-points-counter" class="skill-points-counter">0</span>
+        </div>
+
+        <div class="skill-cards-grid">
+          <!-- 1. HP (Leben) -->
+          <div class="skill-card">
+            <div class="skill-card-top">
+              <span class="skill-icon">❤️</span>
+              <div class="skill-card-text">
+                <div class="skill-name">Leben (HP)</div>
+                <div class="skill-desc">+15 Max HP & Sofort-Heilung</div>
+              </div>
+            </div>
+            <button class="skill-upgrade-btn" data-skill="hp">+ Skillen</button>
+            <div class="skill-invested-info">
+              Geskillt: <strong id="skill-count-hp">0</strong> <span id="skill-bonus-hp" class="skill-bonus-tag">(+0 HP)</span>
+            </div>
+          </div>
+
+          <!-- 2. Melee (Nahkampf) -->
+          <div class="skill-card">
+            <div class="skill-card-top">
+              <span class="skill-icon">⚔️</span>
+              <div class="skill-card-text">
+                <div class="skill-name">Nahkampf</div>
+                <div class="skill-desc">+4 Schwertschaden für alle Schläge</div>
+              </div>
+            </div>
+            <button class="skill-upgrade-btn" data-skill="melee">+ Skillen</button>
+            <div class="skill-invested-info">
+              Geskillt: <strong id="skill-count-melee">0</strong> <span id="skill-bonus-melee" class="skill-bonus-tag">(+0 DMG)</span>
+            </div>
+          </div>
+
+          <!-- 3. Range (Fernkampf) -->
+          <div class="skill-card">
+            <div class="skill-card-top">
+              <span class="skill-icon">🏹</span>
+              <div class="skill-card-text">
+                <div class="skill-name">Fernkampf</div>
+                <div class="skill-desc">Pfeile fliegen schneller & weiter</div>
+              </div>
+            </div>
+            <button class="skill-upgrade-btn" data-skill="range">+ Skillen</button>
+            <div class="skill-invested-info">
+              Geskillt: <strong id="skill-count-range">0</strong> <span id="skill-bonus-range" class="skill-bonus-tag">(Standard)</span>
+            </div>
+          </div>
+
+          <!-- 4. Shield (Schild) -->
+          <div class="skill-card">
+            <div class="skill-card-top">
+              <span class="skill-icon">🛡️</span>
+              <div class="skill-card-text">
+                <div class="skill-name">Schild</div>
+                <div class="skill-desc">Hält länger, mehr Energie & Blockkraft</div>
+              </div>
+            </div>
+            <button class="skill-upgrade-btn" data-skill="shield">+ Skillen</button>
+            <div class="skill-invested-info">
+              Geskillt: <strong id="skill-count-shield">0</strong> <span id="skill-bonus-shield" class="skill-bonus-tag">(+0 Energie)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="skill-modal-footer">
+          <span>Drücke Taste <code>C</code> oder <code>Esc</code> zum Schließen</span>
+        </div>
       </div>
     </div>
   </div>

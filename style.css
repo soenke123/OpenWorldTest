@@ -950,3 +950,289 @@ canvas#gameCanvas {
   }
 }
 
+/* ==========================================================================
+   SKILL SYSTEM & LEVEL-UP UI
+   ========================================================================== */
+
+/* Skill Nav Button */
+.skill-nav-btn {
+  background: rgba(16, 30, 24, 0.90);
+  border-color: rgba(74, 222, 128, 0.4);
+  color: #f1f5f9;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skill-nav-btn:hover {
+  background: rgba(20, 45, 32, 0.95);
+  border-color: #4ade80;
+  box-shadow: 0 0 14px rgba(74, 222, 128, 0.5);
+}
+
+.skill-nav-btn.blinking {
+  animation: skillPulseGlow 1.6s ease-in-out infinite;
+  background: linear-gradient(135deg, rgba(20, 83, 45, 0.95), rgba(15, 30, 24, 0.96));
+  border-color: #facc15;
+}
+
+@keyframes skillPulseGlow {
+  0% {
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.4), inset 0 0 4px rgba(74, 222, 128, 0.2);
+    border-color: rgba(74, 222, 128, 0.6);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(74, 222, 128, 0.85), 0 0 24px rgba(250, 204, 21, 0.6), inset 0 0 8px rgba(74, 222, 128, 0.4);
+    border-color: #facc15;
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.4), inset 0 0 4px rgba(74, 222, 128, 0.2);
+    border-color: rgba(74, 222, 128, 0.6);
+    transform: scale(1);
+  }
+}
+
+.skill-badge {
+  background: linear-gradient(135deg, #facc15, #eab308);
+  color: #1e1b4b;
+  font-weight: 800;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 10px;
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.6);
+}
+
+#skill-menu-btn.hidden,
+#skill-badge.hidden,
+#skill-modal.hidden {
+  display: none !important;
+}
+
+/* Skill Modal Backdrop */
+.skill-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 105;
+  background: rgba(5, 10, 20, 0.80);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeInModal 0.2s ease-out;
+}
+
+@keyframes fadeInModal {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.skill-modal-dialog {
+  background: linear-gradient(145deg, rgba(18, 26, 40, 0.96), rgba(12, 18, 28, 0.98));
+  border: 1.5px solid rgba(74, 222, 128, 0.35);
+  border-radius: 18px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7), 0 0 30px rgba(34, 197, 94, 0.15);
+  width: 100%;
+  max-width: 540px;
+  padding: 20px 24px;
+  user-select: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.skill-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 10px;
+}
+
+.skill-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #f8fafc;
+  letter-spacing: 0.5px;
+}
+
+.skill-header-icon {
+  font-size: 1.25rem;
+}
+
+.skill-modal-close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #94a3b8;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.skill-modal-close-btn:hover {
+  background: rgba(239, 68, 68, 0.8);
+  color: #ffffff;
+  border-color: #ef4444;
+}
+
+.skill-modal-banner {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: 10px;
+  padding: 8px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.skill-points-counter {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #4ade80;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 2px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(74, 222, 128, 0.4);
+}
+
+.skill-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .skill-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.skill-card {
+  background: rgba(24, 32, 48, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.skill-card:hover {
+  border-color: rgba(74, 222, 128, 0.3);
+  background: rgba(30, 41, 59, 0.85);
+}
+
+.skill-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skill-icon {
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.skill-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.skill-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+
+.skill-desc {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  line-height: 1.2;
+}
+
+.skill-upgrade-btn {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  color: #ffffff;
+  border: 1px solid #4ade80;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: 0 2px 8px rgba(22, 163, 74, 0.4);
+}
+
+.skill-upgrade-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.6);
+}
+
+.skill-upgrade-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.skill-upgrade-btn:disabled,
+.skill-upgrade-btn.disabled {
+  background: rgba(51, 65, 85, 0.5);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #64748b;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.skill-invested-info {
+  font-size: 0.74rem;
+  color: #cbd5e1;
+  text-align: center;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+.skill-invested-info strong {
+  color: #4ade80;
+  font-size: 0.82rem;
+}
+
+.skill-bonus-tag {
+  color: #94a3b8;
+  font-size: 0.68rem;
+  margin-left: 2px;
+}
+
+.skill-modal-footer {
+  text-align: center;
+  font-size: 0.74rem;
+  color: #64748b;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+}
+
+.skill-modal-footer code {
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+

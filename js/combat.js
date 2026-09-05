@@ -109,8 +109,11 @@ export class CombatManager {
 
   fireArrow(startX, startY, dirX, dirY, isCharged = false) {
     const angle = Math.atan2(dirY, dirX);
-    const speed = isCharged ? COMBAT_CONFIG.ARROW_CHARGED_SPEED : COMBAT_CONFIG.ARROW_SPEED;
-    const maxRange = isCharged ? COMBAT_CONFIG.ARROW_CHARGED_RANGE : COMBAT_CONFIG.ARROW_RANGE;
+    const rangeSkill = this.game?.player?.skills?.range || 0;
+    const baseSpeed = isCharged ? COMBAT_CONFIG.ARROW_CHARGED_SPEED : COMBAT_CONFIG.ARROW_SPEED;
+    const baseRange = isCharged ? COMBAT_CONFIG.ARROW_CHARGED_RANGE : COMBAT_CONFIG.ARROW_RANGE;
+    const speed = baseSpeed + rangeSkill * 25;
+    const maxRange = baseRange + rangeSkill * 35;
 
     this.flyingArrows.push({
       dimension: this.game?.currentDimension || 'overworld',
@@ -359,6 +362,9 @@ export class CombatManager {
           if (hitbox.type === 'slash2') dmg = 35;
           if (hitbox.type === 'thrust') dmg = 52;
           if (hitbox.type === 'spin') dmg = 68;
+
+          const meleeBonus = (this.game?.player?.skills?.melee || 0) * 4;
+          dmg += meleeBonus;
 
           const angle = hitbox.type === 'spin' ? Math.atan2(enemy.y - hitbox.y, enemy.x - hitbox.x) : hitbox.angle;
           const kb = hitbox.knockback || (hitbox.type === 'thrust' ? 120 : (hitbox.type === 'spin' ? 140 : 80));

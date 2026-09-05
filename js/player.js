@@ -38,6 +38,16 @@ export class Player {
     this.xp = 0;
     this.xpToNext = 50;
 
+    // Skills & Stat Progression (HP, Melee, Range, Shield)
+    this.skills = {
+      hp: 0,
+      melee: 0,
+      range: 0,
+      shield: 0
+    };
+    this.skillPoints = 0;
+    this.levelUpFlameTimer = 0;
+
     this.particles = [];
 
     // Combat & Ability State (Dash, Melee, Shield, Ranged)
@@ -65,6 +75,7 @@ export class Player {
     this.shield = {
       active: false,
       energy: COMBAT_CONFIG.SHIELD_MAX,
+      maxEnergy: COMBAT_CONFIG.SHIELD_MAX,
       broken: false,
       stunTimer: 0,
       rechargeDelay: 0
@@ -108,7 +119,9 @@ export class Player {
     this.shield.broken = false;
     this.shield.stunTimer = 0;
     this.shield.rechargeDelay = 0;
-    this.shield.energy = COMBAT_CONFIG.SHIELD_MAX;
+    const maxShield = COMBAT_CONFIG.SHIELD_MAX + (this.skills?.shield || 0) * 15;
+    this.shield.maxEnergy = maxShield;
+    this.shield.energy = maxShield;
     this.ranged.charging = false;
     this.ranged.ammo = COMBAT_CONFIG.MAX_AMMO;
 
@@ -131,26 +144,79 @@ export class Player {
       this.xp -= this.xpToNext;
       this.level++;
       this.xpToNext = Math.round(50 * Math.pow(1.35, this.level - 1));
+      this.skillPoints = (this.skillPoints || 0) + 1;
       leveledUp = true;
     }
 
-    if (leveledUp && this.game && this.game.combat) {
-      this.game.combat.addFloatingText(`🎉 LEVEL UP! Lv. ${this.level}`, this.x, this.y - 28, '#facc15', 1.0);
-      for (let i = 0; i < 22; i++) {
-        const ang = Math.random() * Math.PI * 2;
-        const sp = Math.random() * 60 + 20;
-        this.game.combat.hitSparks.push({
-          x: this.x,
-          y: this.y - 10,
-          vx: Math.cos(ang) * sp,
-          vy: Math.sin(ang) * sp - 20,
-          color: Math.random() > 0.5 ? '#facc15' : '#4ade80',
-          size: Math.random() * 2.5 + 1.5,
-          life: 0.5,
-          maxLife: 0.5
-        });
+    if (leveledUp) {
+      this.levelUpFlameTimer = 2.4;
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText(`🎉 LEVEL UP! Lv. ${this.level}`, this.x, this.y - 28, '#facc15', 1.0);
+        for (let i = 0; i < 22; i++) {
+          const ang = Math.random() * Math.PI * 2;
+          const sp = Math.random() * 60 + 20;
+          this.game.combat.hitSparks.push({
+            x: this.x,
+            y: this.y - 10,
+            vx: Math.cos(ang) * sp,
+            vy: Math.sin(ang) * sp - 20,
+            color: Math.random() > 0.5 ? '#facc15' : '#4ade80',
+            size: Math.random() * 2.5 + 1.5,
+            life: 0.5,
+            maxLife: 0.5
+          });
+        }
       }
     }
+  }
+
+  investSkillPoint(attribute) {
+    if (!this.skills) {
+      this.skills = { hp: 0, melee: 0, range: 0, shield: 0 };
+    }
+    if ((this.skillPoints || 0) <= 0) {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('Keine Skillpunkte!', this.x, this.y - 20, '#ef4444', 0.8);
+      }
+      return false;
+    }
+
+    if (!['hp', 'melee', 'range', 'shield'].includes(attribute)) {
+      return false;
+    }
+
+    this.skillPoints--;
+    this.skills[attribute] = (this.skills[attribute] || 0) + 1;
+
+    // Apply immediate attribute bonuses
+    if (attribute === 'hp') {
+      this.maxHp += 15;
+      this.hp = Math.min(this.maxHp, this.hp + 15);
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('❤️ +15 Max HP!', this.x, this.y - 24, '#4ade80', 1.1);
+        this.game.combat.addHitSparks(this.x, this.y - 10, '#4ade80', 14);
+      }
+    } else if (attribute === 'melee') {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('⚔️ +4 Nahkampf-Schaden!', this.x, this.y - 24, '#f59e0b', 1.1);
+        this.game.combat.addHitSparks(this.x, this.y - 10, '#f59e0b', 14);
+      }
+    } else if (attribute === 'range') {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('🏹 Pfeil-Speed & Reichweite +!', this.x, this.y - 24, '#38bdf8', 1.1);
+        this.game.combat.addHitSparks(this.x, this.y - 10, '#38bdf8', 14);
+      }
+    } else if (attribute === 'shield') {
+      const baseMax = COMBAT_CONFIG.SHIELD_MAX || 100;
+      this.shield.maxEnergy = baseMax + this.skills.shield * 15;
+      this.shield.energy = Math.min(this.shield.maxEnergy, this.shield.energy + 15);
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('🛡️ +15 Schild-Energie!', this.x, this.y - 24, '#06b6d4', 1.1);
+        this.game.combat.addHitSparks(this.x, this.y - 10, '#06b6d4', 14);
+      }
+    }
+
+    return true;
   }
 
   // ==========================================================================
@@ -454,6 +520,26 @@ export class Player {
   update(dt, input) {
     this.updateParticles(dt);
 
+    // Green Level-Up Flame Aura Timer & Spark Emitters
+    if (this.levelUpFlameTimer > 0) {
+      this.levelUpFlameTimer -= dt;
+      if (this.levelUpFlameTimer < 0) this.levelUpFlameTimer = 0;
+      // Emit rising spirit embers from the feet
+      if (Math.random() < 0.45) {
+        const offX = (Math.random() - 0.5) * 18;
+        this.particles.push({
+          x: this.x + offX,
+          y: this.y + (Math.random() * 6),
+          vx: (Math.random() - 0.5) * 18,
+          vy: -(Math.random() * 38 + 22),
+          size: Math.random() * 2.8 + 1.2,
+          color: Math.random() > 0.4 ? '#4ade80' : '#86efac',
+          life: 0.55,
+          maxLife: 0.55
+        });
+      }
+    }
+
     if (this.transitionCooldown > 0) {
       this.transitionCooldown -= dt;
     }
@@ -520,18 +606,21 @@ export class Player {
     let dx = 0;
     let dy = 0;
 
-    if (input.keys['ArrowUp'] || input.keys['KeyW']) dy -= 1;
-    if (input.keys['ArrowDown'] || input.keys['KeyS']) dy += 1;
-    if (input.keys['ArrowLeft'] || input.keys['KeyA']) dx -= 1;
-    if (input.keys['ArrowRight'] || input.keys['KeyD']) dx += 1;
-
-    // Mobile / Tablet Touch Joystick
-    if (input.joystick && input.joystick.active) {
-      dx += input.joystick.x;
-      dy += input.joystick.y;
+    // Movement-Inputs
+    if (input) {
+      if (input.keys) {
+        if (input.keys['ArrowUp'] || input.keys['KeyW']) dy -= 1;
+        if (input.keys['ArrowDown'] || input.keys['KeyS']) dy += 1;
+        if (input.keys['ArrowLeft'] || input.keys['KeyA']) dx -= 1;
+        if (input.keys['ArrowRight'] || input.keys['KeyD']) dx += 1;
+      }
+      if (input.joystick && input.joystick.active) {
+        dx = input.joystick.x;
+        dy = input.joystick.y;
+      }
     }
 
-    // Update facing direction immediately from movement input (supports 8 directions)
+    // Direction & Vector aktualisieren
     if ((dx !== 0 || dy !== 0) && !this.dash.active && this.shield.stunTimer <= 0) {
       this.setDirectionFromVector(dx, dy);
     }
@@ -540,55 +629,84 @@ export class Player {
     // COMBAT INPUTS DISPATCH & TIMERS UPDATE
     // ==========================================================================
 
-    // Dash (Button A on Mobile/Touch, Space on PC)
-    if (input.keys['Space'] || (input.buttons && input.buttons['A'])) {
-      this.triggerDash();
+    if (input) {
+      // Dash (Button A on Mobile/Touch, Space on PC)
+      if ((input.keys && input.keys['Space']) || (input.buttons && input.buttons['A'])) {
+        this.triggerDash();
+      }
+
+      // Melee (Button B on Mobile/Touch, KeyJ or Left Click on PC)
+      const meleeDown = Boolean((input.keys && input.keys['KeyJ']) || input.mouseLeft || (input.buttons && input.buttons['B']));
+      if (meleeDown && !this.melee.charging) {
+        this.startMelee();
+      } else if (!meleeDown && this.melee.charging) {
+        this.releaseMelee();
+      }
+
+      // Shield (Button Y on Mobile/Touch, KeyK or Right Click on PC)
+      const shieldDown = Boolean((input.keys && input.keys['KeyK']) || input.mouseRight || (input.buttons && input.buttons['Y']));
+      this.setShield(shieldDown);
+
+      // Ranged (Button X on Mobile/Touch, KeyL or KeyF on PC)
+      const rangedDown = Boolean((input.keys && (input.keys['KeyL'] || input.keys['KeyF'])) || (input.buttons && input.buttons['X']));
+      if (rangedDown && !this.ranged.charging) {
+        this.startRanged();
+      } else if (!rangedDown && this.ranged.charging) {
+        this.releaseRanged();
+      }
+
+      this.isSprinting = Boolean(input.keys && (input.keys['ShiftLeft'] || input.keys['ShiftRight']));
+
+      if (input.keys && input.keys['KeyR']) {
+        this.respawn();
+      }
     }
 
-    // Melee (Button B on Mobile/Touch, KeyJ or Left Click on PC)
-    const meleeDown = Boolean(input.keys['KeyJ'] || input.mouseLeft || (input.buttons && input.buttons['B']));
-    if (meleeDown && !this.melee.charging) {
-      this.startMelee();
-    } else if (!meleeDown && this.melee.charging) {
-      this.releaseMelee();
-    }
-
-    // Shield (Button Y on Mobile/Touch, KeyK or Right Click on PC)
-    const shieldDown = Boolean(input.keys['KeyK'] || input.mouseRight || (input.buttons && input.buttons['Y']));
-    this.setShield(shieldDown);
-
-    // Ranged (Button X on Mobile/Touch, KeyL or KeyF on PC)
-    const rangedDown = Boolean(input.keys['KeyL'] || input.keys['KeyF'] || (input.buttons && input.buttons['X']));
-    if (rangedDown && !this.ranged.charging) {
-      this.startRanged();
-    } else if (!rangedDown && this.ranged.charging) {
-      this.releaseRanged();
-    }
-
-    this.isSprinting = Boolean(input.keys['ShiftLeft'] || input.keys['ShiftRight']);
-
-    if (input.keys['KeyR']) {
-      this.respawn();
-    }
-
-    // Health & Status Timers
-    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt);
-    if (this.invulnTimer > 0) this.invulnTimer = Math.max(0, this.invulnTimer - dt);
+    // Slow-Debuff abklingen lassen
     if (this.speedSlowTimer > 0) {
-      this.speedSlowTimer = Math.max(0, this.speedSlowTimer - dt);
+      this.speedSlowTimer -= dt;
       if (this.speedSlowTimer <= 0) {
         this.speedSlowFactor = 1.0;
       }
     }
 
-    // 1. Dash timers & ghost fading
-    if (this.dash.cooldown > 0) this.dash.cooldown -= dt;
+    // HitFlash & Invulnerability
+    if (this.hitFlash > 0) this.hitFlash -= dt;
+    if (this.invulnTimer > 0) this.invulnTimer -= dt;
+
+    // 1. Dash-Update
     if (this.dash.active) {
       this.dash.timer -= dt;
+      const moveStepX = this.dash.vx * dt;
+      const moveStepY = this.dash.vy * dt;
+
+      if (!this.checkCollision(this.x + moveStepX, this.y)) {
+        this.x += moveStepX;
+      }
+      if (!this.checkCollision(this.x, this.y + moveStepY)) {
+        this.y += moveStepY;
+      }
+
+      // Ghost trail
+      if (Math.random() < 0.6) {
+        this.dash.ghosts.push({
+          x: this.x,
+          y: this.y,
+          elevY: Math.round(this.visualElevation * ELEVATION_PIXEL_OFFSET),
+          alpha: 1.0
+        });
+      }
+
       if (this.dash.timer <= 0) {
         this.dash.active = false;
       }
     }
+
+    if (this.dash.cooldown > 0) {
+      this.dash.cooldown -= dt;
+    }
+
+    // Dash Ghost fading
     for (let g = this.dash.ghosts.length - 1; g >= 0; g--) {
       this.dash.ghosts[g].alpha -= dt * 3.5;
       if (this.dash.ghosts[g].alpha <= 0) {
@@ -597,20 +715,24 @@ export class Player {
     }
 
     // 2. Shield drain, broken state full recovery & passive recharge with 1s delay
+    const maxShieldEnergy = this.shield.maxEnergy || (COMBAT_CONFIG.SHIELD_MAX + (this.skills?.shield || 0) * 15);
+    const shieldSkill = this.skills?.shield || 0;
+    const drainFactor = Math.max(0.6, 1.0 - shieldSkill * 0.06);
+
     if (this.shield.broken) {
       if (this.shield.stunTimer > 0) {
         this.shield.stunTimer -= dt;
       }
       // Erst wieder nutzbar, wenn es EINMAL VOLL (100%) aufgeladen ist!
-      this.shield.energy = Math.min(COMBAT_CONFIG.SHIELD_MAX, this.shield.energy + COMBAT_CONFIG.SHIELD_RECHARGE_RATE * dt);
-      if (this.shield.energy >= COMBAT_CONFIG.SHIELD_MAX) {
-        this.shield.energy = COMBAT_CONFIG.SHIELD_MAX;
+      this.shield.energy = Math.min(maxShieldEnergy, this.shield.energy + COMBAT_CONFIG.SHIELD_RECHARGE_RATE * dt);
+      if (this.shield.energy >= maxShieldEnergy) {
+        this.shield.energy = maxShieldEnergy;
         this.shield.broken = false; // Voll aufgeladen und wieder einsatzbereit!
         this.shield.rechargeDelay = 0;
       }
     } else if (this.shield.active) {
       this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY; // 1.0s Pause vorbereiten
-      this.shield.energy = Math.max(0, this.shield.energy - COMBAT_CONFIG.SHIELD_DRAIN_RATE * dt);
+      this.shield.energy = Math.max(0, this.shield.energy - COMBAT_CONFIG.SHIELD_DRAIN_RATE * drainFactor * dt);
       if (this.shield.energy <= 0) {
         // Shield Shatters!
         this.shield.broken = true;
@@ -640,7 +762,7 @@ export class Player {
         this.shield.rechargeDelay -= dt;
       } else {
         // Passive Shield Recharge nach 1s Pause
-        this.shield.energy = Math.min(COMBAT_CONFIG.SHIELD_MAX, this.shield.energy + COMBAT_CONFIG.SHIELD_RECHARGE_RATE * dt);
+        this.shield.energy = Math.min(maxShieldEnergy, this.shield.energy + COMBAT_CONFIG.SHIELD_RECHARGE_RATE * dt);
       }
     }
 
@@ -1082,7 +1204,9 @@ export class Player {
 
     // 2. Schild-Block
     if (this.shield && this.shield.active && this.shield.energy > 0) {
-      this.shield.energy = Math.max(0, this.shield.energy - amount * 0.85);
+      const shieldSkill = this.skills?.shield || 0;
+      const blockEfficiency = Math.max(0.45, 0.85 - shieldSkill * 0.05);
+      this.shield.energy = Math.max(0, this.shield.energy - amount * blockEfficiency);
       this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
       if (this.game && this.game.combat) {
         this.game.combat.addHitSparks(this.x, this.y, '#38bdf8', 14);
@@ -1358,6 +1482,12 @@ export class Player {
     ctx.ellipse(px + 1, py + 2, 8, 4, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // 1b. Level-Up Green Flame Aura (Back Layer)
+    if (this.levelUpFlameTimer > 0) {
+      const flameAlpha = Math.min(1.0, this.levelUpFlameTimer / 0.45);
+      this.renderGreenFlameAura(ctx, px, py, animTime, flameAlpha, true);
+    }
+
     // 2. Folded Papercraft Wanderer (Mononoke Cloak + Chihiro Obi)
     // Dark Indigo/Jade Paper Cloak
     ctx.fillStyle = '#1e2636';
@@ -1404,15 +1534,12 @@ export class Player {
       ctx.fillStyle = '#2dd4bf';
       const eyeBaseX = faceX + fVec.x * 1.2;
       const eyeBaseY = faceY + fVec.y * 0.4;
-      if (this.direction === 'left' || this.direction === 'up-left') {
-        ctx.fillRect(eyeBaseX - 2.8, eyeBaseY - 1, 1.4, 2);
-        ctx.fillRect(eyeBaseX - 0.7, eyeBaseY - 1, 1.2, 2);
-      } else if (this.direction === 'right' || this.direction === 'up-right') {
-        ctx.fillRect(eyeBaseX - 0.5, eyeBaseY - 1, 1.2, 2);
-        ctx.fillRect(eyeBaseX + 1.4, eyeBaseY - 1, 1.4, 2);
-      } else {
-        // Down, down-left, down-right
-        ctx.fillRect(eyeBaseX - 2, eyeBaseY - 1, 1.5, 2);
+      if (this.direction === 'down') {
+        ctx.fillRect(eyeBaseX - 2.2, eyeBaseY - 1, 1.5, 2);
+        ctx.fillRect(eyeBaseX + 0.7, eyeBaseY - 1, 1.5, 2);
+      } else if (this.direction.includes('left')) {
+        ctx.fillRect(eyeBaseX - 2.2, eyeBaseY - 1, 1.5, 2);
+      } else if (this.direction.includes('right')) {
         ctx.fillRect(eyeBaseX + 0.8, eyeBaseY - 1, 1.5, 2);
       }
     }
@@ -1428,6 +1555,12 @@ export class Player {
       ctx.closePath();
       ctx.fill();
       ctx.restore();
+    }
+
+    // 2b. Level-Up Green Flame Aura (Front Layer)
+    if (this.levelUpFlameTimer > 0) {
+      const flameAlpha = Math.min(1.0, this.levelUpFlameTimer / 0.45);
+      this.renderGreenFlameAura(ctx, px, py, animTime, flameAlpha, false);
     }
 
     // 3. Handheld Paper Lantern on Bamboo Pole (Held during Dusk & Night AND always Underground in Caves)
@@ -1721,6 +1854,92 @@ export class Player {
       ctx.restore();
     }
 
+    ctx.restore();
+  }
+
+  renderGreenFlameAura(ctx, px, py, animTime, alpha, behind = false) {
+    if (alpha <= 0) return;
+
+    ctx.save();
+    if (behind) {
+      // 1. Soft Emerald Glow Radial Gradient
+      const glowPulse = 1.0 + Math.sin(animTime * 12) * 0.15;
+      const grad = ctx.createRadialGradient(px, py - 10, 2, px, py - 10, 28 * glowPulse);
+      grad.addColorStop(0, `rgba(74, 222, 128, ${0.45 * alpha})`);
+      grad.addColorStop(0.5, `rgba(34, 197, 94, ${0.28 * alpha})`);
+      grad.addColorStop(1, 'rgba(22, 101, 52, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(px, py - 10, 28 * glowPulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 2. Background Flame Tongues (Darker Emerald & Forest Green)
+      for (let i = 0; i < 5; i++) {
+        const tOff = i * 1.35;
+        const sway = Math.sin(animTime * 11 + tOff) * 3.5;
+        const hFluct = Math.cos(animTime * 13 + tOff) * 4;
+        const bx = px - 9 + i * 4.5;
+        const by = py - 1;
+        const tipX = px - 11 + i * 5.5 + sway;
+        const tipY = py - 24 - (i % 2 === 0 ? 6 : 2) + hFluct;
+
+        ctx.fillStyle = (i % 2 === 0)
+          ? `rgba(22, 163, 74, ${0.75 * alpha})`
+          : `rgba(34, 197, 94, ${0.85 * alpha})`;
+
+        ctx.beginPath();
+        ctx.moveTo(bx - 3.5, by);
+        ctx.quadraticCurveTo(bx - 6 + sway * 0.5, (by + tipY) * 0.5, tipX, tipY);
+        ctx.quadraticCurveTo(bx + 6 + sway * 0.5, (by + tipY) * 0.5, bx + 3.5, by);
+        ctx.closePath();
+        ctx.fill();
+      }
+    } else {
+      // 3. Foreground Flame Tongues (Vibrant Mint & Bright Green)
+      for (let i = 0; i < 4; i++) {
+        const tOff = i * 1.6 + 2.1;
+        const sway = Math.sin(animTime * 14 + tOff) * 3.0;
+        const hFluct = Math.sin(animTime * 16 + tOff) * 3.5;
+        const bx = px - 6 + i * 4;
+        const by = py - 2;
+        const tipX = px - 6 + i * 4 + sway;
+        const tipY = py - 19 - (i % 2 === 1 ? 5 : 1) + hFluct;
+
+        // Outer bright flame
+        ctx.fillStyle = (i % 2 === 0)
+          ? `rgba(74, 222, 128, ${0.85 * alpha})`
+          : `rgba(134, 239, 172, ${0.90 * alpha})`;
+
+        ctx.beginPath();
+        ctx.moveTo(bx - 2.8, by);
+        ctx.quadraticCurveTo(bx - 4.5 + sway * 0.4, (by + tipY) * 0.5, tipX, tipY);
+        ctx.quadraticCurveTo(bx + 4.5 + sway * 0.4, (by + tipY) * 0.5, bx + 2.8, by);
+        ctx.closePath();
+        ctx.fill();
+
+        // White-hot spirit inner core
+        ctx.fillStyle = `rgba(240, 253, 244, ${0.85 * alpha})`;
+        ctx.beginPath();
+        ctx.moveTo(bx - 1.2, by);
+        ctx.quadraticCurveTo(bx - 2.2 + sway * 0.3, (by + tipY) * 0.6, tipX * 0.7 + bx * 0.3, tipY + 4);
+        ctx.quadraticCurveTo(bx + 2.2 + sway * 0.3, (by + tipY) * 0.6, bx + 1.2, by);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // 4. Floating Spirit Flame Embers
+      for (let e = 0; e < 6; e++) {
+        const eProg = (animTime * 2.8 + e * 0.38) % 1.0;
+        const eX = px + Math.sin(animTime * 5 + e * 2.2) * (11 + e * 1.8);
+        const eY = py - eProg * 32;
+        const emberAlpha = Math.sin(eProg * Math.PI) * alpha;
+
+        ctx.fillStyle = `rgba(187, 247, 208, ${emberAlpha})`;
+        ctx.beginPath();
+        ctx.arc(eX, eY, 1.4 + (1 - eProg) * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
     ctx.restore();
   }
 }

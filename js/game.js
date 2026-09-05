@@ -198,6 +198,15 @@ class Game {
       if (e.code === 'KeyL' || e.code === 'KeyF') {
         this.player.startRanged();
       }
+      if (e.code === 'KeyC') {
+        this.toggleSkillModal();
+      }
+      if (e.code === 'Escape') {
+        const modal = document.getElementById('skill-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+          this.toggleSkillModal(false);
+        }
+      }
     });
 
     window.addEventListener('keyup', (e) => {
@@ -440,6 +449,43 @@ class Game {
     }
     document.addEventListener('fullscreenchange', updateFsUI);
     document.addEventListener('webkitfullscreenchange', updateFsUI);
+
+    // 7. Skill System UI & Modal Wiring
+    const skillMenuBtn = document.getElementById('skill-menu-btn');
+    if (skillMenuBtn) {
+      skillMenuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleSkillModal();
+      });
+    }
+
+    const skillModalCloseBtn = document.getElementById('skill-modal-close');
+    if (skillModalCloseBtn) {
+      skillModalCloseBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.toggleSkillModal(false);
+      });
+    }
+
+    const skillModal = document.getElementById('skill-modal');
+    if (skillModal) {
+      skillModal.addEventListener('click', (e) => {
+        if (e.target === skillModal) {
+          this.toggleSkillModal(false);
+        }
+      });
+
+      const upgradeBtns = skillModal.querySelectorAll('.skill-upgrade-btn');
+      upgradeBtns.forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const skillType = btn.getAttribute('data-skill');
+          if (skillType) {
+            this.investSkillPoint(skillType);
+          }
+        });
+      });
+    }
   }
 
   updateZoomDisplay() {
@@ -781,6 +827,105 @@ class Game {
       if (this.compactXpTextEl) {
         this.compactXpTextEl.textContent = `${curXp} / ${xpToNext}`;
       }
+
+      // 4. Skill Menu Button & Blinking Notification
+      const skillBtn = document.getElementById('skill-menu-btn');
+      const skillBadge = document.getElementById('skill-badge');
+      const points = this.player.skillPoints || 0;
+      if (skillBtn) {
+        if (points > 0) {
+          skillBtn.classList.remove('hidden');
+          skillBtn.classList.add('blinking');
+          if (skillBadge) {
+            skillBadge.textContent = points;
+            skillBadge.classList.remove('hidden');
+          }
+        } else {
+          skillBtn.classList.remove('blinking');
+          if (skillBadge) {
+            skillBadge.classList.add('hidden');
+          }
+          const hasInvested = Boolean(this.player.skills && (
+            this.player.skills.hp > 0 ||
+            this.player.skills.melee > 0 ||
+            this.player.skills.range > 0 ||
+            this.player.skills.shield > 0
+          ));
+          if (curLevel > 1 || hasInvested) {
+            skillBtn.classList.remove('hidden');
+          } else {
+            skillBtn.classList.add('hidden');
+          }
+        }
+      }
+
+      // Synchronize modal if it is currently open
+      this.updateSkillModal();
+    }
+  }
+
+  toggleSkillModal(forceState = null) {
+    const modal = document.getElementById('skill-modal');
+    if (!modal) return;
+    const isClosed = modal.classList.contains('hidden');
+    const shouldOpen = forceState !== null ? forceState : isClosed;
+    if (shouldOpen) {
+      modal.classList.remove('hidden');
+      this.updateSkillModal();
+    } else {
+      modal.classList.add('hidden');
+    }
+  }
+
+  updateSkillModal() {
+    if (!this.player) return;
+    const modal = document.getElementById('skill-modal');
+    if (!modal || modal.classList.contains('hidden')) return;
+
+    const points = this.player.skillPoints || 0;
+    const pointsEl = document.getElementById('skill-points-counter');
+    if (pointsEl) {
+      pointsEl.textContent = points;
+      pointsEl.style.color = points > 0 ? '#4ade80' : '#94a3b8';
+    }
+
+    const skills = this.player.skills || { hp: 0, melee: 0, range: 0, shield: 0 };
+
+    // Update Counts and Stat Information
+    const hpCount = document.getElementById('skill-count-hp');
+    const hpBonus = document.getElementById('skill-bonus-hp');
+    if (hpCount) hpCount.textContent = skills.hp;
+    if (hpBonus) hpBonus.textContent = `(+${skills.hp * 15} HP)`;
+
+    const meleeCount = document.getElementById('skill-count-melee');
+    const meleeBonus = document.getElementById('skill-bonus-melee');
+    if (meleeCount) meleeCount.textContent = skills.melee;
+    if (meleeBonus) meleeBonus.textContent = `(+${skills.melee * 4} DMG)`;
+
+    const rangeCount = document.getElementById('skill-count-range');
+    const rangeBonus = document.getElementById('skill-bonus-range');
+    if (rangeCount) rangeCount.textContent = skills.range;
+    if (rangeBonus) rangeBonus.textContent = skills.range > 0 ? `(+${skills.range * 25} Spd / +${skills.range * 35} Rng)` : `(Standard)`;
+
+    const shieldCount = document.getElementById('skill-count-shield');
+    const shieldBonus = document.getElementById('skill-bonus-shield');
+    if (shieldCount) shieldCount.textContent = skills.shield;
+    if (shieldBonus) shieldBonus.textContent = `(+${skills.shield * 15} Energie & Block+)`;
+
+    // Disable / Enable Upgrade Buttons depending on available points
+    const buttons = modal.querySelectorAll('.skill-upgrade-btn');
+    buttons.forEach((btn) => {
+      btn.disabled = (points <= 0);
+      btn.classList.toggle('disabled', points <= 0);
+    });
+  }
+
+  investSkillPoint(type) {
+    if (!this.player || this.player.skillPoints <= 0) return;
+    const success = this.player.investSkillPoint(type);
+    if (success) {
+      this.updateCombatUI();
+      this.updateSkillModal();
     }
   }
 
