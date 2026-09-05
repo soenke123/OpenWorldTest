@@ -1193,6 +1193,26 @@ export class EnemyManager {
         bobOffset: Math.random() * Math.PI * 2
       });
     }
+
+    // 4. Magisches Artefakt (🔥 Zauber-Orb) - NUR bei schweren Monstern!
+    const HEAVY_MONSTER_TYPES = [
+      'boulder_troll', 'frost_giant', 'void_reaper', 'gazer_of_the_void',
+      'sky_harpy_queen', 'sky_astromancer_grand', 'star_astromancer',
+      'cursed_knight', 'emperor_scorpion'
+    ];
+    const isHeavyMonster = enemy && (
+      enemy.category === 'boss' ||
+      enemy.maxHp >= 350 ||
+      HEAVY_MONSTER_TYPES.includes(enemy.typeId)
+    );
+
+    if (isHeavyMonster) {
+      // 50% Chance bei schweren Monstern, 100% bei extremen Bossen (>= 1000 HP)
+      const artifactChance = (enemy.maxHp >= 1000) ? 1.0 : 0.50;
+      if (Math.random() < artifactChance && this.game && this.game.magicManager) {
+        this.game.magicManager.dropMonsterArtifact(x, y, dimension);
+      }
+    }
   }
 
   spawnXp(x, y, totalXp, dimension = null) {

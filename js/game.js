@@ -9,6 +9,7 @@ import { Minimap } from './minimap.js';
 import { TouchControls } from './touchControls.js';
 import { CombatManager } from './combat.js';
 import { EnemyManager } from './enemies.js';
+import { MagicManager } from './magic.js';
 import { CHARACTERS_DATA, CHARACTERS_MAP, getSelectedSkin, setSelectedSkin, getSelectedPlayerName, setSelectedPlayerName, getRandomHeroName } from './characters.js';
 
 class Game {
@@ -49,6 +50,10 @@ class Game {
     this.player = new Player(this.map.spawnPoint.x, this.map.spawnPoint.y, this.map, this);
     this.camera = new Camera(window.innerWidth, window.innerHeight);
     this.minimap = new Minimap(this.minimapCanvas, this.map);
+
+    // Magic & Artifact System (Phoenix Spells, Shrines & Monster Drops)
+    this.magicManager = new MagicManager(this);
+    this.magicManager.initShrineArtifacts(this.caves, this.cloudMap, this.overworldMap);
 
     // Day-Night Cycle System (Start at 18:30 = Golden Twilight & Lantern Awakening)
     this.gameTime = 18.5; // Hours: 0.0 - 24.0
@@ -217,6 +222,13 @@ class Game {
         return;
       }
 
+      if (this.magicManager && this.magicManager.isSwapModalOpen) {
+        if (e.code === 'Escape') {
+          this.magicManager.closeSwapModal();
+        }
+        return;
+      }
+
       this.input.keys[e.code] = true;
       if (e.repeat) return; // Prevent OS keyboard auto-repeat from resetting charge timers!
 
@@ -239,6 +251,9 @@ class Game {
       if (e.code === 'KeyL' || e.code === 'KeyF') {
         this.player.startRanged();
       }
+      if (e.code === 'KeyE') {
+        if (this.magicManager) this.magicManager.castActiveSpell(this.player, this.map, this.combat);
+      }
       if (e.code === 'KeyC') {
         this.toggleSkillModal();
       }
@@ -246,6 +261,10 @@ class Game {
         const modal = document.getElementById('skill-modal');
         if (modal && !modal.classList.contains('hidden')) {
           this.toggleSkillModal(false);
+        }
+        if (this.magicManager) {
+          this.magicManager.toggleInfoModal(false);
+          this.magicManager.closeSwapModal();
         }
       }
     });
@@ -650,6 +669,10 @@ class Game {
     this.camera.follow(this.player.x, this.player.y);
     this.camera.update(dt);
     this.updateAmbientParticles(dt);
+
+    if (this.magicManager) {
+      this.magicManager.update(dt, this.player, this.map, this.combat, this.enemyManager);
+    }
 
     this.updateHUD();
     this.updateCombatUI();
@@ -1064,6 +1087,11 @@ class Game {
 
       // 11. LAYER 9: Global Ambient Day/Night Lighting Wash & Forest Shade
       this.renderGlobalLightingWash(sunlight, sunset, night);
+    }
+
+    // 11.5. Magic Layer: Ground Artifacts, Phoenix Spells & Player Sparkle Aura
+    if (this.magicManager) {
+      this.magicManager.render(this.ctx, this.camera);
     }
 
     // 12. Screen Overlay: Floating Shrine Discovery Banner

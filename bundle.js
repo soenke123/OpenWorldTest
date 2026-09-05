@@ -7156,6 +7156,16 @@ class WorldMap {
       }
     }
 
+    // Sacred Shrines on Overworld (Ancient Void Shrine in the Abyss)
+    this.shrines = [];
+    const voidShrineX = 108;
+    const voidShrineY = 62;
+    if (this.isValid(voidShrineX, voidShrineY)) {
+      this.ground[voidShrineY][voidShrineX] = TILES.VOID_GROUND;
+      this.objects[voidShrineY][voidShrineX] = OBJECTS.SHRINE;
+      this.shrines.push({ x: voidShrineX, y: voidShrineY, name: 'Schrein des Ewigen Abgrunds' });
+    }
+
     // --------------------------------------------------------------------
     // STEP 9: HÖHLEN-ZUGÄNGE IN LÖCHERN & TRAMPOLINE ZUM WOLKENREICH
     // --------------------------------------------------------------------
@@ -8929,6 +8939,26 @@ class EnemyManager {
         bobOffset: Math.random() * Math.PI * 2
       });
     }
+
+    // 4. Magisches Artefakt (🔥 Zauber-Orb) - NUR bei schweren Monstern!
+    const HEAVY_MONSTER_TYPES = [
+      'boulder_troll', 'frost_giant', 'void_reaper', 'gazer_of_the_void',
+      'sky_harpy_queen', 'sky_astromancer_grand', 'star_astromancer',
+      'cursed_knight', 'emperor_scorpion'
+    ];
+    const isHeavyMonster = enemy && (
+      enemy.category === 'boss' ||
+      enemy.maxHp >= 350 ||
+      HEAVY_MONSTER_TYPES.includes(enemy.typeId)
+    );
+
+    if (isHeavyMonster) {
+      // 50% Chance bei schweren Monstern, 100% bei extremen Bossen (>= 1000 HP)
+      const artifactChance = (enemy.maxHp >= 1000) ? 1.0 : 0.50;
+      if (Math.random() < artifactChance && this.game && this.game.magicManager) {
+        this.game.magicManager.dropMonsterArtifact(x, y, dimension);
+      }
+    }
   }
 
   spawnXp(x, y, totalXp, dimension = null) {
@@ -9277,6 +9307,7 @@ class Player {
     this.lastTransitionTile = null; // Verhindert Re-Triggering solange man auf dem Zielfeld steht
     this.discoveredShrines = new Set();
     this.shrineMessage = null;
+    this.artifact = null; // Active magical artifact { id, name, charges, maxCharges, cooldownTimer, ... }
   }
 
   respawn() {
@@ -9370,6 +9401,32 @@ class Player {
       if (typeof setSelectedSkin === 'function') {
         setSelectedSkin(skinId);
       }
+    }
+  }
+
+  hasActiveArtifact() {
+    return !!(this.artifact && this.artifact.charges > 0);
+  }
+
+  equipArtifact(artifactDef) {
+    this.artifact = {
+      id: artifactDef.id,
+      name: artifactDef.name,
+      title: artifactDef.title,
+      icon: artifactDef.icon,
+      charges: artifactDef.maxCharges,
+      maxCharges: artifactDef.maxCharges,
+      cooldownTimer: 0,
+      cooldownMax: artifactDef.cooldown,
+      damage: artifactDef.damage,
+      widthTiles: artifactDef.widthTiles,
+      speed: artifactDef.speed
+    };
+  }
+
+  rechargeArtifact(amount = 3) {
+    if (this.artifact) {
+      this.artifact.charges = Math.min(this.artifact.maxCharges + 5, this.artifact.charges + amount);
     }
   }
 
@@ -13353,6 +13410,10 @@ class Game {
     this.camera = new Camera(window.innerWidth, window.innerHeight);
     this.minimap = new Minimap(this.minimapCanvas, this.map);
 
+    // Magic & Artifact System (Phoenix Spells, Shrines & Monster Drops)
+    this.magicManager = new MagicManager(this);
+    this.magicManager.initShrineArtifacts(this.caves, this.cloudMap, this.overworldMap);
+
     // Day-Night Cycle System (Start at 18:30 = Golden Twilight & Lantern Awakening)
     this.gameTime = 18.5; // Hours: 0.0 - 24.0
     this.timeSpeed = 0.04; // Smooth progression (~10 mins per full 24h cycle)
@@ -13520,6 +13581,13 @@ class Game {
         return;
       }
 
+      if (this.magicManager && this.magicManager.isSwapModalOpen) {
+        if (e.code === 'Escape') {
+          this.magicManager.closeSwapModal();
+        }
+        return;
+      }
+
       this.input.keys[e.code] = true;
       if (e.repeat) return; // Prevent OS keyboard auto-repeat from resetting charge timers!
 
@@ -13542,6 +13610,9 @@ class Game {
       if (e.code === 'KeyL' || e.code === 'KeyF') {
         this.player.startRanged();
       }
+      if (e.code === 'KeyE') {
+        if (this.magicManager) this.magicManager.castActiveSpell(this.player, this.map, this.combat);
+      }
       if (e.code === 'KeyC') {
         this.toggleSkillModal();
       }
@@ -13549,6 +13620,10 @@ class Game {
         const modal = document.getElementById('skill-modal');
         if (modal && !modal.classList.contains('hidden')) {
           this.toggleSkillModal(false);
+        }
+        if (this.magicManager) {
+          this.magicManager.toggleInfoModal(false);
+          this.magicManager.closeSwapModal();
         }
       }
     });
@@ -13953,6 +14028,10 @@ class Game {
     this.camera.follow(this.player.x, this.player.y);
     this.camera.update(dt);
     this.updateAmbientParticles(dt);
+
+    if (this.magicManager) {
+      this.magicManager.update(dt, this.player, this.map, this.combat, this.enemyManager);
+    }
 
     this.updateHUD();
     this.updateCombatUI();
@@ -14367,6 +14446,11 @@ class Game {
 
       // 11. LAYER 9: Global Ambient Day/Night Lighting Wash & Forest Shade
       this.renderGlobalLightingWash(sunlight, sunset, night);
+    }
+
+    // 11.5. Magic Layer: Ground Artifacts, Phoenix Spells & Player Sparkle Aura
+    if (this.magicManager) {
+      this.magicManager.render(this.ctx, this.camera);
     }
 
     // 12. Screen Overlay: Floating Shrine Discovery Banner

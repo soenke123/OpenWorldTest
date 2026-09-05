@@ -100,6 +100,7 @@ export class Player {
     this.lastTransitionTile = null; // Verhindert Re-Triggering solange man auf dem Zielfeld steht
     this.discoveredShrines = new Set();
     this.shrineMessage = null;
+    this.artifact = null; // Active magical artifact { id, name, charges, maxCharges, cooldownTimer, ... }
   }
 
   respawn() {
@@ -193,6 +194,32 @@ export class Player {
       if (typeof setSelectedSkin === 'function') {
         setSelectedSkin(skinId);
       }
+    }
+  }
+
+  hasActiveArtifact() {
+    return !!(this.artifact && this.artifact.charges > 0);
+  }
+
+  equipArtifact(artifactDef) {
+    this.artifact = {
+      id: artifactDef.id,
+      name: artifactDef.name,
+      title: artifactDef.title,
+      icon: artifactDef.icon,
+      charges: artifactDef.maxCharges,
+      maxCharges: artifactDef.maxCharges,
+      cooldownTimer: 0,
+      cooldownMax: artifactDef.cooldown,
+      damage: artifactDef.damage,
+      widthTiles: artifactDef.widthTiles,
+      speed: artifactDef.speed
+    };
+  }
+
+  rechargeArtifact(amount = 3) {
+    if (this.artifact) {
+      this.artifact.charges = Math.min(this.artifact.maxCharges + 5, this.artifact.charges + amount);
     }
   }
 

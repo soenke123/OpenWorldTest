@@ -244,6 +244,102 @@
         </div>
         <span class="respawn-timer">Respawn wird ausgeführt...</span>
       </div>
+    <!-- =======================================================
+         MAGIC & ARTIFACT HUD (Rechter Bildschirmrand)
+         ======================================================= -->
+    <div id="magic-hud-slot" class="magic-hud-slot hidden">
+      <button id="btn-cast-magic" class="btn-cast-magic" title="Zauber entfesseln (Taste E)">
+        <span class="magic-btn-icon">🔥</span>
+        <span class="magic-key-hint">E</span>
+        <span id="magic-charges-badge" class="magic-charges-badge">5</span>
+        <div id="magic-cooldown-overlay" class="magic-cooldown-overlay hidden"></div>
+      </button>
+      <button id="btn-magic-info" class="btn-magic-info" title="Zauber-Informationen anzeigen">ℹ️</button>
+    </div>
+
+    <!-- Blinking Artifact Pickup Banner -->
+    <div id="magic-pickup-banner" class="magic-pickup-banner hidden">
+      <div class="pickup-banner-content">
+        <h3 id="pickup-banner-title">✨ ARTEFAKT GEBUNDEN: RUBIN-PHÖNIX! ✨</h3>
+        <p id="pickup-banner-sub">Drücke [ E ] oder den Zauber-Button zum Entfesseln (5 Aufladungen)</p>
+      </div>
+    </div>
+
+    <!-- Magic Spell Info Modal -->
+    <div id="magic-info-modal" class="magic-info-modal-backdrop hidden">
+      <div class="magic-info-dialog">
+        <div class="magic-info-header">
+          <div class="magic-info-title-wrap">
+            <span id="magic-info-icon" class="magic-info-icon">🔥</span>
+            <h3 id="magic-info-title">Rubin-Phönix</h3>
+          </div>
+          <button id="btn-magic-info-close" class="magic-info-close-btn" title="Schließen">✕</button>
+        </div>
+        <p id="magic-info-desc" class="magic-info-desc">
+          Ein mächtiger flammender Phönix schnellt in Blickrichtung hervor. Er erstreckt sich über 5 Kacheln (80px) und fliegt unaufhaltsam bis an den Rand der gesamten Welt. Alle Monster in seiner Schneise erleiden verheerenden Feuerschaden.
+        </p>
+        <div class="magic-info-stats">
+          <div class="magic-stat-pill">
+            <span class="stat-label">Aufladungen</span>
+            <span id="magic-info-charges" class="stat-val">5 / 5</span>
+          </div>
+          <div class="magic-stat-pill">
+            <span class="stat-label">Abklingzeit</span>
+            <span id="magic-info-cooldown" class="stat-val">3.0s</span>
+          </div>
+          <div class="magic-stat-pill">
+            <span class="stat-label">Spannweite</span>
+            <span id="magic-info-width" class="stat-val">5 Kacheln (80px)</span>
+          </div>
+          <div class="magic-stat-pill">
+            <span class="stat-label">Schaden</span>
+            <span id="magic-info-dmg" class="stat-val">220 Feuer</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Artifact Swap Modal (Entscheidung bei Fund eines zweiten Artefakts) -->
+    <div id="artifact-swap-modal" class="artifact-swap-backdrop hidden">
+      <div class="artifact-swap-dialog">
+        <div class="swap-header">
+          <span class="swap-header-icon">✨</span>
+          <h3>Neues magisches Artefakt gefunden!</h3>
+        </div>
+        <p class="swap-desc">Du kannst immer nur ein Artefakt gleichzeitig tragen. Wähle deine Aktion:</p>
+
+        <div class="swap-comparison">
+          <!-- Aktuelles Artefakt -->
+          <div class="swap-card current">
+            <span class="swap-card-tag">Aktuell getragen</span>
+            <span id="swap-current-icon" class="swap-card-icon">🔥</span>
+            <h4 id="swap-current-name">Rubin-Phönix</h4>
+            <span id="swap-current-charges" class="swap-card-charges">2 / 5 Aufladungen</span>
+          </div>
+
+          <div class="swap-divider">VS</div>
+
+          <!-- Neues Artefakt -->
+          <div class="swap-card incoming">
+            <span class="swap-card-tag">Gefunden</span>
+            <span id="swap-new-icon" class="swap-card-icon">🔥</span>
+            <h4 id="swap-new-name">Rubin-Phönix</h4>
+            <span id="swap-new-charges" class="swap-card-charges">5 Aufladungen</span>
+          </div>
+        </div>
+
+        <div class="swap-actions">
+          <button id="btn-artifact-swap-accept" class="btn-swap-primary" title="Neues Artefakt anlegen">
+            <span>🔄 Neues Artefakt ausrüsten</span>
+          </button>
+          <button id="btn-artifact-swap-recharge" class="btn-swap-recharge" title="Altes Artefakt behalten und Aufladungen erhöhen">
+            <span>⚡ Behalten &amp; Aufladen (+3)</span>
+          </button>
+          <button id="btn-artifact-swap-leave" class="btn-swap-secondary" title="Neues Artefakt liegen lassen">
+            <span>✕ Liegen lassen</span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Skill Level-Up Modal -->

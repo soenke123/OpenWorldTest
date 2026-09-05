@@ -503,6 +503,16 @@ export class WorldMap {
       }
     }
 
+    // Sacred Shrines on Overworld (Ancient Void Shrine in the Abyss)
+    this.shrines = [];
+    const voidShrineX = 108;
+    const voidShrineY = 62;
+    if (this.isValid(voidShrineX, voidShrineY)) {
+      this.ground[voidShrineY][voidShrineX] = TILES.VOID_GROUND;
+      this.objects[voidShrineY][voidShrineX] = OBJECTS.SHRINE;
+      this.shrines.push({ x: voidShrineX, y: voidShrineY, name: 'Schrein des Ewigen Abgrunds' });
+    }
+
     // --------------------------------------------------------------------
     // STEP 9: HÖHLEN-ZUGÄNGE IN LÖCHERN & TRAMPOLINE ZUM WOLKENREICH
     // --------------------------------------------------------------------

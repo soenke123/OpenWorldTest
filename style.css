@@ -1815,4 +1815,446 @@ canvas#gameCanvas {
   }
 }
 
+/* ==========================================================================
+   MAGIC & ARTIFACT SYSTEM (Zauber-HUD, Info-Modal & Swap-Dialog)
+   ========================================================================== */
+
+/* Right Side Magic Spell Slot */
+.magic-hud-slot {
+  position: fixed;
+  right: 20px;
+  bottom: 120px;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  animation: magicSlotPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes magicSlotPop {
+  0% { transform: scale(0.6) translateY(20px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.btn-cast-magic {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f87171, #dc2626 55%, #991b1b 100%);
+  border: 2px solid #fef08a;
+  box-shadow: 0 4px 18px rgba(220, 38, 38, 0.6), 0 0 25px rgba(250, 204, 21, 0.35);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+
+.btn-cast-magic:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 24px rgba(220, 38, 38, 0.8), 0 0 35px rgba(250, 204, 21, 0.55);
+}
+
+.btn-cast-magic:active {
+  transform: scale(0.94);
+}
+
+.magic-btn-icon {
+  font-size: 1.45rem;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+.magic-key-hint {
+  font-size: 0.68rem;
+  font-weight: 900;
+  color: #fef08a;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  margin-top: -3px;
+  letter-spacing: 0.5px;
+}
+
+.magic-charges-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  background: #facc15;
+  color: #0f172a;
+  font-size: 0.78rem;
+  font-weight: 900;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.magic-cooldown-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 0%;
+  background: rgba(15, 23, 42, 0.75);
+  pointer-events: none;
+  transition: height 0.05s linear;
+}
+
+.btn-magic-info {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #38bdf8;
+  font-size: 0.75rem;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.btn-magic-info:hover {
+  background: rgba(30, 41, 59, 0.95);
+  color: #fff;
+  border-color: #38bdf8;
+  transform: scale(1.1);
+}
+
+/* Blinking Pickup Banner */
+.magic-pickup-banner {
+  position: fixed;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  background: linear-gradient(135deg, rgba(185, 28, 28, 0.95), rgba(17, 24, 39, 0.96));
+  border: 2px solid #facc15;
+  border-radius: 14px;
+  box-shadow: 0 0 35px rgba(239, 68, 68, 0.65), 0 10px 30px rgba(0, 0, 0, 0.8);
+  padding: 12px 28px;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+  max-width: 90vw;
+  animation: bannerGlowPulse 0.6s ease-in-out infinite alternate;
+}
+
+@keyframes bannerGlowPulse {
+  0% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5), 0 0 10px rgba(250, 204, 21, 0.3); }
+  100% { box-shadow: 0 0 45px rgba(239, 68, 68, 0.85), 0 0 25px rgba(250, 204, 21, 0.6); }
+}
+
+.pickup-banner-content h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fef08a;
+  letter-spacing: 0.5px;
+}
+
+.pickup-banner-content p {
+  margin: 4px 0 0 0;
+  font-size: 0.85rem;
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+/* Magic Info Modal */
+.magic-info-modal-backdrop, .artifact-swap-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10002;
+  background: rgba(8, 10, 16, 0.85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  user-select: none;
+}
+
+.magic-info-dialog {
+  background: rgba(16, 20, 32, 0.96);
+  border: 1.5px solid rgba(239, 68, 68, 0.4);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(239, 68, 68, 0.25);
+  width: 100%;
+  max-width: 440px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: #f8fafc;
+  animation: charModalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.magic-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+}
+
+.magic-info-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.magic-info-icon {
+  font-size: 1.5rem;
+}
+
+.magic-info-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fef08a;
+}
+
+.magic-info-close-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px;
+}
+.magic-info-close-btn:hover {
+  color: #fff;
+}
+
+.magic-info-desc {
+  font-size: 0.88rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.magic-info-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.magic-stat-pill {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.magic-stat-pill .stat-label {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+
+.magic-stat-pill .stat-val {
+  font-size: 0.92rem;
+  color: #facc15;
+  font-weight: 800;
+  margin-top: 2px;
+}
+
+/* Artifact Swap Modal */
+.artifact-swap-dialog {
+  background: rgba(16, 20, 32, 0.97);
+  border: 1.5px solid rgba(250, 204, 21, 0.4);
+  border-radius: 20px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.9), 0 0 45px rgba(250, 204, 21, 0.25);
+  width: 100%;
+  max-width: 520px;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  color: #f8fafc;
+  animation: charModalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.swap-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.swap-header-icon {
+  font-size: 1.5rem;
+}
+
+.swap-header h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #fef08a;
+}
+
+.swap-desc {
+  font-size: 0.88rem;
+  color: #cbd5e1;
+  margin: 0;
+}
+
+.swap-comparison {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  margin: 6px 0;
+}
+
+.swap-card {
+  flex: 1;
+  background: rgba(14, 18, 30, 0.9);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.swap-card.current {
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+.swap-card.incoming {
+  border-color: #55e6a5;
+  box-shadow: 0 0 16px rgba(85, 230, 165, 0.3);
+  background: rgba(16, 38, 38, 0.9);
+}
+
+.swap-card-tag {
+  font-size: 0.68rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.swap-card.incoming .swap-card-tag {
+  color: #55e6a5;
+}
+
+.swap-card-icon {
+  font-size: 1.8rem;
+  margin: 2px 0;
+}
+
+.swap-card h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.swap-card-charges {
+  font-size: 0.8rem;
+  color: #facc15;
+  font-weight: 700;
+}
+
+.swap-divider {
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: #94a3b8;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 8px;
+  border-radius: 50%;
+}
+
+.swap-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 380px;
+}
+
+.btn-swap-primary {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+}
+.btn-swap-primary:hover {
+  background: linear-gradient(135deg, #34d399, #10b981);
+  transform: translateY(-1px);
+}
+
+.btn-swap-recharge {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 12px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+}
+.btn-swap-recharge:hover {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  transform: translateY(-1px);
+}
+
+.btn-swap-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #cbd5e1;
+  border-radius: 12px;
+  padding: 8px 18px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-swap-secondary:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* Mobile Adjustments for Magic HUD */
+@media (max-width: 768px) {
+  .magic-hud-slot {
+    right: 14px;
+    bottom: 95px;
+  }
+  .btn-cast-magic {
+    width: 50px;
+    height: 50px;
+  }
+  .magic-btn-icon {
+    font-size: 1.25rem;
+  }
+}
+
+
 
