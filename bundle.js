@@ -7141,9 +7141,14 @@ class EnemyManager {
     });
   }
 
-  dropLoot(x, y) {
-    // 1. Herz-Beere (❤️ +25 HP)
-    if (Math.random() > 0.35) {
+  dropLoot(x, y, enemy = null) {
+    // Drop-Raten: XP droppen immer (100%), Pfeile und Herzen nur manchmal / selten!
+    const isBoss = enemy && (enemy.category === 'boss' || enemy.maxHp >= 100);
+    const isRanged = enemy && (enemy.category === 'range' || enemy.typeId === 'moss_archer');
+
+    // 1. Herz-Beere (❤️ +25 HP) - selten (ca. 8% bei normalen Gegnern, 25% bei Bossen)
+    const heartChance = isBoss ? 0.25 : 0.08;
+    if (Math.random() < heartChance) {
       this.lootItems.push({
         type: LOOT_TYPES.HEART,
         x: x + (Math.random() - 0.5) * 12,
@@ -7153,8 +7158,9 @@ class EnemyManager {
       });
     }
 
-    // 2. Köcher-Pfeile (🏹 +3 Pfeile)
-    if (Math.random() > 0.45) {
+    // 2. Köcher-Pfeile (🏹 +3 Pfeile) - selten (ca. 10% bei normalen Gegnern, 25% bei Bogenschützen/Bossen)
+    const arrowChance = isBoss ? 0.25 : (isRanged ? 0.25 : 0.10);
+    if (Math.random() < arrowChance) {
       this.lootItems.push({
         type: LOOT_TYPES.ARROW,
         x: x + (Math.random() - 0.5) * 14,
@@ -7164,18 +7170,23 @@ class EnemyManager {
       });
     }
 
-    // 3. Sternenstaub / Geist-Juwel (⭐ Glanzpartikel)
-    this.lootItems.push({
-      type: LOOT_TYPES.SPIRIT_GEM,
-      x,
-      y,
-      life: 20.0,
-      bobOffset: Math.random() * Math.PI * 2
-    });
+    // 3. Sternenstaub / Geist-Juwel (⭐ Glanzpartikel) - selten (ca. 5% bei normalen Gegnern, 35% bei Bossen)
+    const gemChance = isBoss ? 0.35 : 0.05;
+    if (Math.random() < gemChance) {
+      this.lootItems.push({
+        type: LOOT_TYPES.SPIRIT_GEM,
+        x,
+        y,
+        life: 20.0,
+        bobOffset: Math.random() * Math.PI * 2
+      });
+    }
   }
 
   spawnXp(x, y, totalXp) {
-    if (totalXp <= 0) return;
+    // Gegner droppen IMMER Erfahrungspunkte (mindestens 1 EP)
+    totalXp = Math.max(1, totalXp || 1);
+
     let orbCount = 1;
     if (totalXp >= 40) orbCount = Math.min(9, Math.max(5, Math.round(totalXp / 8)));
     else if (totalXp >= 12) orbCount = Math.min(4, Math.max(2, Math.round(totalXp / 5)));
@@ -7214,10 +7225,10 @@ class EnemyManager {
 
       enemy.update(dt, player, map, this, combatManager);
 
-      // Bei Tod Loot & EP droppen und aus Liste entfernen
+      // Bei Tod: XP droppt IMMER garantiert, Pfeile & Herzen nur selten
       if (enemy.state === 'dead') {
-        this.dropLoot(enemy.x, enemy.y);
-        this.spawnXp(enemy.x, enemy.y, enemy.xpValue);
+        this.dropLoot(enemy.x, enemy.y, enemy);
+        this.spawnXp(enemy.x, enemy.y, Math.max(1, enemy.xpValue || 2));
         this.enemies.splice(i, 1);
       }
     }
