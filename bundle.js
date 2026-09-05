@@ -8066,6 +8066,7 @@ class MagicManager {
 
       this.teleportCanvas.addEventListener('touchstart', (e) => {
         e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
         if (e.touches && e.touches[0]) {
           this.handleTeleportClick(e.touches[0].clientX, e.touches[0].clientY);
         }
@@ -8291,8 +8292,17 @@ class MagicManager {
           this.groundArtifacts.splice(i, 1);
           this.triggerPickupBanner(art.def);
           this.pickupCooldown = 0.5;
+        } else if (player.artifact.id === art.def.id) {
+          // 2. Gleiche Artefakt-Art: Automatisch +3 Aufladungen ohne Frage!
+          const bonus = art.def.rechargeBonus || 3;
+          player.artifact.charges = Math.min(player.artifact.maxCharges + 5, player.artifact.charges + bonus);
+          this.handleArtifactRemoved(art);
+          this.groundArtifacts.splice(i, 1);
+          this.updateHUD();
+          this.triggerPickupBanner(art.def, `✨ ${art.def.name.toUpperCase()} AUFGELADEN (+${bonus} AUFLADUNGEN)!`);
+          this.pickupCooldown = 0.5;
         } else {
-          // Spieler hat bereits ein aktives Artefakt -> Swap Modal anzeigen
+          // Spieler hat bereits ein ANDERES aktives Artefakt -> Swap Modal anzeigen
           this.openSwapModal(art, i);
         }
         break;
@@ -8331,7 +8341,7 @@ class MagicManager {
     const player = this.game?.player;
     if (!player) return;
 
-    // 7. Sicherheitsprüfung: Wenn kein aktives Artefakt vorhanden ist, direkt ausrüsten
+    // Sicherheitsprüfung: Wenn kein aktives Artefakt vorhanden ist, direkt ausrüsten
     const hasActiveArtifact = Boolean(player.artifact && player.artifact.id && player.artifact.charges > 0);
     if (!hasActiveArtifact) {
       this.equipArtifact(player, groundArtifact.def);
@@ -8340,6 +8350,20 @@ class MagicManager {
         this.groundArtifacts.splice(index, 1);
       }
       this.triggerPickupBanner(groundArtifact.def);
+      this.pickupCooldown = 0.5;
+      return;
+    }
+
+    // Wenn gleiches Artefakt: Automatisch aufladen ohne Dialog
+    if (player.artifact.id === groundArtifact.def.id) {
+      const bonus = groundArtifact.def.rechargeBonus || 3;
+      player.artifact.charges = Math.min(player.artifact.maxCharges + 5, player.artifact.charges + bonus);
+      this.handleArtifactRemoved(groundArtifact);
+      if (index >= 0 && index < this.groundArtifacts.length) {
+        this.groundArtifacts.splice(index, 1);
+      }
+      this.updateHUD();
+      this.triggerPickupBanner(groundArtifact.def, `✨ ${groundArtifact.def.name.toUpperCase()} AUFGELADEN (+${bonus} AUFLADUNGEN)!`);
       this.pickupCooldown = 0.5;
       return;
     }
@@ -8870,7 +8894,21 @@ class MagicManager {
     if (!modal) return;
     this.isTeleportModalOpen = true;
     modal.classList.remove('hidden');
+
+    if (this.game?.minimap) {
+      this.game.minimap.renderStaticBackground();
+    }
+
     this.renderTeleportMap();
+
+    const animLoop = () => {
+      if (!this.isTeleportModalOpen) return;
+      this.renderTeleportMap();
+      this.teleportAnimFrame = requestAnimationFrame(animLoop);
+    };
+    if (typeof requestAnimationFrame === 'function') {
+      this.teleportAnimFrame = requestAnimationFrame(animLoop);
+    }
   }
 
   closeTeleportModal() {
@@ -8878,6 +8916,10 @@ class MagicManager {
     if (modal) modal.classList.add('hidden');
     this.isTeleportModalOpen = false;
     this.teleportHoverTile = null;
+    if (this.teleportAnimFrame && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this.teleportAnimFrame);
+      this.teleportAnimFrame = null;
+    }
   }
 
   renderTeleportMap() {
@@ -8893,13 +8935,14 @@ class MagicManager {
     const mapW = map.width || MAP_WIDTH;
     const mapH = map.height || MAP_HEIGHT;
 
-    ctx.fillStyle = '#090a10';
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = '#050508';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const scaleX = canvas.width / mapW;
     const scaleY = canvas.height / mapH;
 
-    // Draw explored tiles / minimap background
+    // 1. Exakte Minimap-Karte in Groß
     if (this.game?.minimap && this.game.minimap.bgCanvas) {
       ctx.drawImage(this.game.minimap.bgCanvas, 0, 0, canvas.width, canvas.height);
     } else {
@@ -8912,9 +8955,9 @@ class MagicManager {
       }
     }
 
-    // Fog of war: darken unexplored tiles if map.explored exists
+    // 2. Nebel des Krieges (falls Erkundung aktiv)
     if (map.explored) {
-      ctx.fillStyle = 'rgba(5, 7, 15, 0.82)';
+      ctx.fillStyle = 'rgba(5, 7, 15, 0.85)';
       for (let ty = 0; ty < mapH; ty++) {
         for (let tx = 0; tx < mapW; tx++) {
           if (!map.explored[ty] || !map.explored[ty][tx]) {
@@ -8924,46 +8967,92 @@ class MagicManager {
       }
     }
 
-    // Grid lines for tactical map feel
-    ctx.strokeStyle = 'rgba(147, 51, 234, 0.15)';
-    ctx.lineWidth = 1;
-    const gridStepX = scaleX * 10;
-    for (let gx = 0; gx < canvas.width; gx += gridStepX) {
+    // 3. Schreine als leuchtende goldene Diamanten hervorheben
+    const time = Date.now() / 1000;
+    const shrinePulse = 1.0 + Math.sin(time * 4) * 0.2;
+    const drawShrine = (sx, sy) => {
+      const isExplored = !map.explored || (map.explored[sy] && map.explored[sy][sx]);
+      if (!isExplored) return;
+      const px = (sx + 0.5) * scaleX;
+      const py = (sy + 0.5) * scaleY;
+      const sz = 5 * shrinePulse;
+
+      ctx.save();
+      ctx.fillStyle = '#facc15';
+      ctx.shadowColor = 'rgba(250, 204, 21, 0.85)';
+      ctx.shadowBlur = 6;
       ctx.beginPath();
-      ctx.moveTo(gx, 0);
-      ctx.lineTo(gx, canvas.height);
+      ctx.moveTo(px, py - sz);
+      ctx.lineTo(px + sz, py);
+      ctx.lineTo(px, py + sz);
+      ctx.lineTo(px - sz, py);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
       ctx.stroke();
-    }
-    const gridStepY = scaleY * 10;
-    for (let gy = 0; gy < canvas.height; gy += gridStepY) {
-      ctx.beginPath();
-      ctx.moveTo(0, gy);
-      ctx.lineTo(canvas.width, gy);
-      ctx.stroke();
+      ctx.restore();
+    };
+
+    if (map.shrines && Array.isArray(map.shrines)) {
+      map.shrines.forEach(s => drawShrine(s.x, s.y));
+    } else if (map.objects) {
+      for (let ty = 0; ty < mapH; ty++) {
+        if (!map.objects[ty]) continue;
+        for (let tx = 0; tx < mapW; tx++) {
+          if (map.objects[ty][tx] === 15) {
+            drawShrine(tx, ty);
+          }
+        }
+      }
     }
 
-    // Player position marker (Pulsing Cyan/Gold Star)
+    // 4. Kamera-Sichtfeld (Weißer Rahmen wie auf der Minimap)
+    const camera = this.game?.camera;
+    if (camera) {
+      const viewW = (camera.viewportWidth / (camera.zoom || 1)) / TILE_SIZE * scaleX;
+      const viewH = (camera.viewportHeight / (camera.zoom || 1)) / TILE_SIZE * scaleY;
+      const viewX = (camera.x / TILE_SIZE) * scaleX;
+      const viewY = (camera.y / TILE_SIZE) * scaleY;
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(viewX, viewY, viewW, viewH);
+      ctx.restore();
+    }
+
+    // 5. Spieler-Position (Roter Punkt + weißer Rand wie Minimap + Lila Aura)
     if (player) {
       const pTileX = player.x / TILE_SIZE;
       const pTileY = player.y / TILE_SIZE;
       const px = pTileX * scaleX;
       const py = pTileY * scaleY;
 
-      const time = Date.now() / 1000;
-      const ringR = 6 + Math.sin(time * 5) * 2;
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.8;
+      // Pulsierende Leeren-Aura
+      const ringR = 8 + Math.sin(time * 5) * 2.5;
+      ctx.save();
+      ctx.strokeStyle = '#c084fc';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(px, py, ringR, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.fillStyle = '#facc15';
+      // Minimap Marker
+      ctx.fillStyle = '#ff2a55';
       ctx.beginPath();
-      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.arc(px, py, 3.5, 0, Math.PI * 2);
       ctx.fill();
+
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
     }
 
-    // Hovered Target Reticle
+    // 6. Ausgewählte Ziel-Schablone / Hover Reticle
     if (this.teleportHoverTile) {
       const { tx, ty, valid } = this.teleportHoverTile;
       const hx = (tx + 0.5) * scaleX;
@@ -8974,19 +9063,19 @@ class MagicManager {
       ctx.lineWidth = 2;
 
       ctx.beginPath();
-      ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+      ctx.arc(hx, hy, 11, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.moveTo(hx - 14, hy); ctx.lineTo(hx - 6, hy);
-      ctx.moveTo(hx + 6, hy); ctx.lineTo(hx + 14, hy);
-      ctx.moveTo(hx, hy - 14); ctx.lineTo(hx, hy - 6);
-      ctx.moveTo(hx, hy + 6); ctx.lineTo(hx, hy + 14);
+      ctx.moveTo(hx - 15, hy); ctx.lineTo(hx - 6, hy);
+      ctx.moveTo(hx + 6, hy); ctx.lineTo(hx + 15, hy);
+      ctx.moveTo(hx, hy - 15); ctx.lineTo(hx, hy - 6);
+      ctx.moveTo(hx, hy + 6); ctx.lineTo(hx, hy + 15);
       ctx.stroke();
 
-      ctx.fillStyle = valid ? 'rgba(168, 85, 247, 0.25)' : 'rgba(239, 68, 68, 0.25)';
+      ctx.fillStyle = valid ? 'rgba(168, 85, 247, 0.3)' : 'rgba(239, 68, 68, 0.3)';
       ctx.beginPath();
-      ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+      ctx.arc(hx, hy, 11, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
@@ -9010,26 +9099,55 @@ class MagicManager {
     const scaleX = canvas.width / mapW;
     const scaleY = canvas.height / mapH;
 
-    const tx = Math.floor(clickX / scaleX);
-    const ty = Math.floor(clickY / scaleY);
+    const rawTx = Math.floor(clickX / scaleX);
+    const rawTy = Math.floor(clickY / scaleY);
 
-    if (tx < 0 || tx >= mapW || ty < 0 || ty >= mapH) return;
+    if (rawTx < 0 || rawTx >= mapW || rawTy < 0 || rawTy >= mapH) return;
 
-    const isWalkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
-    const isExplored = !map.explored || (map.explored[ty] && map.explored[ty][tx]);
+    const isValidTile = (tx, ty) => {
+      if (tx < 0 || tx >= mapW || ty < 0 || ty >= mapH) return false;
+      const walkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
+      const explored = !map.explored || (map.explored[ty] && map.explored[ty][tx]);
+      return Boolean(walkable && explored);
+    };
 
-    if (!isWalkable || !isExplored) {
-      const tooltip = getElement('teleport-target-tooltip');
-      if (tooltip) {
-        tooltip.textContent = !isExplored ? '❌ Unerforschter Ort!' : '❌ Nicht begehbar!';
-        tooltip.classList.remove('hidden');
-        setTimeout(() => tooltip?.classList.add('hidden'), 1200);
+    let targetTx = rawTx;
+    let targetTy = rawTy;
+
+    // Sanfte Suche nach begehbaren Nachbar-Kacheln (Radius 1-5) für einfache Touch-Bedienung mit dem Finger
+    if (!isValidTile(targetTx, targetTy)) {
+      let found = false;
+      for (let r = 1; r <= 5 && !found; r++) {
+        for (let dy = -r; dy <= r && !found; dy++) {
+          for (let dx = -r; dx <= r && !found; dx++) {
+            if (Math.abs(dx) === r || Math.abs(dy) === r) {
+              const nx = rawTx + dx;
+              const ny = rawTy + dy;
+              if (isValidTile(nx, ny)) {
+                targetTx = nx;
+                targetTy = ny;
+                found = true;
+              }
+            }
+          }
+        }
       }
-      return;
+
+      if (!found) {
+        const tooltip = getElement('teleport-target-tooltip');
+        if (tooltip) {
+          const isExplored = !map.explored || (map.explored[rawTy] && map.explored[rawTy][rawTx]);
+          tooltip.textContent = !isExplored ? '❌ Unerforschtes Gebiet!' : '❌ Nicht erreichbar!';
+          tooltip.classList.remove('hidden');
+          setTimeout(() => tooltip?.classList.add('hidden'), 1200);
+        }
+        return;
+      }
     }
 
-    const targetWorldX = tx * TILE_SIZE + TILE_SIZE / 2;
-    const targetWorldY = ty * TILE_SIZE + TILE_SIZE / 2;
+    // Sofortige Ausführung des Leeren-Teleports mit Animation
+    const targetWorldX = targetTx * TILE_SIZE + TILE_SIZE / 2;
+    const targetWorldY = targetTy * TILE_SIZE + TILE_SIZE / 2;
 
     const combat = this.game?.combat;
     if (combat) {
@@ -10646,39 +10764,13 @@ class EnemyEntity {
       ctx.restore();
     }
 
-    // 6. Name und HP unter dem Charakter (erst Name, dann HP nur wenn nicht voll)
-    const baseBelowY = drawY + Math.round(15 * this.scale) + 4;
-    const enemyName = this.name || this.def?.name || '';
-    if (enemyName) {
-      ctx.save();
-      ctx.font = 'bold 8px system-ui, -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const nameY = baseBelowY;
-      const metrics = (typeof ctx.measureText === 'function') ? ctx.measureText(enemyName) : { width: enemyName.length * 5 };
-      const textW = Math.max(14, metrics.width);
-      const padX = 3;
-      const badgeH = 10;
-
-      // Dunkles Papercraft-Badge
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
-      ctx.fillRect(drawX - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-      ctx.lineWidth = 0.8;
-      ctx.strokeRect(drawX - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
-
-      // Name Text
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillText(enemyName, drawX, nameY);
-      ctx.restore();
-    }
-
-    // Lebensbalken direkt unter dem Namen (nur wenn verletzt)
+    // Lebensbalken unter dem Monster (nur wenn verletzt / < 100% HP, kein Name)
     if (this.hp < this.maxHp && this.hp > 0) {
+      const baseBelowY = drawY + Math.round(15 * this.scale) + 4;
       const barW = Math.round(24 * Math.max(0.8, Math.min(1.8, this.scale)));
       const barH = 3.5;
       const barX = drawX - barW / 2;
-      const barY = baseBelowY + 8;
+      const barY = baseBelowY;
       const hpPct = Math.max(0, this.hp / this.maxHp);
 
       ctx.save();
@@ -16780,12 +16872,16 @@ class Game {
       sunset = Math.sin(((t - 16.5) / 3.5) * Math.PI);
     }
 
-    // Night factor: 1.0 during 20.5 - 04.5
+    // Night factor: 0.0 - 1.0 (clamped strictly between 0 and 1)
     let night = 0;
-    if (t >= 20.0 || t <= 5.5) {
-      if (t >= 20.0) night = Math.min(1.0, (t - 20.0) / 1.5);
-      else if (t <= 5.5) night = Math.max(0.0, 1.0 - (t - 4.0) / 1.5);
+    if (t >= 20.0 && t <= 21.5) {
+      night = (t - 20.0) / 1.5; // Dämmerung -> Nacht Übergang
+    } else if (t > 21.5 || t < 4.0) {
+      night = 1.0; // Volle Nacht (Mitternacht bis 04:00)
+    } else if (t >= 4.0 && t <= 5.5) {
+      night = 1.0 - (t - 4.0) / 1.5; // Nacht -> Morgengrauen Übergang
     }
+    night = Math.max(0, Math.min(1, night));
 
     return { sunlight, sunset, night };
   }
@@ -16893,17 +16989,17 @@ class Game {
       let lanternText = 'Lampions aus';
       let lanternCol = '#94a3b8';
 
-      if (night > 0.3) {
+      if (night > 0.3 || this.gameTime >= 21.0 || this.gameTime < 4.0) {
         icon = '🌙 Geisternacht';
         col = '#818cf8';
         lanternText = '🏮 Lampions an';
         lanternCol = '#fbbf24';
-      } else if (sunset > 0.2 || (this.gameTime >= 17 && this.gameTime <= 20)) {
+      } else if (sunset > 0.2 || (this.gameTime >= 16.5 && this.gameTime < 21.0)) {
         icon = '🏮 Dämmerung';
         col = '#f59e0b';
         lanternText = '🏮 Lampions an';
         lanternCol = '#f59e0b';
-      } else if (this.gameTime < 6.5) {
+      } else if (this.gameTime >= 4.0 && this.gameTime < 6.5) {
         icon = '🌅 Morgengrauen';
         col = '#f472b6';
         lanternText = 'Lampions aus';
@@ -18439,9 +18535,10 @@ class Game {
       this.ctx.fillRect(0, 0, w, h);
     }
 
-    // Deep Mononoke Night Indigo Wash
+    // Deep Mononoke Night Indigo Wash (max 0.38 alpha for clear visibility at night)
     if (night > 0.02) {
-      this.ctx.fillStyle = `rgba(18, 24, 48, ${night * 0.42})`;
+      const nightAlpha = Math.min(0.38, Math.max(0, night) * 0.38);
+      this.ctx.fillStyle = `rgba(18, 24, 48, ${nightAlpha})`;
       this.ctx.fillRect(0, 0, w, h);
     }
 

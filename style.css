@@ -2314,53 +2314,58 @@ canvas#gameCanvas {
 .teleport-map-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(4, 6, 14, 0.82);
+  background: rgba(4, 6, 14, 0.85);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: 10px;
   animation: fadeIn 0.2s ease-out;
+  box-sizing: border-box;
 }
 
 .teleport-map-dialog {
   background: linear-gradient(155deg, #110d1f, #090a14);
-  border: 1.5px solid rgba(168, 85, 247, 0.45);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 32px rgba(168, 85, 247, 0.25);
-  border-radius: 18px;
-  max-width: 600px;
-  width: 100%;
+  border: 1.5px solid rgba(168, 85, 247, 0.55);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 32px rgba(168, 85, 247, 0.25);
+  border-radius: 16px;
+  max-width: 580px;
+  width: min(96vw, 580px);
+  max-height: 94vh;
+  max-height: 94dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   user-select: none;
+  box-sizing: border-box;
 }
 
 .teleport-map-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 18px;
-  background: rgba(168, 85, 247, 0.1);
+  padding: 8px 14px;
+  background: rgba(168, 85, 247, 0.12);
   border-bottom: 1px solid rgba(168, 85, 247, 0.25);
+  flex-shrink: 0;
 }
 
 .teleport-map-title-wrap {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .teleport-map-icon {
-  font-size: 1.8rem;
+  font-size: 1.4rem;
   filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.8));
 }
 
 .teleport-map-title {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 800;
   color: #f3e8ff;
   letter-spacing: 0.5px;
@@ -2368,7 +2373,7 @@ canvas#gameCanvas {
 
 .teleport-map-sub {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   color: #c084fc;
 }
 
@@ -2379,12 +2384,13 @@ canvas#gameCanvas {
   border-radius: 8px;
   width: 32px;
   height: 32px;
-  font-size: 1rem;
+  font-size: 1.1rem;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .teleport-map-close-btn:hover {
@@ -2396,19 +2402,32 @@ canvas#gameCanvas {
 .teleport-canvas-wrap {
   position: relative;
   width: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
   background: #090a10;
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
   cursor: crosshair;
+  touch-action: none;
+  padding: 6px;
+  box-sizing: border-box;
 }
 
 #teleportMapCanvas {
   display: block;
+  width: 100%;
   max-width: 100%;
   height: auto;
-  border: none;
+  max-height: calc(94vh - 105px);
+  max-height: calc(94dvh - 105px);
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(168, 85, 247, 0.3);
 }
 
 .teleport-tooltip {
@@ -2432,21 +2451,59 @@ canvas#gameCanvas {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 18px;
-  background: rgba(0, 0, 0, 0.35);
+  padding: 6px 14px;
+  background: rgba(0, 0, 0, 0.45);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  gap: 8px;
 }
 
 .teleport-coords {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: #c084fc;
   font-family: monospace;
+  white-space: nowrap;
 }
 
 .teleport-hint {
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   color: #94a3b8;
+  text-align: right;
+}
+
+@media (max-width: 640px), (max-height: 540px) {
+  .teleport-map-backdrop {
+    padding: 6px;
+  }
+  .teleport-map-dialog {
+    border-radius: 12px;
+    width: 98vw;
+    max-height: 96vh;
+    max-height: 96dvh;
+  }
+  .teleport-map-header {
+    padding: 6px 10px;
+  }
+  .teleport-map-title {
+    font-size: 0.95rem;
+  }
+  .teleport-map-sub {
+    font-size: 0.68rem;
+  }
+  .teleport-map-footer {
+    padding: 4px 10px;
+  }
+  .teleport-coords {
+    font-size: 0.74rem;
+  }
+  .teleport-hint {
+    font-size: 0.66rem;
+  }
+  #teleportMapCanvas {
+    max-height: calc(96vh - 85px);
+    max-height: calc(96dvh - 85px);
+  }
 }
 
 .dev-artifact-switchers .dev-action-btn:hover {

@@ -747,12 +747,16 @@ class Game {
       sunset = Math.sin(((t - 16.5) / 3.5) * Math.PI);
     }
 
-    // Night factor: 1.0 during 20.5 - 04.5
+    // Night factor: 0.0 - 1.0 (clamped strictly between 0 and 1)
     let night = 0;
-    if (t >= 20.0 || t <= 5.5) {
-      if (t >= 20.0) night = Math.min(1.0, (t - 20.0) / 1.5);
-      else if (t <= 5.5) night = Math.max(0.0, 1.0 - (t - 4.0) / 1.5);
+    if (t >= 20.0 && t <= 21.5) {
+      night = (t - 20.0) / 1.5; // Dämmerung -> Nacht Übergang
+    } else if (t > 21.5 || t < 4.0) {
+      night = 1.0; // Volle Nacht (Mitternacht bis 04:00)
+    } else if (t >= 4.0 && t <= 5.5) {
+      night = 1.0 - (t - 4.0) / 1.5; // Nacht -> Morgengrauen Übergang
     }
+    night = Math.max(0, Math.min(1, night));
 
     return { sunlight, sunset, night };
   }
@@ -860,17 +864,17 @@ class Game {
       let lanternText = 'Lampions aus';
       let lanternCol = '#94a3b8';
 
-      if (night > 0.3) {
+      if (night > 0.3 || this.gameTime >= 21.0 || this.gameTime < 4.0) {
         icon = '🌙 Geisternacht';
         col = '#818cf8';
         lanternText = '🏮 Lampions an';
         lanternCol = '#fbbf24';
-      } else if (sunset > 0.2 || (this.gameTime >= 17 && this.gameTime <= 20)) {
+      } else if (sunset > 0.2 || (this.gameTime >= 16.5 && this.gameTime < 21.0)) {
         icon = '🏮 Dämmerung';
         col = '#f59e0b';
         lanternText = '🏮 Lampions an';
         lanternCol = '#f59e0b';
-      } else if (this.gameTime < 6.5) {
+      } else if (this.gameTime >= 4.0 && this.gameTime < 6.5) {
         icon = '🌅 Morgengrauen';
         col = '#f472b6';
         lanternText = 'Lampions aus';
@@ -2406,9 +2410,10 @@ class Game {
       this.ctx.fillRect(0, 0, w, h);
     }
 
-    // Deep Mononoke Night Indigo Wash
+    // Deep Mononoke Night Indigo Wash (max 0.38 alpha for clear visibility at night)
     if (night > 0.02) {
-      this.ctx.fillStyle = `rgba(18, 24, 48, ${night * 0.42})`;
+      const nightAlpha = Math.min(0.38, Math.max(0, night) * 0.38);
+      this.ctx.fillStyle = `rgba(18, 24, 48, ${nightAlpha})`;
       this.ctx.fillRect(0, 0, w, h);
     }
 
