@@ -10,6 +10,7 @@ const files = [
   'js/caveMap.js',
   'js/cloudMap.js',
   'js/map.js',
+  'js/magic.js',
   'js/enemies.js',
   'js/player.js',
   'js/camera.js',
