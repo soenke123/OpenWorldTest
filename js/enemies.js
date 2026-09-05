@@ -657,7 +657,7 @@ export class EnemyEntity {
 
     // Poof / Konfetti-Partikelwolke
     if (combatManager) {
-      combatManager.addDefeatPoof(this.x, this.y, this.category);
+      combatManager.addDefeatPoof(this.x, this.y, this.category, this.dimension);
 
       // Spritzige Gelee-Partikel für Blobs
       if (this.typeId === 'green_slime') {
@@ -665,6 +665,7 @@ export class EnemyEntity {
           const pAng = Math.random() * Math.PI * 2;
           const sp = Math.random() * 50 + 15;
           combatManager.hitSparks.push({
+            dimension: this.dimension,
             x: this.x,
             y: this.y,
             vx: Math.cos(pAng) * sp,
@@ -939,6 +940,8 @@ export class EnemyManager {
   }
 
   dropLoot(x, y, enemy = null) {
+    const dimension = enemy?.dimension || this.game?.currentDimension || DIMENSIONS.OVERWORLD;
+
     // Drop-Raten: XP droppen immer (100%), Pfeile und Herzen nur manchmal / selten!
     const isBoss = enemy && (enemy.category === 'boss' || enemy.maxHp >= 100);
     const isRanged = enemy && (enemy.category === 'range' || enemy.typeId === 'moss_archer');
@@ -948,6 +951,7 @@ export class EnemyManager {
     if (Math.random() < heartChance) {
       this.lootItems.push({
         type: LOOT_TYPES.HEART,
+        dimension,
         x: x + (Math.random() - 0.5) * 12,
         y: y + (Math.random() - 0.5) * 12,
         life: 25.0,
@@ -960,6 +964,7 @@ export class EnemyManager {
     if (Math.random() < arrowChance) {
       this.lootItems.push({
         type: LOOT_TYPES.ARROW,
+        dimension,
         x: x + (Math.random() - 0.5) * 14,
         y: y + (Math.random() - 0.5) * 14,
         life: 25.0,
@@ -972,6 +977,7 @@ export class EnemyManager {
     if (Math.random() < gemChance) {
       this.lootItems.push({
         type: LOOT_TYPES.SPIRIT_GEM,
+        dimension,
         x,
         y,
         life: 20.0,
@@ -980,7 +986,9 @@ export class EnemyManager {
     }
   }
 
-  spawnXp(x, y, totalXp) {
+  spawnXp(x, y, totalXp, dimension = null) {
+    const dim = dimension || this.game?.currentDimension || DIMENSIONS.OVERWORLD;
+
     // Gegner droppen IMMER Erfahrungspunkte (mindestens 1 EP)
     totalXp = Math.max(1, totalXp || 1);
 
@@ -1000,6 +1008,7 @@ export class EnemyManager {
       const burstSpeed = Math.random() * 45 + 20;
 
       this.xpOrbs.push({
+        dimension: dim,
         x: x + (Math.random() - 0.5) * 6,
         y: y + (Math.random() - 0.5) * 6,
         vx: Math.cos(burstAng) * burstSpeed,
@@ -1025,14 +1034,16 @@ export class EnemyManager {
       // Bei Tod: XP droppt IMMER garantiert, Pfeile & Herzen nur selten
       if (enemy.state === 'dead') {
         this.dropLoot(enemy.x, enemy.y, enemy);
-        this.spawnXp(enemy.x, enemy.y, Math.max(1, enemy.xpValue || 2));
+        this.spawnXp(enemy.x, enemy.y, Math.max(1, enemy.xpValue || 2), enemy.dimension);
         this.enemies.splice(i, 1);
       }
     }
 
-    // 2. Update Loot Items
+    // 2. Update Loot Items (nur aktuelle Dimension)
     for (let i = this.lootItems.length - 1; i >= 0; i--) {
       const item = this.lootItems[i];
+      if (item.dimension && curDim && item.dimension !== curDim) continue;
+
       item.life -= dt;
       if (item.life <= 0) {
         this.lootItems.splice(i, 1);
@@ -1045,31 +1056,33 @@ export class EnemyManager {
         if (item.type === LOOT_TYPES.HEART) {
           if (player.hp < player.maxHp) {
             player.hp = Math.min(player.maxHp, player.hp + 25);
-            combatManager.addFloatingText('❤️ +25 LEBEN', player.x, player.y - 20, '#4ade80');
-            combatManager.addHitSparks(player.x, player.y, '#4ade80', 12);
+            combatManager?.addFloatingText('❤️ +25 LEBEN', player.x, player.y - 20, '#4ade80');
+            combatManager?.addHitSparks(player.x, player.y, '#4ade80', 12);
             this.lootItems.splice(i, 1);
           }
         } else if (item.type === LOOT_TYPES.ARROW) {
           if (player.ranged && player.ranged.ammo < 30) {
             player.ranged.ammo = Math.min(30, player.ranged.ammo + 3);
-            combatManager.addFloatingText('🏹 +3 PFEILE', player.x, player.y - 20, '#38bdf8');
-            combatManager.addHitSparks(player.x, player.y, '#38bdf8', 10);
+            combatManager?.addFloatingText('🏹 +3 PFEILE', player.x, player.y - 20, '#38bdf8');
+            combatManager?.addHitSparks(player.x, player.y, '#38bdf8', 10);
             this.lootItems.splice(i, 1);
           }
         } else if (item.type === LOOT_TYPES.SPIRIT_GEM) {
-          combatManager.addFloatingText('⭐ GEIST-FUNKE', player.x, player.y - 20, '#fde047');
-          combatManager.addHitSparks(player.x, player.y, '#facc15', 14);
+          combatManager?.addFloatingText('⭐ GEIST-FUNKE', player.x, player.y - 20, '#fde047');
+          combatManager?.addHitSparks(player.x, player.y, '#facc15', 14);
           this.lootItems.splice(i, 1);
         }
       }
     }
 
-    // 3. Update XP Orbs (Magnetischer Flug zum Spieler)
+    // 3. Update XP Orbs (Magnetischer Flug zum Spieler, nur in aktueller Dimension)
     const MAGNET_RADIUS = 90;
     const PICKUP_RADIUS = 14;
 
     for (let i = this.xpOrbs.length - 1; i >= 0; i--) {
       const orb = this.xpOrbs[i];
+      if (orb.dimension && curDim && orb.dimension !== curDim) continue;
+
       orb.life -= dt;
       if (orb.life <= 0) {
         this.xpOrbs.splice(i, 1);
@@ -1130,10 +1143,12 @@ export class EnemyManager {
   }
 
   renderLoot(ctx, t) {
-    const curDim = this.game.currentDimension;
+    const curDim = this.game?.currentDimension || DIMENSIONS.OVERWORLD;
 
-    // 1. Render Normal Loot
+    // 1. Render Normal Loot (nur in der Dimension wo es gedroppt wurde!)
     this.lootItems.forEach(item => {
+      if (item.dimension && curDim && item.dimension !== curDim) return;
+
       const bob = Math.sin(t * 4 + item.bobOffset) * 2.5;
 
       ctx.save();
@@ -1182,8 +1197,10 @@ export class EnemyManager {
       ctx.restore();
     });
 
-    // 2. Render Glowing Green XP Orbs (Kleine grüne leuchtende Punkte)
+    // 2. Render Glowing Green XP Orbs (nur in der Dimension wo es gedroppt wurde!)
     this.xpOrbs.forEach(orb => {
+      if (orb.dimension && curDim && orb.dimension !== curDim) return;
+
       const bob = Math.sin(t * 6 + orb.bobOffset) * 2;
       const ox = orb.x;
       const oy = orb.y + bob;

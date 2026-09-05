@@ -6860,7 +6860,7 @@ class EnemyEntity {
 
     // Poof / Konfetti-Partikelwolke
     if (combatManager) {
-      combatManager.addDefeatPoof(this.x, this.y, this.category);
+      combatManager.addDefeatPoof(this.x, this.y, this.category, this.dimension);
 
       // Spritzige Gelee-Partikel für Blobs
       if (this.typeId === 'green_slime') {
@@ -6868,6 +6868,7 @@ class EnemyEntity {
           const pAng = Math.random() * Math.PI * 2;
           const sp = Math.random() * 50 + 15;
           combatManager.hitSparks.push({
+            dimension: this.dimension,
             x: this.x,
             y: this.y,
             vx: Math.cos(pAng) * sp,
@@ -7142,6 +7143,8 @@ class EnemyManager {
   }
 
   dropLoot(x, y, enemy = null) {
+    const dimension = enemy?.dimension || this.game?.currentDimension || DIMENSIONS.OVERWORLD;
+
     // Drop-Raten: XP droppen immer (100%), Pfeile und Herzen nur manchmal / selten!
     const isBoss = enemy && (enemy.category === 'boss' || enemy.maxHp >= 100);
     const isRanged = enemy && (enemy.category === 'range' || enemy.typeId === 'moss_archer');
@@ -7151,6 +7154,7 @@ class EnemyManager {
     if (Math.random() < heartChance) {
       this.lootItems.push({
         type: LOOT_TYPES.HEART,
+        dimension,
         x: x + (Math.random() - 0.5) * 12,
         y: y + (Math.random() - 0.5) * 12,
         life: 25.0,
@@ -7163,6 +7167,7 @@ class EnemyManager {
     if (Math.random() < arrowChance) {
       this.lootItems.push({
         type: LOOT_TYPES.ARROW,
+        dimension,
         x: x + (Math.random() - 0.5) * 14,
         y: y + (Math.random() - 0.5) * 14,
         life: 25.0,
@@ -7175,6 +7180,7 @@ class EnemyManager {
     if (Math.random() < gemChance) {
       this.lootItems.push({
         type: LOOT_TYPES.SPIRIT_GEM,
+        dimension,
         x,
         y,
         life: 20.0,
@@ -7183,7 +7189,9 @@ class EnemyManager {
     }
   }
 
-  spawnXp(x, y, totalXp) {
+  spawnXp(x, y, totalXp, dimension = null) {
+    const dim = dimension || this.game?.currentDimension || DIMENSIONS.OVERWORLD;
+
     // Gegner droppen IMMER Erfahrungspunkte (mindestens 1 EP)
     totalXp = Math.max(1, totalXp || 1);
 
@@ -7203,6 +7211,7 @@ class EnemyManager {
       const burstSpeed = Math.random() * 45 + 20;
 
       this.xpOrbs.push({
+        dimension: dim,
         x: x + (Math.random() - 0.5) * 6,
         y: y + (Math.random() - 0.5) * 6,
         vx: Math.cos(burstAng) * burstSpeed,
@@ -7228,14 +7237,16 @@ class EnemyManager {
       // Bei Tod: XP droppt IMMER garantiert, Pfeile & Herzen nur selten
       if (enemy.state === 'dead') {
         this.dropLoot(enemy.x, enemy.y, enemy);
-        this.spawnXp(enemy.x, enemy.y, Math.max(1, enemy.xpValue || 2));
+        this.spawnXp(enemy.x, enemy.y, Math.max(1, enemy.xpValue || 2), enemy.dimension);
         this.enemies.splice(i, 1);
       }
     }
 
-    // 2. Update Loot Items
+    // 2. Update Loot Items (nur aktuelle Dimension)
     for (let i = this.lootItems.length - 1; i >= 0; i--) {
       const item = this.lootItems[i];
+      if (item.dimension && curDim && item.dimension !== curDim) continue;
+
       item.life -= dt;
       if (item.life <= 0) {
         this.lootItems.splice(i, 1);
@@ -7248,31 +7259,33 @@ class EnemyManager {
         if (item.type === LOOT_TYPES.HEART) {
           if (player.hp < player.maxHp) {
             player.hp = Math.min(player.maxHp, player.hp + 25);
-            combatManager.addFloatingText('❤️ +25 LEBEN', player.x, player.y - 20, '#4ade80');
-            combatManager.addHitSparks(player.x, player.y, '#4ade80', 12);
+            combatManager?.addFloatingText('❤️ +25 LEBEN', player.x, player.y - 20, '#4ade80');
+            combatManager?.addHitSparks(player.x, player.y, '#4ade80', 12);
             this.lootItems.splice(i, 1);
           }
         } else if (item.type === LOOT_TYPES.ARROW) {
           if (player.ranged && player.ranged.ammo < 30) {
             player.ranged.ammo = Math.min(30, player.ranged.ammo + 3);
-            combatManager.addFloatingText('🏹 +3 PFEILE', player.x, player.y - 20, '#38bdf8');
-            combatManager.addHitSparks(player.x, player.y, '#38bdf8', 10);
+            combatManager?.addFloatingText('🏹 +3 PFEILE', player.x, player.y - 20, '#38bdf8');
+            combatManager?.addHitSparks(player.x, player.y, '#38bdf8', 10);
             this.lootItems.splice(i, 1);
           }
         } else if (item.type === LOOT_TYPES.SPIRIT_GEM) {
-          combatManager.addFloatingText('⭐ GEIST-FUNKE', player.x, player.y - 20, '#fde047');
-          combatManager.addHitSparks(player.x, player.y, '#facc15', 14);
+          combatManager?.addFloatingText('⭐ GEIST-FUNKE', player.x, player.y - 20, '#fde047');
+          combatManager?.addHitSparks(player.x, player.y, '#facc15', 14);
           this.lootItems.splice(i, 1);
         }
       }
     }
 
-    // 3. Update XP Orbs (Magnetischer Flug zum Spieler)
+    // 3. Update XP Orbs (Magnetischer Flug zum Spieler, nur in aktueller Dimension)
     const MAGNET_RADIUS = 90;
     const PICKUP_RADIUS = 14;
 
     for (let i = this.xpOrbs.length - 1; i >= 0; i--) {
       const orb = this.xpOrbs[i];
+      if (orb.dimension && curDim && orb.dimension !== curDim) continue;
+
       orb.life -= dt;
       if (orb.life <= 0) {
         this.xpOrbs.splice(i, 1);
@@ -7333,10 +7346,12 @@ class EnemyManager {
   }
 
   renderLoot(ctx, t) {
-    const curDim = this.game.currentDimension;
+    const curDim = this.game?.currentDimension || DIMENSIONS.OVERWORLD;
 
-    // 1. Render Normal Loot
+    // 1. Render Normal Loot (nur in der Dimension wo es gedroppt wurde!)
     this.lootItems.forEach(item => {
+      if (item.dimension && curDim && item.dimension !== curDim) return;
+
       const bob = Math.sin(t * 4 + item.bobOffset) * 2.5;
 
       ctx.save();
@@ -7385,8 +7400,10 @@ class EnemyManager {
       ctx.restore();
     });
 
-    // 2. Render Glowing Green XP Orbs (Kleine grüne leuchtende Punkte)
+    // 2. Render Glowing Green XP Orbs (nur in der Dimension wo es gedroppt wurde!)
     this.xpOrbs.forEach(orb => {
+      if (orb.dimension && curDim && orb.dimension !== curDim) return;
+
       const bob = Math.sin(t * 6 + orb.bobOffset) * 2;
       const ox = orb.x;
       const oy = orb.y + bob;
@@ -9864,6 +9881,7 @@ class CombatManager {
     const maxRange = isCharged ? COMBAT_CONFIG.ARROW_CHARGED_RANGE : COMBAT_CONFIG.ARROW_RANGE;
 
     this.flyingArrows.push({
+      dimension: this.game?.currentDimension || 'overworld',
       x: startX,
       y: startY,
       vx: Math.cos(angle) * speed,
@@ -9962,13 +9980,15 @@ class CombatManager {
     });
   }
 
-  addDefeatPoof(x, y, category = 'normal') {
+  addDefeatPoof(x, y, category = 'normal', dimension = null) {
     const count = category === 'boss' ? 32 : 18;
     const colors = category === 'boss' ? ['#facc15', '#f43f5e', '#a855f7', '#ffffff'] : ['#f8fafc', '#e2e8f0', '#cbd5e1', '#fef08a'];
+    const dim = dimension || this.game?.currentDimension || 'overworld';
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const sp = Math.random() * 70 + 20;
       this.defeatPoofs.push({
+        dimension: dim,
         x,
         y,
         vx: Math.cos(angle) * sp,
@@ -9985,6 +10005,7 @@ class CombatManager {
 
   fireEnemyProjectile(config) {
     this.enemyProjectiles.push({
+      dimension: config.dimension || this.game?.currentDimension || 'overworld',
       type: config.type || 'generic',
       x: config.x,
       y: config.y,
@@ -10003,8 +10024,9 @@ class CombatManager {
     });
   }
 
-  createShockwave(x, y, maxRadius, damage, color = '#f59e0b', slowsPlayer = false) {
+  createShockwave(x, y, maxRadius, damage, color = '#f59e0b', slowsPlayer = false, dimension = null) {
     this.shockwaves.push({
+      dimension: dimension || this.game?.currentDimension || 'overworld',
       x,
       y,
       maxRadius,
@@ -10018,8 +10040,9 @@ class CombatManager {
     });
   }
 
-  spawnCelestialStrike(targetX, targetY, damage) {
+  spawnCelestialStrike(targetX, targetY, damage, dimension = null) {
     this.celestialStrikes.push({
+      dimension: dimension || this.game?.currentDimension || 'overworld',
       targetX,
       targetY,
       damage,
@@ -10029,8 +10052,9 @@ class CombatManager {
     });
   }
 
-  spawnHazardPuddle(x, y, radius = 18, duration = 4.5, damage = 10, color = '#a855f7') {
+  spawnHazardPuddle(x, y, radius = 18, duration = 4.5, damage = 10, color = '#a855f7', dimension = null) {
     this.hazardPuddles.push({
+      dimension: dimension || this.game?.currentDimension || 'overworld',
       x,
       y,
       radius,
@@ -10170,10 +10194,13 @@ class CombatManager {
   update(dt) {
     const map = this.game.map;
     const player = this.game.player;
+    const curDim = this.game?.currentDimension || 'overworld';
 
     // 1. Update Flying Arrows
     for (let i = this.flyingArrows.length - 1; i >= 0; i--) {
       const arrow = this.flyingArrows[i];
+      if (arrow.dimension && arrow.dimension !== curDim) continue;
+
       const stepX = arrow.vx * dt;
       const stepY = arrow.vy * dt;
       arrow.x += stepX;
@@ -10185,6 +10212,7 @@ class CombatManager {
       if (arrow.trailTimer >= 0.02) {
         arrow.trailTimer = 0;
         this.hitSparks.push({
+          dimension: curDim,
           x: arrow.x,
           y: arrow.y,
           vx: -arrow.vx * 0.05 + (Math.random() - 0.5) * 10,
@@ -10242,6 +10270,7 @@ class CombatManager {
         } else {
           // Arrow sticks in the ground or obstacle!
           this.stuckArrows.push({
+            dimension: arrow.dimension || curDim,
             x: arrow.x,
             y: arrow.y,
             angle: arrow.angle,
@@ -10253,6 +10282,7 @@ class CombatManager {
           for (let s = 0; s < 6; s++) {
             const spAngle = Math.random() * Math.PI * 2;
             this.hitSparks.push({
+              dimension: curDim,
               x: arrow.x,
               y: arrow.y,
               vx: Math.cos(spAngle) * (Math.random() * 25 + 10),
@@ -10272,6 +10302,8 @@ class CombatManager {
     // 2. Update Stuck Arrows (quiver animation & player pickup)
     for (let i = this.stuckArrows.length - 1; i >= 0; i--) {
       const stuck = this.stuckArrows[i];
+      if (stuck.dimension && stuck.dimension !== curDim) continue;
+
       if (stuck.quiverTimer > 0) {
         stuck.quiverTimer -= dt;
       }
@@ -10280,7 +10312,7 @@ class CombatManager {
       if (stuck.canCollect) {
         const pDist = Math.hypot(player.x - stuck.x, player.y - stuck.y);
         if (pDist <= COMBAT_CONFIG.ARROW_PICKUP_RADIUS) {
-          if (player.ranged.ammo < COMBAT_CONFIG.MAX_AMMO) {
+          if (player && player.ranged && player.ranged.ammo < COMBAT_CONFIG.MAX_AMMO) {
             player.ranged.ammo++;
 
             // Shiny green/gold pickup sparkles
@@ -10371,6 +10403,8 @@ class CombatManager {
     // 7. Update Enemy Projectiles
     for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
       const proj = this.enemyProjectiles[i];
+      if (proj.dimension && curDim && proj.dimension !== curDim) continue;
+
       proj.x += proj.dirX * proj.speed * dt;
       proj.y += proj.dirY * proj.speed * dt;
       proj.distTraveled += proj.speed * dt;
@@ -10380,6 +10414,7 @@ class CombatManager {
       if (proj.trailTimer >= 0.035) {
         proj.trailTimer = 0;
         this.hitSparks.push({
+          dimension: curDim,
           x: proj.x,
           y: proj.y,
           vx: -proj.dirX * 18 + (Math.random() - 0.5) * 12,
@@ -10412,7 +10447,7 @@ class CombatManager {
 
       if (hitWall || proj.distTraveled >= proj.maxDist) {
         if (proj.spawnsPuddle) {
-          this.spawnHazardPuddle(proj.x, proj.y, 20, 5.0, 10, proj.color);
+          this.spawnHazardPuddle(proj.x, proj.y, 20, 5.0, 10, proj.color, proj.dimension);
         }
         this.addHitSparks(proj.x, proj.y, proj.color, 8);
         this.enemyProjectiles.splice(i, 1);
@@ -10422,6 +10457,8 @@ class CombatManager {
     // 8. Update Shockwaves
     for (let i = this.shockwaves.length - 1; i >= 0; i--) {
       const sw = this.shockwaves[i];
+      if (sw.dimension && curDim && sw.dimension !== curDim) continue;
+
       sw.timer += dt;
       sw.currentRadius = (sw.timer / sw.duration) * sw.maxRadius;
 
@@ -10443,6 +10480,8 @@ class CombatManager {
     // 9. Update Celestial Strikes
     for (let i = this.celestialStrikes.length - 1; i >= 0; i--) {
       const cs = this.celestialStrikes[i];
+      if (cs.dimension && curDim && cs.dimension !== curDim) continue;
+
       cs.timer += dt;
 
       if (cs.timer >= cs.delay && !cs.impacted) {
@@ -10462,6 +10501,8 @@ class CombatManager {
     // 10. Update Hazard Puddles
     for (let i = this.hazardPuddles.length - 1; i >= 0; i--) {
       const pud = this.hazardPuddles[i];
+      if (pud.dimension && curDim && pud.dimension !== curDim) continue;
+
       pud.timer += dt;
       pud.tickTimer += dt;
 
@@ -10470,6 +10511,7 @@ class CombatManager {
         const pAng = Math.random() * Math.PI * 2;
         const pDist = Math.random() * pud.radius;
         this.hitSparks.push({
+          dimension: curDim,
           x: pud.x + Math.cos(pAng) * pDist,
           y: pud.y + Math.sin(pAng) * pDist,
           vx: (Math.random() - 0.5) * 8,
@@ -10498,6 +10540,8 @@ class CombatManager {
     // 11. Update Defeat Poof Particles
     for (let i = this.defeatPoofs.length - 1; i >= 0; i--) {
       const p = this.defeatPoofs[i];
+      if (p.dimension && curDim && p.dimension !== curDim) continue;
+
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.rotation += p.rotSpeed * dt;
@@ -10527,7 +10571,9 @@ class CombatManager {
   }
 
   renderHazardPuddles(ctx, t) {
+    const curDim = this.game?.currentDimension || 'overworld';
     for (const pud of this.hazardPuddles) {
+      if (pud.dimension && pud.dimension !== curDim) continue;
       const alpha = Math.min(1.0, (pud.duration - pud.timer) / 0.5) * 0.65;
       const pulse = Math.sin(t * 5 + pud.x) * 1.5;
       const r = pud.radius + pulse;
@@ -10554,7 +10600,9 @@ class CombatManager {
   }
 
   renderShockwaves(ctx, t) {
+    const curDim = this.game?.currentDimension || 'overworld';
     for (const sw of this.shockwaves) {
+      if (sw.dimension && sw.dimension !== curDim) continue;
       const alpha = 1.0 - (sw.timer / sw.duration);
       ctx.save();
       ctx.strokeStyle = sw.color;
@@ -10569,7 +10617,9 @@ class CombatManager {
   }
 
   renderCelestialStrikes(ctx, t) {
+    const curDim = this.game?.currentDimension || 'overworld';
     for (const cs of this.celestialStrikes) {
+      if (cs.dimension && cs.dimension !== curDim) continue;
       const prog = cs.timer / cs.delay;
       ctx.save();
       ctx.translate(cs.targetX, cs.targetY);
@@ -10613,7 +10663,9 @@ class CombatManager {
   }
 
   renderEnemyProjectiles(ctx, t) {
+    const curDim = this.game?.currentDimension || 'overworld';
     for (const proj of this.enemyProjectiles) {
+      if (proj.dimension && proj.dimension !== curDim) continue;
       ctx.save();
       ctx.translate(proj.x, proj.y);
 
@@ -10686,7 +10738,9 @@ class CombatManager {
   }
 
   renderDefeatPoofs(ctx) {
+    const curDim = this.game?.currentDimension || 'overworld';
     for (const p of this.defeatPoofs) {
+      if (p.dimension && p.dimension !== curDim) continue;
       const alpha = p.life / p.maxLife;
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -10700,7 +10754,9 @@ class CombatManager {
   }
 
   renderStuckArrows(ctx) {
+    const curDim = this.game?.currentDimension || 'overworld';
     for (const stuck of this.stuckArrows) {
+      if (stuck.dimension && stuck.dimension !== curDim) continue;
       ctx.save();
       ctx.translate(stuck.x, stuck.y);
 
@@ -10743,7 +10799,9 @@ class CombatManager {
   }
 
   renderFlyingArrows(ctx) {
+    const curDim = this.game?.currentDimension || 'overworld';
     for (const arrow of this.flyingArrows) {
+      if (arrow.dimension && arrow.dimension !== curDim) continue;
       ctx.save();
       ctx.translate(arrow.x, arrow.y);
       ctx.rotate(arrow.angle);
