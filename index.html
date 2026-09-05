@@ -341,46 +341,68 @@
     <!-- =======================================================
          CHARACTER & NAME SELECTION MODAL (Game Intro / Setup)
          ======================================================= -->
+    <!-- =======================================================
+         CHARACTER & NAME SELECTION WIZARD (Clean 3 Steps)
+         ======================================================= -->
     <div id="character-select-modal" class="char-modal-backdrop">
       <div class="char-modal-dialog">
-        <div class="char-modal-header">
-          <div class="char-modal-title-group">
-            <span class="char-modal-icon">🎭</span>
-            <h2>Wähle deinen Helden &amp; Namen</h2>
-          </div>
-          <span class="char-modal-subtitle">15 Ghibli-Helden • Gleiche Werte &amp; Angriffe • Wähle deinen Stil</span>
+        <!-- Step Indicator Dots -->
+        <div class="char-wizard-dots">
+          <span class="wizard-dot active" data-step="1"></span>
+          <span class="wizard-dot" data-step="2"></span>
+          <span class="wizard-dot" data-step="3"></span>
         </div>
 
-        <!-- Name Input Section -->
-        <div class="char-name-section">
-          <label for="hero-name-input" class="char-name-label">Dein Heldenname:</label>
+        <!-- STEP 1: Name wählen -->
+        <div id="char-wizard-step-1" class="char-wizard-step active">
+          <h2 class="wizard-step-title">Wähle deinen Namen</h2>
           <div class="char-name-input-row">
-            <input type="text" id="hero-name-input" class="hero-name-input" maxlength="20" placeholder="Dein Heldenname..." value="Ren" autocomplete="off" spellcheck="false">
+            <input type="text" id="hero-name-input" class="hero-name-input" maxlength="20" placeholder="Dein Name..." value="Ren" autocomplete="off" spellcheck="false">
             <button id="btn-random-hero-name" class="btn-random-name" title="Zufälliger Ghibli-Name">
               <span>🎲 Zufall</span>
             </button>
           </div>
+          <div class="wizard-nav-row single-nav">
+            <button id="btn-step1-next" class="btn-wizard-nav btn-wizard-primary">
+              <span>Weiter →</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Category Filters -->
-        <div class="char-filter-pills-row" id="char-select-filters">
-          <button class="char-pill-btn active" data-category="all">Alle (15)</button>
-          <button class="char-pill-btn" data-category="male">⚔️ Männlich (4)</button>
-          <button class="char-pill-btn" data-category="female">🌸 Weiblich (4)</button>
-          <button class="char-pill-btn" data-category="beast">🐾 Tierwesen (5)</button>
-          <button class="char-pill-btn" data-category="spirit">👻 Geisterwesen (2)</button>
+        <!-- STEP 2: Charakter wählen (Große Figuren, keine Namen, keine Texte) -->
+        <div id="char-wizard-step-2" class="char-wizard-step">
+          <h2 class="wizard-step-title">Wähle deinen Charakter</h2>
+          <div id="char-select-grid" class="char-select-grid visual-only-grid"></div>
+          <div class="wizard-nav-row">
+            <button id="btn-step2-back" class="btn-wizard-nav btn-wizard-secondary">
+              <span>← Zurück</span>
+            </button>
+            <button id="btn-step2-next" class="btn-wizard-nav btn-wizard-primary">
+              <span>Weiter →</span>
+            </button>
+          </div>
         </div>
 
-        <!-- 15 Characters Selection Grid -->
-        <div id="char-select-grid" class="char-select-grid"></div>
-
-        <!-- Footer / Start Game Button -->
-        <div class="char-modal-footer">
-          <button id="btn-start-game" class="btn-start-game" title="Das Abenteuer beginnen!">
-            <span class="start-btn-icon">⚔️</span>
-            <span class="start-btn-text">Los geht's! (Abenteuer starten)</span>
-          </button>
+        <!-- STEP 3: Bestätigung ("Du bist [Name]...") + Welt betreten -->
+        <div id="char-wizard-step-3" class="char-wizard-step">
+          <div class="char-confirm-preview-wrap">
+            <canvas id="char-confirm-canvas" width="120" height="120" class="char-confirm-canvas"></canvas>
+          </div>
+          <div class="char-confirm-intro">
+            <p id="char-confirm-greeting" class="char-confirm-greeting">Du bist <span id="confirm-hero-name" class="highlight-name">Ren</span>,</p>
+            <p id="char-confirm-sub" class="char-confirm-sub">der Schattengänger.</p>
+          </div>
+          <div class="wizard-nav-row">
+            <button id="btn-step3-back" class="btn-wizard-nav btn-wizard-secondary">
+              <span>← Zurück</span>
+            </button>
+            <button id="btn-start-game" class="btn-start-game" title="Die Welt betreten">
+              <span class="start-btn-icon">🌍</span>
+              <span class="start-btn-text">Welt betreten</span>
+            </button>
+          </div>
         </div>
+
       </div>
     </div>
   </div>

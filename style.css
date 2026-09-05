@@ -1413,120 +1413,129 @@ canvas#gameCanvas {
 }
 
 .char-modal-dialog {
-  background: rgba(18, 22, 34, 0.96);
-  border: 1.5px solid rgba(167, 139, 250, 0.4);
+  background: rgba(16, 20, 32, 0.96);
+  border: 1.5px solid rgba(167, 139, 250, 0.35);
   border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 40px rgba(167, 139, 250, 0.2);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.85), 0 0 45px rgba(167, 139, 250, 0.18);
   width: 100%;
-  max-width: 860px;
+  max-width: 620px;
   max-height: 92vh;
   max-height: 92dvh;
   display: flex;
   flex-direction: column;
-  padding: 20px 24px;
-  gap: 12px;
+  align-items: center;
+  padding: 24px 28px;
+  gap: 16px;
   overflow: hidden;
   animation: charModalPop 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   color: #f8fafc;
   user-select: none;
+  position: relative;
 }
 
 @keyframes charModalPop {
-  0% { transform: scale(0.92); opacity: 0; }
+  0% { transform: scale(0.93); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
 
-/* Modal Header */
-.char-modal-header {
+/* Step Indicator Dots */
+.char-wizard-dots {
   display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.wizard-dot {
+  width: 28px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+  transition: all 0.3s ease;
+}
+
+.wizard-dot.active {
+  background: #55e6a5;
+  box-shadow: 0 0 10px rgba(85, 230, 165, 0.6);
+  width: 36px;
+}
+
+/* Wizard Steps */
+.char-wizard-step {
+  display: none;
+  width: 100%;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding-bottom: 10px;
+  gap: 16px;
+  animation: fadeInStep 0.22s ease-out;
 }
 
-.char-modal-title-group {
+.char-wizard-step.active {
   display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
-.char-modal-icon {
-  font-size: 1.4rem;
+@keyframes fadeInStep {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.char-modal-header h2 {
-  font-size: 1.35rem;
+.wizard-step-title {
+  font-size: 1.45rem;
   font-weight: 800;
   color: #ffffff;
   letter-spacing: -0.02em;
   margin: 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-.char-modal-subtitle {
-  font-size: 0.78rem;
-  color: #94a3b8;
-}
-
-/* Name Input Section */
-.char-name-section {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  background: rgba(15, 23, 42, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 10px 14px;
-}
-
-.char-name-label {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: #cbd5e1;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+/* Step 1: Name Input */
+#char-wizard-step-1 {
+  padding: 18px 0;
 }
 
 .char-name-input-row {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
+  width: 100%;
+  max-width: 380px;
 }
 
 .hero-name-input {
   flex: 1;
   background: rgba(10, 14, 24, 0.85);
   border: 1.5px solid rgba(167, 139, 250, 0.4);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 0.95rem;
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 1.15rem;
   font-weight: 700;
   color: #38bdf8;
   outline: none;
   transition: all 0.2s;
   font-family: inherit;
+  text-align: center;
 }
 
 .hero-name-input:focus {
   border-color: #55e6a5;
-  box-shadow: 0 0 12px rgba(85, 230, 165, 0.35);
+  box-shadow: 0 0 16px rgba(85, 230, 165, 0.35);
   color: #55e6a5;
 }
 
 .btn-random-name {
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   color: #cbd5e1;
-  padding: 8px 14px;
-  border-radius: 8px;
-  font-size: 0.82rem;
+  padding: 11px 16px;
+  border-radius: 12px;
+  font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
@@ -1541,49 +1550,18 @@ canvas#gameCanvas {
   transform: scale(0.96);
 }
 
-/* Category Filter Pills */
-.char-filter-pills-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: center;
-}
-
-.char-pill-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #94a3b8;
-  padding: 4px 12px;
-  border-radius: 16px;
-  font-size: 0.76rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.char-pill-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-
-.char-pill-btn.active {
-  background: #a78bfa;
-  color: #0f172a;
-  font-weight: 700;
-  box-shadow: 0 0 12px rgba(167, 139, 250, 0.35);
-}
-
-/* 15 Characters Grid */
-.char-select-grid {
+/* Step 2: 15 Characters Visual Grid (Large figures, no text) */
+.char-select-grid.visual-only-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  max-height: 380px;
   overflow-y: auto;
-  max-height: 360px;
-  padding: 4px 6px 8px 2px;
+  padding: 6px 8px 10px;
+  width: 100%;
+  justify-items: center;
 }
 
-/* Custom Scrollbar for Grid */
 .char-select-grid::-webkit-scrollbar {
   width: 6px;
 }
@@ -1599,32 +1577,33 @@ canvas#gameCanvas {
   background: rgba(167, 139, 250, 0.6);
 }
 
-/* Individual Hero Select Card */
 .char-select-card {
-  background: rgba(15, 20, 32, 0.85);
-  border: 1.5px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 8px 6px;
+  background: rgba(14, 18, 30, 0.88);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 6px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  gap: 4px;
+  justify-content: center;
   cursor: pointer;
   transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
   position: relative;
+  width: 88px;
+  height: 98px;
 }
 
 .char-select-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(24, 30, 48, 0.92);
+  transform: translateY(-3px) scale(1.03);
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(24, 32, 52, 0.95);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
 }
 
 .char-select-card.is-selected {
   border-color: #55e6a5;
-  background: rgba(18, 36, 38, 0.96);
-  box-shadow: 0 0 16px rgba(85, 230, 165, 0.35);
+  background: rgba(16, 38, 38, 0.95);
+  box-shadow: 0 0 20px rgba(85, 230, 165, 0.45);
+  transform: translateY(-2px) scale(1.04);
 }
 
 .char-select-card.is-selected::after {
@@ -1634,62 +1613,126 @@ canvas#gameCanvas {
   right: 6px;
   font-size: 0.72rem;
   font-weight: 900;
-  color: #55e6a5;
-  background: rgba(85, 230, 165, 0.2);
+  color: #0f172a;
+  background: #55e6a5;
   border-radius: 50%;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 .char-card-canvas {
-  width: 60px;
-  height: 60px;
+  width: 78px;
+  height: 88px;
   image-rendering: auto;
-  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45));
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
 }
 
-.char-card-name {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.15;
+/* Step 3: Confirmation */
+#char-wizard-step-3 {
+  padding: 10px 0;
+  gap: 18px;
 }
 
-.char-card-sub {
-  font-size: 0.65rem;
-  color: #94a3b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+.char-confirm-preview-wrap {
+  background: radial-gradient(circle, rgba(85, 230, 165, 0.15) 0%, rgba(15, 23, 42, 0) 70%);
+  padding: 12px;
+  border-radius: 50%;
 }
 
-.char-card-badge {
-  font-size: 0.62rem;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 4px;
-  margin-top: 2px;
+.char-confirm-canvas {
+  width: 120px;
+  height: 120px;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.6));
 }
 
-/* Footer / Start Game Button */
-.char-modal-footer {
+.char-confirm-intro {
   display: flex;
-  justify-content: center;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-direction: column;
+  gap: 4px;
 }
 
+.char-confirm-greeting {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin: 0;
+}
+
+.highlight-name {
+  color: #55e6a5;
+  text-shadow: 0 0 14px rgba(85, 230, 165, 0.45);
+}
+
+.char-confirm-sub {
+  font-size: 1.05rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+/* Navigation Buttons Row */
+.wizard-nav-row {
+  display: flex;
+  gap: 14px;
+  width: 100%;
+  max-width: 420px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.wizard-nav-row.single-nav {
+  justify-content: center;
+}
+
+.btn-wizard-nav {
+  padding: 11px 26px;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-wizard-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #cbd5e1;
+}
+
+.btn-wizard-secondary:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.btn-wizard-primary {
+  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.4);
+}
+
+.btn-wizard-primary:hover {
+  background: linear-gradient(135deg, #c4b5fd, #a78bfa);
+  box-shadow: 0 6px 22px rgba(139, 92, 246, 0.6);
+  transform: translateY(-1px);
+}
+
+/* Final Start Button: Welt betreten */
 .btn-start-game {
   background: linear-gradient(135deg, #10b981, #059669);
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.35);
   border-radius: 12px;
   padding: 12px 32px;
-  font-size: 1.05rem;
+  font-size: 1.08rem;
   font-weight: 800;
   letter-spacing: 0.3px;
   cursor: pointer;
@@ -1698,9 +1741,6 @@ canvas#gameCanvas {
   gap: 8px;
   box-shadow: 0 4px 20px rgba(16, 185, 129, 0.45);
   transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
-  width: 100%;
-  max-width: 380px;
-  justify-content: center;
 }
 
 .btn-start-game:hover {
@@ -1714,91 +1754,64 @@ canvas#gameCanvas {
 }
 
 .start-btn-icon {
-  font-size: 1.2rem;
+  font-size: 1.25rem;
 }
 
-/* Mobile Responsiveness for Landscape Mode */
+/* Mobile Responsiveness */
+@media (max-width: 600px) {
+  .char-select-grid.visual-only-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .char-select-card {
+    width: 72px;
+    height: 82px;
+  }
+  .char-card-canvas {
+    width: 64px;
+    height: 74px;
+  }
+}
+
 @media (max-height: 520px) {
   .char-modal-dialog {
-    padding: 8px 14px;
-    gap: 6px;
+    padding: 10px 16px;
+    gap: 8px;
     max-height: 98vh;
     max-height: 98dvh;
     border-radius: 14px;
   }
-
-  .char-modal-header {
-    padding-bottom: 4px;
-  }
-
-  .char-modal-header h2 {
+  .wizard-step-title {
     font-size: 1.05rem;
+    margin: 0;
   }
-
-  .char-modal-subtitle {
-    display: none;
-  }
-
-  .char-name-section {
-    padding: 4px 10px;
-    gap: 2px;
-  }
-
-  .char-name-label {
-    font-size: 0.7rem;
-  }
-
-  .hero-name-input {
-    padding: 4px 8px;
-    font-size: 0.82rem;
-  }
-
-  .btn-random-name {
-    padding: 4px 8px;
-    font-size: 0.74rem;
-  }
-
-  .char-filter-pills-row {
-    gap: 4px;
-  }
-
-  .char-pill-btn {
-    padding: 2px 8px;
-    font-size: 0.68rem;
-  }
-
-  .char-select-grid {
-    max-height: 145px;
-    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+  .char-select-grid.visual-only-grid {
+    max-height: 180px;
+    grid-template-columns: repeat(5, 1fr);
     gap: 6px;
+    padding: 4px;
   }
-
   .char-select-card {
-    padding: 4px 3px;
-    gap: 2px;
+    width: 62px;
+    height: 72px;
   }
-
   .char-card-canvas {
-    width: 44px;
-    height: 44px;
+    width: 54px;
+    height: 64px;
   }
-
-  .char-card-name {
-    font-size: 0.72rem;
+  .char-confirm-canvas {
+    width: 80px;
+    height: 80px;
   }
-
-  .char-card-sub {
-    display: none;
+  .char-confirm-greeting {
+    font-size: 1.15rem;
   }
-
-  .char-modal-footer {
-    padding-top: 4px;
+  .char-confirm-sub {
+    font-size: 0.85rem;
   }
-
-  .btn-start-game {
+  .btn-start-game, .btn-wizard-nav {
     padding: 7px 18px;
     font-size: 0.88rem;
-    max-width: 280px;
   }
 }
 

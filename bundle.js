@@ -13381,20 +13381,28 @@ class Game {
     this.lanternStatusEl = document.getElementById('lantern-status-hint');
     this.timePanelEl = document.getElementById('time-panel');
 
-    // Character & Name Selection State
+    // Character & Name Selection Wizard State
     this.compactPlayerNameEl = document.getElementById('compact-player-name');
     this.charSelectModal = document.getElementById('character-select-modal');
     this.heroNameInput = document.getElementById('hero-name-input');
     this.btnRandomName = document.getElementById('btn-random-hero-name');
     this.btnStartGame = document.getElementById('btn-start-game');
-    this.charSelectFilters = document.getElementById('char-select-filters');
     this.charSelectGrid = document.getElementById('char-select-grid');
     this.btnOpenCharSelect = document.getElementById('btn-open-char-select');
 
+    this.btnStep1Next = document.getElementById('btn-step1-next');
+    this.btnStep2Back = document.getElementById('btn-step2-back');
+    this.btnStep2Next = document.getElementById('btn-step2-next');
+    this.btnStep3Back = document.getElementById('btn-step3-back');
+    this.confirmHeroNameEl = document.getElementById('confirm-hero-name');
+    this.confirmHeroSubEl = document.getElementById('char-confirm-sub');
+    this.confirmCanvas = document.getElementById('char-confirm-canvas');
+    this.confirmCtx = this.confirmCanvas ? this.confirmCanvas.getContext('2d') : null;
+
+    this.charWizardStep = 1;
     this.isCharacterSelectOpen = !!this.charSelectModal;
-    this.selectedHeroSkin = this.player.skinId || getSelectedSkin();
+    this.selectedHeroSkin = (this.player && this.player.skinId) || getSelectedSkin();
     this.charPreviewCanvases = {};
-    this.charCategoryFilter = 'all';
 
     this.lastTime = 0;
     this.animTime = 0;
@@ -13499,11 +13507,18 @@ class Game {
     window.addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
         if (e.code === 'Enter' && e.target === this.heroNameInput) {
-          this.startGameWithSelectedHero();
+          this.goToCharWizardStep(2);
         }
         return;
       }
-      if (this.isCharacterSelectOpen) return;
+      if (this.isCharacterSelectOpen) {
+        if (e.code === 'Enter') {
+          if (this.charWizardStep === 1) this.goToCharWizardStep(2);
+          else if (this.charWizardStep === 2) this.goToCharWizardStep(3);
+          else if (this.charWizardStep === 3) this.startGameWithSelectedHero();
+        }
+        return;
+      }
 
       this.input.keys[e.code] = true;
       if (e.repeat) return; // Prevent OS keyboard auto-repeat from resetting charge timers!
@@ -16690,21 +16705,29 @@ class Game {
       });
     }
 
-    // Category filter pills
-    if (this.charSelectFilters) {
-      this.charSelectFilters.addEventListener('click', (e) => {
-        const btn = e.target.closest('.char-pill-btn');
-        if (!btn) return;
-        const cat = btn.dataset.filter || 'all';
-        this.charCategoryFilter = cat;
-        this.charSelectFilters.querySelectorAll('.char-pill-btn').forEach(b => {
-          b.classList.toggle('active', b === btn);
-        });
-        this.renderCharacterSelectCards();
+    // Wizard Step Navigation
+    if (this.btnStep1Next) {
+      this.btnStep1Next.addEventListener('click', () => {
+        this.goToCharWizardStep(2);
+      });
+    }
+    if (this.btnStep2Back) {
+      this.btnStep2Back.addEventListener('click', () => {
+        this.goToCharWizardStep(1);
+      });
+    }
+    if (this.btnStep2Next) {
+      this.btnStep2Next.addEventListener('click', () => {
+        this.goToCharWizardStep(3);
+      });
+    }
+    if (this.btnStep3Back) {
+      this.btnStep3Back.addEventListener('click', () => {
+        this.goToCharWizardStep(2);
       });
     }
 
-    // Start Game Button
+    // Final Start Button: Welt betreten
     if (this.btnStartGame) {
       this.btnStartGame.addEventListener('click', () => {
         this.startGameWithSelectedHero();
@@ -16718,8 +16741,56 @@ class Game {
       });
     }
 
-    // Populate initial cards
+    // Populate initial cards and start at step 1
+    this.goToCharWizardStep(1);
     this.renderCharacterSelectCards();
+  }
+
+  goToCharWizardStep(step) {
+    this.charWizardStep = step;
+
+    // Ensure valid name before moving past step 1
+    if (step >= 2 && this.heroNameInput) {
+      const val = this.heroNameInput.value.trim();
+      if (!val) {
+        const defChar = (typeof CHARACTERS_MAP !== 'undefined' ? CHARACTERS_MAP[this.selectedHeroSkin] : null) || (CHARACTERS_DATA && CHARACTERS_DATA[0]);
+        const fallback = defChar ? defChar.name : 'Ren';
+        this.heroNameInput.value = fallback;
+        setSelectedPlayerName(fallback);
+        if (this.player) this.player.setName(fallback);
+        this.updatePlayerNameUI();
+      }
+    }
+
+    // Toggle step containers
+    for (let i = 1; i <= 3; i++) {
+      const stepEl = document.getElementById(`char-wizard-step-${i}`);
+      if (stepEl) {
+        stepEl.classList.toggle('active', i === step);
+      }
+    }
+
+    // Toggle indicator dots
+    const dots = document.querySelectorAll('.wizard-dot');
+    dots.forEach((dot, idx) => {
+      dot.classList.toggle('active', idx + 1 === step);
+    });
+
+    if (step === 3) {
+      this.updateConfirmStep();
+    }
+  }
+
+  updateConfirmStep() {
+    const chosenName = (this.heroNameInput && this.heroNameInput.value.trim()) || (this.player ? this.player.name : 'Ren');
+    if (this.confirmHeroNameEl) {
+      this.confirmHeroNameEl.textContent = chosenName;
+    }
+    const defChar = (typeof CHARACTERS_MAP !== 'undefined' ? CHARACTERS_MAP[this.selectedHeroSkin] : null) || (CHARACTERS_DATA && CHARACTERS_DATA[0]);
+    if (this.confirmHeroSubEl && defChar) {
+      this.confirmHeroSubEl.textContent = defChar.subtitle ? `${defChar.subtitle}.` : `${defChar.name}.`;
+    }
+    this.renderConfirmPreview();
   }
 
   renderCharacterSelectCards() {
@@ -16727,26 +16798,18 @@ class Game {
     this.charSelectGrid.innerHTML = '';
     this.charPreviewCanvases = {};
 
-    const list = (typeof CHARACTERS_DATA !== 'undefined' ? CHARACTERS_DATA : []).filter(c => {
-      if (this.charCategoryFilter === 'all') return true;
-      return c.category === this.charCategoryFilter;
-    });
+    const list = (typeof CHARACTERS_DATA !== 'undefined' ? CHARACTERS_DATA : []);
 
     list.forEach(char => {
       const isSelected = char.id === this.selectedHeroSkin;
       const card = document.createElement('div');
       card.className = `char-select-card${isSelected ? ' is-selected' : ''}`;
       card.dataset.charId = char.id;
+      card.title = `${char.name} (${char.subtitle})`;
 
+      // Clean card with large figure only - no names or text
       card.innerHTML = `
-        <div class="char-canvas-wrap">
-          <canvas width="60" height="60" class="char-preview-canvas" data-char-id="${char.id}"></canvas>
-        </div>
-        <div class="char-card-info">
-          <div class="char-card-name">${char.name}</div>
-          <div class="char-card-subtitle">${char.subtitle}</div>
-          <div class="char-card-tag">${char.tag}</div>
-        </div>
+        <canvas width="78" height="88" class="char-card-canvas" data-char-id="${char.id}"></canvas>
       `;
 
       card.addEventListener('click', () => {
@@ -16758,15 +16821,8 @@ class Game {
           c.classList.toggle('is-selected', c.dataset.charId === char.id);
         });
 
-        if (this.heroNameInput) {
-          const currentVal = this.heroNameInput.value.trim();
-          const wasDefaultName = CHARACTERS_DATA.some(c => c.name === currentVal) || !currentVal;
-          if (wasDefaultName) {
-            this.heroNameInput.value = char.name;
-            setSelectedPlayerName(char.name);
-            if (this.player) this.player.setName(char.name);
-            this.updatePlayerNameUI();
-          }
+        if (this.charWizardStep === 3) {
+          this.updateConfirmStep();
         }
       });
 
@@ -16786,14 +16842,40 @@ class Game {
   }
 
   updateCharacterSelectPreviews(dt) {
-    if (!this.charPreviewCanvases) return;
-    for (const [id, item] of Object.entries(this.charPreviewCanvases)) {
-      const { canvas, ctx, charDef } = item;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      if (typeof charDef.render === 'function') {
-        charDef.render(ctx, 30, 48, this.animTime, 'down', true, 0);
+    if (this.charWizardStep === 2 && this.charPreviewCanvases) {
+      for (const [id, item] of Object.entries(this.charPreviewCanvases)) {
+        const { canvas, ctx, charDef } = item;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (typeof charDef.render === 'function') {
+          ctx.save();
+          ctx.translate(39, 74);
+          ctx.scale(1.65, 1.65);
+          charDef.render(ctx, 0, 0, this.animTime, 'down', true, 0);
+          ctx.restore();
+        }
       }
+    } else if (this.charWizardStep === 3) {
+      this.renderConfirmPreview();
     }
+  }
+
+  renderConfirmPreview() {
+    if (!this.confirmCanvas || !this.confirmCtx) {
+      this.confirmCanvas = document.getElementById('char-confirm-canvas');
+      if (this.confirmCanvas) this.confirmCtx = this.confirmCanvas.getContext('2d');
+    }
+    if (!this.confirmCanvas || !this.confirmCtx) return;
+
+    const defChar = (typeof CHARACTERS_MAP !== 'undefined' ? CHARACTERS_MAP[this.selectedHeroSkin] : null) || (CHARACTERS_DATA && CHARACTERS_DATA[0]);
+    if (!defChar || typeof defChar.render !== 'function') return;
+
+    const ctx = this.confirmCtx;
+    ctx.clearRect(0, 0, this.confirmCanvas.width, this.confirmCanvas.height);
+    ctx.save();
+    ctx.translate(60, 98);
+    ctx.scale(2.2, 2.2);
+    defChar.render(ctx, 0, 0, this.animTime, 'down', true, 0);
+    ctx.restore();
   }
 
   startGameWithSelectedHero() {
@@ -16827,6 +16909,7 @@ class Game {
       this.heroNameInput.value = this.player.name || getSelectedPlayerName();
     }
     this.charSelectModal.classList.remove('hidden');
+    this.goToCharWizardStep(1);
     this.renderCharacterSelectCards();
   }
 
