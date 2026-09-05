@@ -12085,6 +12085,10 @@ class Player {
       this.elevation = 0;
       this.visualElevation = 0;
     }
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendRespawn(this.x, this.y);
+    }
   }
 
   addXp(amount) {
@@ -13364,6 +13368,65 @@ class Player {
 
     if (this.hp <= 0) {
       this.die('enemy');
+    }
+
+    return 'hit';
+  }
+
+  takePvPDamage(amount, kbX = 0, kbY = 0, attackerId = null) {
+    if (this.isDead) return 'dead';
+
+    // 1. Dash-I-Frames
+    if (this.dash && this.dash.active) {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('💨 AUSGEWICHEN!', this.x, this.y - 18, '#67e8f9');
+      }
+      return 'dodged';
+    }
+
+    // 2. Schild-Block
+    if (this.shield && this.shield.active && this.shield.energy > 0) {
+      const shieldSkill = this.skills?.shield || 0;
+      const blockEfficiency = Math.max(0.45, 0.85 - shieldSkill * 0.05);
+      this.shield.energy = Math.max(0, this.shield.energy - amount * blockEfficiency);
+      this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
+      if (this.game && this.game.combat) {
+        this.game.combat.addHitSparks(this.x, this.y, '#38bdf8', 14);
+        this.game.combat.addFloatingText('🛡️ GEBLOCKT!', this.x, this.y - 18, '#38bdf8');
+      }
+      if (this.shield.energy <= 0) {
+        this.shield.broken = true;
+        this.shield.stunTimer = COMBAT_CONFIG.SHIELD_BREAK_STUN || 1.2;
+        this.shield.active = false;
+        if (this.game && this.game.combat) {
+          this.game.combat.addFloatingText('💥 SCHILD ZERBROCHEN!', this.x, this.y - 26, '#ef4444');
+        }
+      }
+      return 'blocked';
+    }
+
+    // 3. Voller PvP-Treffer
+    this.hp = Math.max(0, this.hp - amount);
+    this.hitFlash = 0.3;
+    this.invulnTimer = 0.35;
+
+    // Knockback
+    if (kbX !== 0 || kbY !== 0) {
+      if (!this.checkCollision(this.x + kbX, this.y)) this.x += kbX;
+      if (!this.checkCollision(this.x, this.y + kbY)) this.y += kbY;
+    }
+
+    if (this.game && this.game.combat) {
+      this.game.combat.addHitSparks(this.x, this.y - 8, '#ef4444', 16);
+      this.game.combat.addFloatingText(`-${Math.round(amount)} HP`, this.x, this.y - 22, '#ef4444');
+    }
+
+    if (this.game && this.game.camera) {
+      this.game.camera.shake(6, 0.22);
+    }
+
+    if (this.hp <= 0) {
+      this.die('pvp');
     }
 
     return 'hit';
@@ -15080,6 +15143,721 @@ class TouchControls {
 }
 
 
+// --- js/remotePlayer.js ---
+
+class RemotePlayer {
+  constructor(data) {
+    this.id = data.id;
+    this.name = data.name || 'Mitspieler';
+    this.skinId = data.skinId || 'ren_twilight';
+
+    this.x = data.x || 800;
+    this.y = data.y || 1600;
+    this.targetX = this.x;
+    this.targetY = this.y;
+
+    this.elevation = data.elevation || 0;
+    this.targetElevation = this.elevation;
+    this.visualElevation = this.elevation;
+
+    this.dimension = data.dimension || 'overworld';
+    this.direction = data.direction || 'down';
+    this.isMoving = Boolean(data.isMoving);
+    this.isSprinting = Boolean(data.isSprinting);
+
+    this.hp = data.hp ?? 100;
+    this.maxHp = data.maxHp ?? 100;
+    this.level = data.level || 1;
+    this.xp = data.xp || 0;
+    this.pvpKills = data.pvpKills || 0;
+    this.deaths = data.deaths || 0;
+    this.isDead = Boolean(data.isDead);
+
+    this.shieldActive = Boolean(data.shieldActive);
+    this.isBearForm = Boolean(data.isBearForm);
+
+    this.hitFlash = 0;
+    this.radius = 6;
+
+    // Melee attack visual effect
+    this.swingAnim = 0;
+    this.swingType = null;
+  }
+
+  updateFromNetwork(data) {
+    if (typeof data.x === 'number') this.targetX = data.x;
+    if (typeof data.y === 'number') this.targetY = data.y;
+    if (typeof data.elevation === 'number') this.targetElevation = data.elevation;
+    if (data.dimension) this.dimension = data.dimension;
+    if (data.direction) this.direction = data.direction;
+    if (data.skinId) this.skinId = data.skinId;
+
+    this.isMoving = Boolean(data.isMoving);
+    this.isSprinting = Boolean(data.isSprinting);
+
+    if (typeof data.hp === 'number') {
+      if (data.hp < this.hp) this.hitFlash = 0.2;
+      this.hp = data.hp;
+    }
+    if (typeof data.maxHp === 'number') this.maxHp = data.maxHp;
+    if (typeof data.level === 'number') this.level = data.level;
+    if (typeof data.xp === 'number') this.xp = data.xp;
+    if (typeof data.pvpKills === 'number') this.pvpKills = data.pvpKills;
+    if (typeof data.deaths === 'number') this.deaths = data.deaths;
+    if (typeof data.isDead === 'boolean') this.isDead = data.isDead;
+
+    this.shieldActive = Boolean(data.shieldActive);
+    this.isBearForm = Boolean(data.isBearForm);
+  }
+
+  update(dt) {
+    if (this.hitFlash > 0) this.hitFlash -= dt;
+
+    // Smooth Lerp Position (Butterweiche Interpolation bei 25 Hz Netzwerk-Updates)
+    const lerpSpeed = 16.0;
+    const dx = this.targetX - this.x;
+    const dy = this.targetY - this.y;
+
+    // Schneller Sprung bei Teleportation / großem Desync (> 200 px)
+    if (Math.hypot(dx, dy) > 200) {
+      this.x = this.targetX;
+      this.y = this.targetY;
+    } else {
+      this.x += dx * Math.min(1.0, dt * lerpSpeed);
+      this.y += dy * Math.min(1.0, dt * lerpSpeed);
+    }
+
+    // Smooth elevation lerp
+    this.visualElevation += (this.targetElevation - this.visualElevation) * Math.min(1.0, dt * 10);
+    this.elevation = this.targetElevation;
+
+    // Swing animation decay
+    if (this.swingAnim > 0) {
+      this.swingAnim = Math.max(0, this.swingAnim - dt * 4);
+    }
+  }
+
+  triggerAction(action, data = {}) {
+    if (action === 'melee') {
+      this.swingAnim = 1.0;
+      this.swingType = data.subType || 'slash';
+      if (data.direction) this.direction = data.direction;
+    }
+  }
+
+  render(ctx, animTime, nightFactor = 0) {
+    if (this.isDead) return;
+
+    const px = Math.round(this.x);
+    const py = Math.round(this.y - this.visualElevation * ELEVATION_PIXEL_OFFSET);
+
+    ctx.save();
+
+    // 1. Weicher Papierschatten unter den Füßen
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(px, py + 5, 8, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Charakter Skin rendern
+    const skinDef = CHARACTERS_MAP[this.skinId] || CHARACTERS_MAP['ren_twilight'];
+    if (skinDef && typeof skinDef.render === 'function') {
+      skinDef.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+    } else {
+      // Fallback
+      ctx.fillStyle = '#60a5fa';
+      ctx.beginPath();
+      ctx.arc(px, py, 7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3. Schild-Blase (wenn aktiv)
+    if (this.shieldActive) {
+      ctx.save();
+      const pulse = 1.0 + Math.sin(animTime * 10) * 0.06;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.8;
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+      ctx.beginPath();
+      ctx.arc(px, py - 4, 15 * pulse, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 4. Melee Schwung-Visual
+    if (this.swingAnim > 0) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+      let arcStart = 0;
+      let arcEnd = Math.PI;
+      if (this.direction === 'right') { arcStart = -Math.PI / 3; arcEnd = Math.PI / 3; }
+      else if (this.direction === 'left') { arcStart = Math.PI * 2/3; arcEnd = Math.PI * 4/3; }
+      else if (this.direction === 'up') { arcStart = -Math.PI * 5/6; arcEnd = -Math.PI / 6; }
+      else { arcStart = Math.PI / 6; arcEnd = Math.PI * 5/6; }
+
+      ctx.arc(px, py - 3, 16, arcStart, arcEnd);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 5. Nameplate & Level unter dem Charakter
+    const baseUnderY = py + 9;
+    if (this.name) {
+      ctx.save();
+      ctx.font = 'bold 8.5px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const nameY = baseUnderY;
+      const text = `${this.name} (Lv.${this.level})`;
+      const textMetrics = (typeof ctx.measureText === 'function') ? ctx.measureText(text) : { width: text.length * 5.2 };
+      const textW = Math.max(16, textMetrics.width);
+      const padX = 4;
+      const badgeH = 11;
+
+      // Dark Papercraft Badge
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.fillRect(px - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
+
+      // Goldene Umrandung für Mitspieler
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(px - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
+
+      // Weißer Text
+      ctx.fillStyle = '#f8fafc';
+      if (typeof ctx.fillText === 'function') {
+        ctx.fillText(text, px, nameY);
+      }
+      ctx.restore();
+    }
+
+    // 6. Lebensbalken direkt unter dem Namen (nur wenn verletzt)
+    if (this.hp < this.maxHp && this.hp > 0) {
+      const barW = 24;
+      const barH = 3.5;
+      const barX = px - barW / 2;
+      const barY = baseUnderY + 8;
+      const hpPct = Math.max(0, this.hp / this.maxHp);
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+      ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
+      ctx.fillRect(barX, barY, barW * hpPct, barH);
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
+}
+
+
+// --- js/network.js ---
+/**
+ * NetworkManager - WebSocket Client für Ocarina of Brawls LAN-Multiplayer
+ * Verwaltet Verbindung, Paket-Serialisierung, Ratenbegrenzung und Event-Dispatching.
+ */
+
+class NetworkManager {
+  constructor(game) {
+    this.game = game;
+    this.ws = null;
+    this.connected = false;
+    this.clientId = null;
+    this.role = 'player'; // 'host' | 'player'
+    this.lanIp = '';
+    this.joinUrl = '';
+
+    this.updateInterval = 1000 / 25; // 25 Hz Tickrate für Positionsübertragung
+    this.lastUpdateSent = 0;
+
+    this.listeners = new Map();
+  }
+
+  on(type, callback) {
+    if (!this.listeners.has(type)) {
+      this.listeners.set(type, []);
+    }
+    this.listeners.get(type).push(callback);
+  }
+
+  emit(type, data) {
+    const list = this.listeners.get(type);
+    if (list) {
+      for (const cb of list) {
+        try {
+          cb(data);
+        } catch (err) {
+          console.error(`[Network Event Error] ${type}:`, err);
+        }
+      }
+    }
+  }
+
+  connect(role = 'player', name = 'Ren', skinId = 'ren_twilight') {
+    if (this.ws) {
+      try { this.ws.close(); } catch (e) {}
+    }
+
+    this.role = role;
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${proto}//${window.location.host}`;
+
+    console.log(`[Network] Verbinde mit WebSocket: ${wsUrl} als ${role}...`);
+
+    try {
+      this.ws = new WebSocket(wsUrl);
+    } catch (e) {
+      console.error('[Network] Konnte WebSocket nicht erstellen:', e);
+      return;
+    }
+
+    this.ws.onopen = () => {
+      this.connected = true;
+      console.log('[Network] ✅ WebSocket verbunden!');
+
+      const spawnX = (this.game.player && this.game.player.x) || 800;
+      const spawnY = (this.game.player && this.game.player.y) || 1600;
+      const dim = (this.game.currentDimension) || 'overworld';
+
+      this.send({
+        type: 'join',
+        role: this.role,
+        name,
+        skinId,
+        x: spawnX,
+        y: spawnY,
+        dimension: dim
+      });
+
+      this.emit('connected', { role: this.role });
+    };
+
+    this.ws.onmessage = (event) => {
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch (e) {
+        return;
+      }
+      this.handleMessage(msg);
+    };
+
+    this.ws.onclose = () => {
+      this.connected = false;
+      console.warn('[Network] ⚠️ WebSocket getrennt.');
+      this.emit('disconnected', {});
+    };
+
+    this.ws.onerror = (err) => {
+      console.error('[Network Error]', err);
+    };
+  }
+
+  send(data) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+
+  handleMessage(msg) {
+    // Standard-Event an registrierte Listener
+    this.emit(msg.type, msg);
+
+    // Globale Aktionen
+    switch (msg.type) {
+      case 'init':
+        this.clientId = msg.clientId;
+        this.lanIp = msg.lanIp;
+        this.joinUrl = msg.joinUrl;
+        console.log(`[Network] Initialisiert. Eigene ID: ${this.clientId}, LAN-URL: ${this.joinUrl}`);
+        break;
+
+      case 'player_killed':
+        if (this.game && typeof this.game.showKillFeed === 'function') {
+          this.game.showKillFeed(msg.killerName, msg.victimName);
+        }
+        break;
+    }
+  }
+
+  update(dt, player) {
+    if (!this.connected || this.role !== 'player' || !player) return;
+
+    const now = performance.now();
+    if (now - this.lastUpdateSent >= this.updateInterval) {
+      this.lastUpdateSent = now;
+
+      this.send({
+        type: 'player_update',
+        x: Math.round(player.x * 10) / 10,
+        y: Math.round(player.y * 10) / 10,
+        elevation: player.elevation || 0,
+        dimension: this.game.currentDimension || 'overworld',
+        direction: player.direction || 'down',
+        isMoving: Boolean(player.isMoving),
+        isSprinting: Boolean(player.isSprinting),
+        hp: player.hp,
+        maxHp: player.maxHp,
+        level: player.level || 1,
+        xp: player.xp || 0,
+        shieldActive: Boolean(player.shield && player.shield.active),
+        isBearForm: Boolean(player.isBearForm),
+        skinId: player.skinId
+      });
+    }
+  }
+
+  sendAction(action, extraData = {}) {
+    if (!this.connected || this.role !== 'player') return;
+    this.send({
+      type: 'player_action',
+      action,
+      ...extraData
+    });
+  }
+
+  sendPvPHit(targetId, damage, kbX = 0, kbY = 0) {
+    if (!this.connected) return;
+    this.send({
+      type: 'pvp_hit',
+      targetId,
+      damage,
+      kbX,
+      kbY
+    });
+  }
+
+  sendRespawn(x, y) {
+    if (!this.connected) return;
+    this.send({
+      type: 'player_respawn',
+      x,
+      y
+    });
+  }
+
+  sendArtifactPickup(artifactType, shrineIdx, dimension) {
+    if (!this.connected) return;
+    this.send({
+      type: 'artifact_pickup',
+      artifactType,
+      shrineIdx,
+      dimension
+    });
+  }
+
+  sendHostSelectWorld(worldId) {
+    if (!this.connected || this.role !== 'host') return;
+    this.send({
+      type: 'host_select_world',
+      worldId
+    });
+  }
+
+  sendHostEndGame() {
+    if (!this.connected || this.role !== 'host') return;
+    this.send({
+      type: 'host_end_game'
+    });
+  }
+
+  sendHostStartRound(worldId) {
+    if (!this.connected || this.role !== 'host') return;
+    this.send({
+      type: 'host_start_round',
+      worldId
+    });
+  }
+}
+
+
+// --- js/spectator.js ---
+/**
+ * SpectatorManager - Spielleiter & Beobachter-Steuerung für den Host
+ * Verwaltet freie Kamerafahrt, Spieler-Verfolgung, Host-HUD, QR-Code und Runden-Management.
+ */
+
+
+class SpectatorManager {
+  constructor(game) {
+    this.game = game;
+    this.active = false;
+    this.followedPlayerId = null; // null = freie Kamera
+
+    // Freie Kamera-Geschwindigkeit
+    this.camX = 800;
+    this.camY = 1600;
+    this.panSpeed = 600; // px/s
+
+    // UI Elemente
+    this.container = document.getElementById('spectator-hud');
+    this.playersListEl = document.getElementById('spectator-players-list');
+    this.lanIpDisplayEl = document.getElementById('spectator-lan-ip');
+    this.btnCopyLink = document.getElementById('btn-copy-join-link');
+    this.qrImageEl = document.getElementById('spectator-qr-img');
+    this.qrWrapperEl = document.getElementById('spectator-qr-wrapper');
+    this.btnToggleQr = document.getElementById('btn-toggle-qr');
+    this.btnEndGame = document.getElementById('btn-host-end-game');
+    this.btnNewRound = document.getElementById('btn-host-new-round');
+    this.worldSelectEl = document.getElementById('spectator-world-select');
+
+    // Drag-to-pan State
+    this.isDragging = false;
+    this.dragStartX = 0;
+    this.dragStartY = 0;
+    this.camStartX = 0;
+    this.camStartY = 0;
+
+    this.initEvents();
+  }
+
+  initEvents() {
+    // 1. Link kopieren
+    if (this.btnCopyLink) {
+      this.btnCopyLink.addEventListener('click', () => {
+        const url = this.game.network ? this.game.network.joinUrl : window.location.href;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).then(() => {
+            const span = this.btnCopyLink.querySelector('span') || this.btnCopyLink;
+            const prev = span.textContent;
+            span.textContent = '✅ Kopiert!';
+            setTimeout(() => { span.textContent = prev; }, 2000);
+          }).catch(() => {
+            prompt('Kopiere diesen Link für Mitspieler:', url);
+          });
+        } else {
+          prompt('Kopiere diesen Link für Mitspieler:', url);
+        }
+      });
+    }
+
+    // 2. QR-Code ein-/ausklappen
+    if (this.btnToggleQr && this.qrWrapperEl) {
+      this.btnToggleQr.addEventListener('click', () => {
+        this.qrWrapperEl.classList.toggle('hidden');
+      });
+    }
+
+    // 3. Spiel beenden
+    if (this.btnEndGame) {
+      this.btnEndGame.addEventListener('click', () => {
+        if (confirm('Möchtest du das laufende Spiel beenden und die Siegerehrung starten?')) {
+          if (this.game.network) {
+            this.game.network.sendHostEndGame();
+          }
+        }
+      });
+    }
+
+    // 4. Neue Runde starten
+    if (this.btnNewRound) {
+      this.btnNewRound.addEventListener('click', () => {
+        const selWorld = this.worldSelectEl ? parseInt(this.worldSelectEl.value, 10) : 1;
+        if (this.game.network) {
+          this.game.network.sendHostStartRound(selWorld);
+        }
+      });
+    }
+
+    // 5. Welt-Auswahl Dropdown befüllen
+    if (this.worldSelectEl) {
+      this.worldSelectEl.innerHTML = '';
+      WORLD_PRESETS.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.id}. ${p.name} (${p.badge})`;
+        this.worldSelectEl.appendChild(opt);
+      });
+
+      this.worldSelectEl.addEventListener('change', (e) => {
+        const newWorldId = parseInt(e.target.value, 10);
+        if (this.game.network) {
+          this.game.network.sendHostSelectWorld(newWorldId);
+        }
+      });
+    }
+
+    // 6. Canvas Drag-to-pan für die freie Kamera
+    const canvas = this.game.canvas;
+    if (canvas) {
+      canvas.addEventListener('mousedown', (e) => {
+        if (!this.active || this.followedPlayerId) return;
+        if (e.button === 0 || e.button === 1) { // Left or Middle click
+          this.isDragging = true;
+          this.dragStartX = e.clientX;
+          this.dragStartY = e.clientY;
+          this.camStartX = this.camX;
+          this.camStartY = this.camY;
+        }
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!this.active || !this.isDragging) return;
+        const zoom = (this.game.camera && this.game.camera.zoom) || 2.0;
+        const dx = (e.clientX - this.dragStartX) / zoom;
+        const dy = (e.clientY - this.dragStartY) / zoom;
+        this.camX = this.camStartX - dx;
+        this.camY = this.camStartY - dy;
+      });
+
+      window.addEventListener('mouseup', () => {
+        this.isDragging = false;
+      });
+    }
+  }
+
+  activate() {
+    this.active = true;
+    if (this.container) {
+      this.container.classList.remove('hidden');
+    }
+
+    // Eigene Kampf- und Touch-Elemente auf Host ausblenden
+    const touchControls = document.getElementById('touch-controls');
+    if (touchControls) touchControls.style.display = 'none';
+
+    const playerCompactHud = document.getElementById('player-compact-hud');
+    if (playerCompactHud) playerCompactHud.style.display = 'none';
+
+    const magicSlot = document.getElementById('magic-hud-slot');
+    if (magicSlot) magicSlot.style.display = 'none';
+
+    // Start-Kamera auf Spawnpunkt der Welt
+    if (this.game.map && this.game.map.spawnPoint) {
+      this.camX = this.game.map.spawnPoint.x * TILE_SIZE;
+      this.camY = this.game.map.spawnPoint.y * TILE_SIZE;
+    }
+
+    // Host-Zoom auf Übersicht stellen
+    if (this.game.camera) {
+      this.game.camera.setZoom(1.85);
+    }
+
+    // Server-Info (IP & QR) abrufen
+    this.fetchServerInfo();
+  }
+
+  async fetchServerInfo() {
+    try {
+      const res = await fetch('/api/server-info');
+      if (!res.ok) return;
+      const data = await res.json();
+
+      if (this.lanIpDisplayEl) {
+        this.lanIpDisplayEl.textContent = data.joinUrl;
+      }
+      if (this.qrImageEl && data.qrDataUrl) {
+        this.qrImageEl.src = data.qrDataUrl;
+      }
+      if (this.worldSelectEl && data.worldId) {
+        this.worldSelectEl.value = data.worldId;
+      }
+    } catch (e) {
+      console.warn('[Spectator] Konnte Server-Info nicht laden:', e);
+    }
+  }
+
+  followPlayer(playerId) {
+    if (this.followedPlayerId === playerId) {
+      // Toggle off -> Freie Kamera
+      this.followedPlayerId = null;
+      console.log('[Spectator] Kamera freigegeben (Freier Modus)');
+    } else {
+      this.followedPlayerId = playerId;
+      console.log(`[Spectator] Verfolge Spieler: ${playerId}`);
+    }
+    this.updatePlayersListUI();
+  }
+
+  update(dt, input) {
+    if (!this.active) return;
+
+    if (this.followedPlayerId) {
+      const target = this.game.remotePlayers.get(this.followedPlayerId);
+      if (target) {
+        this.camX = target.x;
+        this.camY = target.y;
+      } else {
+        this.followedPlayerId = null; // Spieler hat verlassen
+      }
+    } else {
+      // Freie Kamera über Tastatur (WASD oder Pfeile)
+      let vx = 0;
+      let vy = 0;
+      if (input && input.keys) {
+        if (input.keys['KeyW'] || input.keys['ArrowUp']) vy -= 1;
+        if (input.keys['KeyS'] || input.keys['ArrowDown']) vy += 1;
+        if (input.keys['KeyA'] || input.keys['ArrowLeft']) vx -= 1;
+        if (input.keys['KeyD'] || input.keys['ArrowRight']) vx += 1;
+      }
+
+      if (vx !== 0 || vy !== 0) {
+        const len = Math.hypot(vx, vy);
+        const speed = this.panSpeed * (input.keys && input.keys['ShiftLeft'] ? 2.5 : 1.0);
+        this.camX += (vx / len) * speed * dt;
+        this.camY += (vy / len) * speed * dt;
+      }
+    }
+
+    // Kamera im Spiel aktualisieren
+    if (this.game.camera) {
+      this.game.camera.follow(this.camX, this.camY);
+      this.game.camera.update(dt);
+    }
+
+    // Spieler-Liste periodisch aktualisieren
+    this.updatePlayersListUI();
+  }
+
+  updatePlayersListUI() {
+    if (!this.playersListEl) return;
+
+    const players = Array.from(this.game.remotePlayers.values());
+    if (players.length === 0) {
+      this.playersListEl.innerHTML = '<div class="spectator-no-players">Warte auf Mitspieler...</div>';
+      return;
+    }
+
+    let html = '';
+    for (const p of players) {
+      const isFollowed = this.followedPlayerId === p.id;
+      const hpPct = Math.round((p.hp / p.maxHp) * 100);
+      const hpColor = hpPct > 50 ? '#22c55e' : (hpPct > 25 ? '#f59e0b' : '#ef4444');
+
+      html += `
+        <div class="spectator-player-card ${isFollowed ? 'following' : ''}" data-id="${p.id}">
+          <div class="sp-card-left">
+            <span class="sp-name">${p.name}</span>
+            <span class="sp-badge">Lv.${p.level}</span>
+            <span class="sp-kills">⚔️ ${p.pvpKills}</span>
+          </div>
+          <div class="sp-card-right">
+            <div class="sp-hp-bar">
+              <div class="sp-hp-fill" style="width: ${hpPct}%; background-color: ${hpColor};"></div>
+            </div>
+            <button class="sp-follow-btn" title="Kamera auf Spieler zentrieren">${isFollowed ? '🎥 Folgt' : '👁️ Zuschauen'}</button>
+          </div>
+        </div>
+      `;
+    }
+
+    this.playersListEl.innerHTML = html;
+
+    // Klick-Events auf Spielerkarten
+    this.playersListEl.querySelectorAll('.spectator-player-card').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = el.getAttribute('data-id');
+        this.followPlayer(id);
+      });
+    });
+  }
+}
+
+
 // --- js/combat.js ---
 
 class CombatManager {
@@ -15500,6 +16278,69 @@ class CombatManager {
       }
     }
 
+    // Check collision with remote players (LAN Multiplayer PvP)
+    if (this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
+      const curDim = this.game.currentDimension || 'overworld';
+      for (const remotePlayer of this.game.remotePlayers.values()) {
+        if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
+
+        const dx = remotePlayer.x - hitbox.x;
+        const dy = remotePlayer.y - hitbox.y;
+        const dist = Math.hypot(dx, dy);
+
+        let inRange = false;
+        if (isSpin) {
+          inRange = dist <= (hitbox.radius + remotePlayer.radius + 4);
+        } else if (isThrust) {
+          const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
+          const sideDist = Math.abs(-dx * Math.sin(hitbox.angle) + dy * Math.cos(hitbox.angle));
+          inRange = (forwardDot > 0 && forwardDot <= hitbox.range + remotePlayer.radius && sideDist <= (hitbox.width || 22) + remotePlayer.radius);
+        } else {
+          const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
+          const angleDiff = Math.abs(Math.atan2(dy, dx) - hitbox.angle);
+          const normAngleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+          inRange = (dist <= hitbox.radius + remotePlayer.radius && Math.abs(normAngleDiff) <= 0.95);
+        }
+
+        if (inRange) {
+          hitAny = true;
+          let dmg = 25;
+          if (hitbox.type === 'slash2' || hitbox.type === 'bear_claw2') dmg = 35;
+          if (isThrust) dmg = 52;
+          if (isSpin) dmg = 68;
+
+          const meleeBonus = (this.game?.player?.skills?.melee || 0) * 4;
+          dmg += meleeBonus;
+
+          if (hitbox.damageMultiplier) {
+            dmg = Math.round(dmg * hitbox.damageMultiplier);
+          } else if (hitbox.damage) {
+            dmg = hitbox.damage;
+          }
+
+          const angle = isSpin ? Math.atan2(dy, dx) : hitbox.angle;
+          let kb = hitbox.knockback || (isThrust ? 120 : (isSpin ? 140 : 80));
+          if (hitbox.knockbackMultiplier) {
+            kb = Math.round(kb * hitbox.knockbackMultiplier);
+          }
+
+          // Shield block check
+          if (remotePlayer.shieldActive) {
+            this.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 16, 90);
+            this.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 16, '#38bdf8');
+            dmg = Math.round(dmg * 0.2); // 80% Schadensreduktion
+          } else {
+            this.addHitSparks(remotePlayer.x, remotePlayer.y, '#ef4444', 12, 70);
+            this.addFloatingText(`-${dmg}`, remotePlayer.x, remotePlayer.y - 14, '#f87171');
+          }
+
+          const kbX = Math.cos(angle) * (kb * 0.4);
+          const kbY = Math.sin(angle) * (kb * 0.4);
+          this.game.network.sendPvPHit(remotePlayer.id, dmg, kbX, kbY);
+        }
+      }
+    }
+
     // Heavy thrust or spin attack camera shake impact
     if (hitAny && this.game && this.game.camera) {
       if (isThrust) {
@@ -15688,6 +16529,38 @@ class CombatManager {
         }
       }
 
+      // Check collision with remote players (PvP)
+      let hitRemotePlayer = false;
+      if (!hitEnemy && this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
+        const curDim = this.game.currentDimension || 'overworld';
+        for (const remotePlayer of this.game.remotePlayers.values()) {
+          if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
+
+          if (Math.hypot(remotePlayer.x - arrow.x, remotePlayer.y - arrow.y) <= (remotePlayer.radius + 6)) {
+            let dmg = arrow.isCharged ? 45 : 22;
+            const kb = arrow.isCharged ? 140 : 70;
+
+            if (remotePlayer.shieldActive) {
+              this.addHitSparks(arrow.x, arrow.y, '#38bdf8', 14, 80);
+              this.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 18, '#38bdf8');
+              dmg = 0;
+            } else {
+              this.addHitSparks(arrow.x, arrow.y, '#ef4444', 12, 70);
+              this.addFloatingText(`-${dmg}`, remotePlayer.x, remotePlayer.y - 14, '#f87171');
+            }
+
+            if (dmg > 0) {
+              const kbX = Math.cos(arrow.angle) * kb * 0.3;
+              const kbY = Math.sin(arrow.angle) * kb * 0.3;
+              this.game.network.sendPvPHit(remotePlayer.id, dmg, kbX, kbY);
+            }
+
+            hitRemotePlayer = true;
+            break;
+          }
+        }
+      }
+
       // Check dummy hit
       let hitDummy = false;
       if (this.game.currentDimension === 'overworld') {
@@ -15709,7 +16582,7 @@ class CombatManager {
       const tY = Math.floor(arrow.y / TILE_SIZE);
       const hitWall = this.isArrowObstacle(map, tX, tY);
 
-      if (hitDummy || hitEnemy || hitWall || arrow.distTraveled >= arrow.maxRange) {
+      if (hitDummy || hitEnemy || hitRemotePlayer || hitWall || arrow.distTraveled >= arrow.maxRange) {
         const curTile = map.getGroundTile ? map.getGroundTile(tX, tY) : (map.ground ? map.ground[tY]?.[tX] : 0);
         const inWater = this.isWaterOrAbyssTile(curTile) && !hitEnemy && !hitDummy && !hitWall;
 
@@ -16767,6 +17640,12 @@ class Game {
     this.ctx = this.canvas.getContext('2d');
     this.minimapCanvas = document.getElementById('minimapCanvas');
 
+    // Multiplayer State
+    this.remotePlayers = new Map();
+    this.isHost = false;
+    this.network = new NetworkManager(this);
+    this.spectator = new SpectatorManager(this);
+
     this.input = {
       keys: {},
       joystick: { x: 0, y: 0, active: false },
@@ -16862,6 +17741,8 @@ class Game {
     this.initCharacterSelectModal();
     this.initWorldSelectUI();
     this.updatePlayerNameUI();
+    this.initNetworkEvents();
+    this.initMultiplayerUI();
     this.resize();
     this.start();
   }
@@ -17467,19 +18348,40 @@ class Game {
     }
 
     this.spriteManager.update(dt);
-    this.player.update(dt, this.input);
+
+    // Host / Spectator vs normaler Spieler
+    if (this.isHost && this.spectator && this.spectator.active) {
+      this.spectator.update(dt, this.input);
+    } else {
+      this.player.update(dt, this.input);
+      this.camera.follow(this.player.x, this.player.y);
+      this.camera.update(dt);
+    }
+
+    // Remote Players aktualisieren
+    if (this.remotePlayers) {
+      for (const rp of this.remotePlayers.values()) {
+        rp.update(dt);
+      }
+    }
+
     if (this.enemyManager) this.enemyManager.update(dt, this.player, this.map, this.combat);
     if (this.combat) this.combat.update(dt);
-    this.camera.follow(this.player.x, this.player.y);
-    this.camera.update(dt);
     this.updateAmbientParticles(dt);
 
     if (this.magicManager) {
       this.magicManager.update(dt, this.player, this.map, this.combat, this.enemyManager);
     }
 
-    this.updateHUD();
-    this.updateCombatUI();
+    if (!this.isHost) {
+      this.updateHUD();
+      this.updateCombatUI();
+    }
+
+    // Netzwerk-Synchronisation
+    if (this.network) {
+      this.network.update(dt, this.isHost ? null : this.player);
+    }
   }
 
   getDayNightFactors() {
@@ -18935,12 +19837,40 @@ class Game {
       }
     }
 
+    // Remote Players (LAN Multiplayer)
+    if (this.remotePlayers && this.remotePlayers.size > 0) {
+      const curDim = this.currentDimension || 'overworld';
+      const minX = bounds.startX * TILE_SIZE - 48;
+      const maxX = bounds.endX * TILE_SIZE + 48;
+      const minY = bounds.startY * TILE_SIZE - 48;
+      const maxY = bounds.endY * TILE_SIZE + 48;
+
+      for (const rp of this.remotePlayers.values()) {
+        if (!rp.isDead && (rp.dimension || 'overworld') === curDim) {
+          if (rp.x >= minX && rp.x <= maxX && rp.y >= minY && rp.y <= maxY) {
+            const rpElev = rp.visualElevation || 0;
+            const rpSortY = rp.y - rpElev * ELEVATION_PIXEL_OFFSET;
+            renderList.push({
+              sortY: rpSortY,
+              isPlayer: false,
+              isRemotePlayer: true,
+              remotePlayer: rp
+            });
+          }
+        }
+      }
+    }
+
     // Sort back-to-front by visual screen Y
     renderList.sort((a, b) => a.sortY - b.sortY);
 
     for (const item of renderList) {
       if (item.isPlayer) {
-        this.player.render(this.ctx, this.spriteManager, t, night);
+        if (!this.isHost) {
+          this.player.render(this.ctx, this.spriteManager, t, night);
+        }
+      } else if (item.isRemotePlayer) {
+        item.remotePlayer.render(this.ctx, t, night);
       } else if (item.isTree) {
         this.renderPaperTree(item.tree, t, night, item.treeElev);
       } else if (item.isKodama) {
@@ -19386,7 +20316,16 @@ class Game {
       this.enemyManager.renderLoot(this.ctx, t);
     }
 
-    this.player.render(this.ctx, this.spriteManager, t, 0.4);
+    if (!this.isHost) {
+      this.player.render(this.ctx, this.spriteManager, t, 0.4);
+    }
+    if (this.remotePlayers) {
+      for (const rp of this.remotePlayers.values()) {
+        if (!rp.isDead && rp.dimension === DIMENSIONS.CLOUDS) {
+          rp.render(this.ctx, t, 0.4);
+        }
+      }
+    }
 
     // Combat layer: flying arrows, slashes, hit effects, floating texts
     if (this.combat) {
@@ -19821,7 +20760,16 @@ class Game {
       this.enemyManager.renderLoot(this.ctx, t);
     }
 
-    this.player.render(this.ctx, this.spriteManager, t, 1.0);
+    if (!this.isHost) {
+      this.player.render(this.ctx, this.spriteManager, t, 1.0);
+    }
+    if (this.remotePlayers) {
+      for (const rp of this.remotePlayers.values()) {
+        if (!rp.isDead && rp.dimension === DIMENSIONS.CAVES) {
+          rp.render(this.ctx, t, 1.0);
+        }
+      }
+    }
 
     // Combat layer: flying arrows, slashes, hit effects, floating texts
     if (this.combat) {
@@ -20552,6 +21500,11 @@ class Game {
     }
     this.isCharacterSelectOpen = false;
 
+    // Auto-Connect to LAN-Multiplayer as Player
+    if (this.network && !this.isHost) {
+      this.network.connect('player', chosenName, this.selectedHeroSkin);
+    }
+
     if (this.heroNameInput && typeof this.heroNameInput.blur === 'function') {
       this.heroNameInput.blur();
     }
@@ -20682,6 +21635,244 @@ class Game {
     if (this.compactPlayerNameEl) {
       this.compactPlayerNameEl.textContent = name;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // LAN MULTIPLAYER & SPECTATOR SYSTEMS
+  // ---------------------------------------------------------------------------
+  startAsHost() {
+    this.isHost = true;
+    if (this.charSelectModal) {
+      this.charSelectModal.classList.add('hidden');
+    }
+    this.isCharacterSelectOpen = false;
+
+    if (this.spectator) {
+      this.spectator.activate();
+    }
+    if (this.network) {
+      this.network.connect('host', 'Spielleiter', 'ren_twilight');
+    }
+    this.showToast('👑 Als Spielleiter (Host / Spectator) gestartet!');
+  }
+
+  initMultiplayerUI() {
+    this.btnStartAsHost = document.getElementById('btn-start-as-host');
+    if (this.btnStartAsHost) {
+      this.btnStartAsHost.addEventListener('click', () => {
+        this.startAsHost();
+      });
+    }
+
+    const btnResultsNewRound = document.getElementById('btn-results-new-round');
+    if (btnResultsNewRound) {
+      btnResultsNewRound.addEventListener('click', () => {
+        const selWorld = (this.spectator && this.spectator.worldSelectEl) ? parseInt(this.spectator.worldSelectEl.value, 10) : 1;
+        if (this.network) {
+          this.network.sendHostStartRound(selWorld);
+        }
+      });
+    }
+
+    // URL Query Parameter ?host=true Support
+    if (typeof window !== 'undefined' && window.location) {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('host') === 'true' || urlParams.get('host') === '1') {
+        this.startAsHost();
+      }
+    }
+  }
+
+  initNetworkEvents() {
+    if (!this.network) return;
+
+    this.network.on('init', (msg) => {
+      this.remotePlayers.clear();
+      if (msg.players) {
+        for (const p of msg.players) {
+          if (p.id !== this.network.clientId) {
+            this.remotePlayers.set(p.id, new RemotePlayer(p));
+          }
+        }
+      }
+      if (msg.worldId && this.overworldMap && this.overworldMap.preset.id !== msg.worldId) {
+        this.switchWorld(msg.worldId);
+      }
+    });
+
+    this.network.on('player_joined', (msg) => {
+      if (msg.player && msg.player.id !== this.network.clientId) {
+        this.remotePlayers.set(msg.player.id, new RemotePlayer(msg.player));
+        this.showToast(`👋 ${msg.player.name} ist beigetreten!`);
+      }
+    });
+
+    this.network.on('player_left', (msg) => {
+      this.remotePlayers.delete(msg.id);
+      this.showToast(`🚪 ${msg.name || 'Ein Spieler'} hat das Spiel verlassen.`);
+    });
+
+    this.network.on('player_update', (msg) => {
+      const rp = this.remotePlayers.get(msg.id);
+      if (rp) {
+        rp.updateFromNetwork(msg);
+      }
+    });
+
+    this.network.on('player_action', (msg) => {
+      const rp = this.remotePlayers.get(msg.id);
+      if (rp) {
+        rp.triggerAction(msg.action, msg);
+      }
+      if (msg.action === 'arrow' && this.combat) {
+        this.combat.fireArrow(msg.x, msg.y, msg.dirX, msg.dirY, msg.isCharged);
+      }
+    });
+
+    this.network.on('pvp_hit', (msg) => {
+      if (msg.targetId === this.network.clientId) {
+        this.player.takePvPDamage(msg.damage, msg.kbX, msg.kbY, msg.attackerId);
+      } else {
+        const rp = this.remotePlayers.get(msg.targetId);
+        if (rp && typeof msg.targetHp === 'number') {
+          rp.hp = msg.targetHp;
+        }
+      }
+    });
+
+    this.network.on('player_respawned', (msg) => {
+      if (msg.id !== this.network.clientId) {
+        const rp = this.remotePlayers.get(msg.id);
+        if (rp) {
+          rp.isDead = false;
+          rp.hp = msg.hp;
+          rp.maxHp = msg.maxHp;
+          rp.x = msg.x;
+          rp.y = msg.y;
+        }
+      }
+    });
+
+    this.network.on('world_changed', (msg) => {
+      this.switchWorld(msg.worldId);
+      this.showToast(`🌍 Welt gewechselt: ${getWorldPreset(msg.worldId).name}`);
+    });
+
+    this.network.on('game_ended', (msg) => {
+      this.showMatchResultsModal(msg.winners, msg.leaderboard);
+    });
+
+    this.network.on('round_started', (msg) => {
+      this.hideMatchResultsModal();
+      this.switchWorld(msg.worldId);
+
+      // Reset local player
+      if (!this.isHost && this.player) {
+        this.player.level = 1;
+        this.player.xp = 0;
+        this.player.totalXpEarned = 0;
+        this.player.skillPoints = 0;
+        this.player.skills = { hp: 0, melee: 0, range: 0, shield: 0 };
+        this.player.hp = this.player.maxHp;
+        this.player.isDead = false;
+        this.player.x = this.map.spawnPoint.x * TILE_SIZE + 8;
+        this.player.y = this.map.spawnPoint.y * TILE_SIZE + 8;
+        this.updateHUD();
+      }
+
+      // Reset remote players
+      for (const rp of this.remotePlayers.values()) {
+        rp.level = 1;
+        rp.xp = 0;
+        rp.pvpKills = 0;
+        rp.deaths = 0;
+        rp.hp = rp.maxHp;
+        rp.isDead = false;
+        rp.x = this.map.spawnPoint.x * TILE_SIZE + 8;
+        rp.y = this.map.spawnPoint.y * TILE_SIZE + 8;
+      }
+
+      this.showToast('🚀 Neue Runde gestartet! Auf in den Kampf!');
+    });
+  }
+
+  showKillFeed(killerName, victimName) {
+    const container = document.getElementById('killfeed-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'killfeed-toast';
+    toast.textContent = `⚔️ ${killerName} hat ${victimName} besiegt!`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 4000);
+  }
+
+  showMatchResultsModal(winners, leaderboard) {
+    const modal = document.getElementById('match-results-modal');
+    if (!modal) return;
+
+    const levelNameEl = document.getElementById('podium-level-name');
+    const levelStatEl = document.getElementById('podium-level-stat');
+    const killsNameEl = document.getElementById('podium-kills-name');
+    const killsStatEl = document.getElementById('podium-kills-stat');
+    const tbody = document.getElementById('results-table-body');
+    const hostControls = document.getElementById('results-host-controls');
+    const playerNotice = document.getElementById('results-player-notice');
+
+    if (winners && winners.highestLevel) {
+      if (levelNameEl) levelNameEl.textContent = winners.highestLevel.name;
+      if (levelStatEl) levelStatEl.textContent = `Level ${winners.highestLevel.level} (${winners.highestLevel.xp} XP)`;
+    } else {
+      if (levelNameEl) levelNameEl.textContent = '-';
+      if (levelStatEl) levelStatEl.textContent = 'Keine Daten';
+    }
+
+    if (winners && winners.mostKills) {
+      if (killsNameEl) killsNameEl.textContent = winners.mostKills.name;
+      if (killsStatEl) killsStatEl.textContent = `${winners.mostKills.pvpKills} PvP-Kills`;
+    } else {
+      if (killsNameEl) killsNameEl.textContent = '-';
+      if (killsStatEl) killsStatEl.textContent = '0 Kills';
+    }
+
+    if (tbody) {
+      tbody.innerHTML = '';
+      if (leaderboard && leaderboard.length > 0) {
+        leaderboard.forEach((p, idx) => {
+          const row = document.createElement('tr');
+          const medal = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `#${idx + 1}`));
+          row.innerHTML = `
+            <td><strong>${medal}</strong></td>
+            <td><strong>${p.name}</strong></td>
+            <td>Lv.${p.level}</td>
+            <td>${p.xp}</td>
+            <td style="color: #f87171; font-weight: bold;">${p.pvpKills}</td>
+            <td style="color: #94a3b8;">${p.deaths}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      } else {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #94a3b8;">Keine Spielerdaten verfügbar</td></tr>';
+      }
+    }
+
+    if (this.isHost) {
+      if (hostControls) hostControls.classList.remove('hidden');
+      if (playerNotice) playerNotice.classList.add('hidden');
+    } else {
+      if (hostControls) hostControls.classList.add('hidden');
+      if (playerNotice) playerNotice.classList.remove('hidden');
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  hideMatchResultsModal() {
+    const modal = document.getElementById('match-results-modal');
+    if (modal) modal.classList.add('hidden');
   }
 }
 

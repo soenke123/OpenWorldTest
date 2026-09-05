@@ -12,12 +12,21 @@ import { EnemyManager } from './enemies.js';
 import { MagicManager } from './magic.js';
 import { CHARACTERS_DATA, CHARACTERS_MAP, getSelectedSkin, setSelectedSkin, getSelectedPlayerName, setSelectedPlayerName, getRandomHeroName } from './characters.js';
 import { getWorldPreset, getAllWorldPresets, getSelectedWorldId, setSelectedWorldId } from './worldPresets.js';
+import { NetworkManager } from './network.js';
+import { RemotePlayer } from './remotePlayer.js';
+import { SpectatorManager } from './spectator.js';
 
 class Game {
   constructor() {
     this.canvas = document.getElementById('gameCanvas');
     this.ctx = this.canvas.getContext('2d');
     this.minimapCanvas = document.getElementById('minimapCanvas');
+
+    // Multiplayer State
+    this.remotePlayers = new Map();
+    this.isHost = false;
+    this.network = new NetworkManager(this);
+    this.spectator = new SpectatorManager(this);
 
     this.input = {
       keys: {},
@@ -114,6 +123,8 @@ class Game {
     this.initCharacterSelectModal();
     this.initWorldSelectUI();
     this.updatePlayerNameUI();
+    this.initNetworkEvents();
+    this.initMultiplayerUI();
     this.resize();
     this.start();
   }
@@ -719,19 +730,40 @@ class Game {
     }
 
     this.spriteManager.update(dt);
-    this.player.update(dt, this.input);
+
+    // Host / Spectator vs normaler Spieler
+    if (this.isHost && this.spectator && this.spectator.active) {
+      this.spectator.update(dt, this.input);
+    } else {
+      this.player.update(dt, this.input);
+      this.camera.follow(this.player.x, this.player.y);
+      this.camera.update(dt);
+    }
+
+    // Remote Players aktualisieren
+    if (this.remotePlayers) {
+      for (const rp of this.remotePlayers.values()) {
+        rp.update(dt);
+      }
+    }
+
     if (this.enemyManager) this.enemyManager.update(dt, this.player, this.map, this.combat);
     if (this.combat) this.combat.update(dt);
-    this.camera.follow(this.player.x, this.player.y);
-    this.camera.update(dt);
     this.updateAmbientParticles(dt);
 
     if (this.magicManager) {
       this.magicManager.update(dt, this.player, this.map, this.combat, this.enemyManager);
     }
 
-    this.updateHUD();
-    this.updateCombatUI();
+    if (!this.isHost) {
+      this.updateHUD();
+      this.updateCombatUI();
+    }
+
+    // Netzwerk-Synchronisation
+    if (this.network) {
+      this.network.update(dt, this.isHost ? null : this.player);
+    }
   }
 
   getDayNightFactors() {
@@ -2187,12 +2219,40 @@ class Game {
       }
     }
 
+    // Remote Players (LAN Multiplayer)
+    if (this.remotePlayers && this.remotePlayers.size > 0) {
+      const curDim = this.currentDimension || 'overworld';
+      const minX = bounds.startX * TILE_SIZE - 48;
+      const maxX = bounds.endX * TILE_SIZE + 48;
+      const minY = bounds.startY * TILE_SIZE - 48;
+      const maxY = bounds.endY * TILE_SIZE + 48;
+
+      for (const rp of this.remotePlayers.values()) {
+        if (!rp.isDead && (rp.dimension || 'overworld') === curDim) {
+          if (rp.x >= minX && rp.x <= maxX && rp.y >= minY && rp.y <= maxY) {
+            const rpElev = rp.visualElevation || 0;
+            const rpSortY = rp.y - rpElev * ELEVATION_PIXEL_OFFSET;
+            renderList.push({
+              sortY: rpSortY,
+              isPlayer: false,
+              isRemotePlayer: true,
+              remotePlayer: rp
+            });
+          }
+        }
+      }
+    }
+
     // Sort back-to-front by visual screen Y
     renderList.sort((a, b) => a.sortY - b.sortY);
 
     for (const item of renderList) {
       if (item.isPlayer) {
-        this.player.render(this.ctx, this.spriteManager, t, night);
+        if (!this.isHost) {
+          this.player.render(this.ctx, this.spriteManager, t, night);
+        }
+      } else if (item.isRemotePlayer) {
+        item.remotePlayer.render(this.ctx, t, night);
       } else if (item.isTree) {
         this.renderPaperTree(item.tree, t, night, item.treeElev);
       } else if (item.isKodama) {
@@ -2638,7 +2698,16 @@ class Game {
       this.enemyManager.renderLoot(this.ctx, t);
     }
 
-    this.player.render(this.ctx, this.spriteManager, t, 0.4);
+    if (!this.isHost) {
+      this.player.render(this.ctx, this.spriteManager, t, 0.4);
+    }
+    if (this.remotePlayers) {
+      for (const rp of this.remotePlayers.values()) {
+        if (!rp.isDead && rp.dimension === DIMENSIONS.CLOUDS) {
+          rp.render(this.ctx, t, 0.4);
+        }
+      }
+    }
 
     // Combat layer: flying arrows, slashes, hit effects, floating texts
     if (this.combat) {
@@ -3073,7 +3142,16 @@ class Game {
       this.enemyManager.renderLoot(this.ctx, t);
     }
 
-    this.player.render(this.ctx, this.spriteManager, t, 1.0);
+    if (!this.isHost) {
+      this.player.render(this.ctx, this.spriteManager, t, 1.0);
+    }
+    if (this.remotePlayers) {
+      for (const rp of this.remotePlayers.values()) {
+        if (!rp.isDead && rp.dimension === DIMENSIONS.CAVES) {
+          rp.render(this.ctx, t, 1.0);
+        }
+      }
+    }
 
     // Combat layer: flying arrows, slashes, hit effects, floating texts
     if (this.combat) {
@@ -3804,6 +3882,11 @@ class Game {
     }
     this.isCharacterSelectOpen = false;
 
+    // Auto-Connect to LAN-Multiplayer as Player
+    if (this.network && !this.isHost) {
+      this.network.connect('player', chosenName, this.selectedHeroSkin);
+    }
+
     if (this.heroNameInput && typeof this.heroNameInput.blur === 'function') {
       this.heroNameInput.blur();
     }
@@ -3934,6 +4017,244 @@ class Game {
     if (this.compactPlayerNameEl) {
       this.compactPlayerNameEl.textContent = name;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // LAN MULTIPLAYER & SPECTATOR SYSTEMS
+  // ---------------------------------------------------------------------------
+  startAsHost() {
+    this.isHost = true;
+    if (this.charSelectModal) {
+      this.charSelectModal.classList.add('hidden');
+    }
+    this.isCharacterSelectOpen = false;
+
+    if (this.spectator) {
+      this.spectator.activate();
+    }
+    if (this.network) {
+      this.network.connect('host', 'Spielleiter', 'ren_twilight');
+    }
+    this.showToast('👑 Als Spielleiter (Host / Spectator) gestartet!');
+  }
+
+  initMultiplayerUI() {
+    this.btnStartAsHost = document.getElementById('btn-start-as-host');
+    if (this.btnStartAsHost) {
+      this.btnStartAsHost.addEventListener('click', () => {
+        this.startAsHost();
+      });
+    }
+
+    const btnResultsNewRound = document.getElementById('btn-results-new-round');
+    if (btnResultsNewRound) {
+      btnResultsNewRound.addEventListener('click', () => {
+        const selWorld = (this.spectator && this.spectator.worldSelectEl) ? parseInt(this.spectator.worldSelectEl.value, 10) : 1;
+        if (this.network) {
+          this.network.sendHostStartRound(selWorld);
+        }
+      });
+    }
+
+    // URL Query Parameter ?host=true Support
+    if (typeof window !== 'undefined' && window.location) {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('host') === 'true' || urlParams.get('host') === '1') {
+        this.startAsHost();
+      }
+    }
+  }
+
+  initNetworkEvents() {
+    if (!this.network) return;
+
+    this.network.on('init', (msg) => {
+      this.remotePlayers.clear();
+      if (msg.players) {
+        for (const p of msg.players) {
+          if (p.id !== this.network.clientId) {
+            this.remotePlayers.set(p.id, new RemotePlayer(p));
+          }
+        }
+      }
+      if (msg.worldId && this.overworldMap && this.overworldMap.preset.id !== msg.worldId) {
+        this.switchWorld(msg.worldId);
+      }
+    });
+
+    this.network.on('player_joined', (msg) => {
+      if (msg.player && msg.player.id !== this.network.clientId) {
+        this.remotePlayers.set(msg.player.id, new RemotePlayer(msg.player));
+        this.showToast(`👋 ${msg.player.name} ist beigetreten!`);
+      }
+    });
+
+    this.network.on('player_left', (msg) => {
+      this.remotePlayers.delete(msg.id);
+      this.showToast(`🚪 ${msg.name || 'Ein Spieler'} hat das Spiel verlassen.`);
+    });
+
+    this.network.on('player_update', (msg) => {
+      const rp = this.remotePlayers.get(msg.id);
+      if (rp) {
+        rp.updateFromNetwork(msg);
+      }
+    });
+
+    this.network.on('player_action', (msg) => {
+      const rp = this.remotePlayers.get(msg.id);
+      if (rp) {
+        rp.triggerAction(msg.action, msg);
+      }
+      if (msg.action === 'arrow' && this.combat) {
+        this.combat.fireArrow(msg.x, msg.y, msg.dirX, msg.dirY, msg.isCharged);
+      }
+    });
+
+    this.network.on('pvp_hit', (msg) => {
+      if (msg.targetId === this.network.clientId) {
+        this.player.takePvPDamage(msg.damage, msg.kbX, msg.kbY, msg.attackerId);
+      } else {
+        const rp = this.remotePlayers.get(msg.targetId);
+        if (rp && typeof msg.targetHp === 'number') {
+          rp.hp = msg.targetHp;
+        }
+      }
+    });
+
+    this.network.on('player_respawned', (msg) => {
+      if (msg.id !== this.network.clientId) {
+        const rp = this.remotePlayers.get(msg.id);
+        if (rp) {
+          rp.isDead = false;
+          rp.hp = msg.hp;
+          rp.maxHp = msg.maxHp;
+          rp.x = msg.x;
+          rp.y = msg.y;
+        }
+      }
+    });
+
+    this.network.on('world_changed', (msg) => {
+      this.switchWorld(msg.worldId);
+      this.showToast(`🌍 Welt gewechselt: ${getWorldPreset(msg.worldId).name}`);
+    });
+
+    this.network.on('game_ended', (msg) => {
+      this.showMatchResultsModal(msg.winners, msg.leaderboard);
+    });
+
+    this.network.on('round_started', (msg) => {
+      this.hideMatchResultsModal();
+      this.switchWorld(msg.worldId);
+
+      // Reset local player
+      if (!this.isHost && this.player) {
+        this.player.level = 1;
+        this.player.xp = 0;
+        this.player.totalXpEarned = 0;
+        this.player.skillPoints = 0;
+        this.player.skills = { hp: 0, melee: 0, range: 0, shield: 0 };
+        this.player.hp = this.player.maxHp;
+        this.player.isDead = false;
+        this.player.x = this.map.spawnPoint.x * TILE_SIZE + 8;
+        this.player.y = this.map.spawnPoint.y * TILE_SIZE + 8;
+        this.updateHUD();
+      }
+
+      // Reset remote players
+      for (const rp of this.remotePlayers.values()) {
+        rp.level = 1;
+        rp.xp = 0;
+        rp.pvpKills = 0;
+        rp.deaths = 0;
+        rp.hp = rp.maxHp;
+        rp.isDead = false;
+        rp.x = this.map.spawnPoint.x * TILE_SIZE + 8;
+        rp.y = this.map.spawnPoint.y * TILE_SIZE + 8;
+      }
+
+      this.showToast('🚀 Neue Runde gestartet! Auf in den Kampf!');
+    });
+  }
+
+  showKillFeed(killerName, victimName) {
+    const container = document.getElementById('killfeed-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'killfeed-toast';
+    toast.textContent = `⚔️ ${killerName} hat ${victimName} besiegt!`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      if (toast.parentNode) toast.parentNode.removeChild(toast);
+    }, 4000);
+  }
+
+  showMatchResultsModal(winners, leaderboard) {
+    const modal = document.getElementById('match-results-modal');
+    if (!modal) return;
+
+    const levelNameEl = document.getElementById('podium-level-name');
+    const levelStatEl = document.getElementById('podium-level-stat');
+    const killsNameEl = document.getElementById('podium-kills-name');
+    const killsStatEl = document.getElementById('podium-kills-stat');
+    const tbody = document.getElementById('results-table-body');
+    const hostControls = document.getElementById('results-host-controls');
+    const playerNotice = document.getElementById('results-player-notice');
+
+    if (winners && winners.highestLevel) {
+      if (levelNameEl) levelNameEl.textContent = winners.highestLevel.name;
+      if (levelStatEl) levelStatEl.textContent = `Level ${winners.highestLevel.level} (${winners.highestLevel.xp} XP)`;
+    } else {
+      if (levelNameEl) levelNameEl.textContent = '-';
+      if (levelStatEl) levelStatEl.textContent = 'Keine Daten';
+    }
+
+    if (winners && winners.mostKills) {
+      if (killsNameEl) killsNameEl.textContent = winners.mostKills.name;
+      if (killsStatEl) killsStatEl.textContent = `${winners.mostKills.pvpKills} PvP-Kills`;
+    } else {
+      if (killsNameEl) killsNameEl.textContent = '-';
+      if (killsStatEl) killsStatEl.textContent = '0 Kills';
+    }
+
+    if (tbody) {
+      tbody.innerHTML = '';
+      if (leaderboard && leaderboard.length > 0) {
+        leaderboard.forEach((p, idx) => {
+          const row = document.createElement('tr');
+          const medal = idx === 0 ? '🥇' : (idx === 1 ? '🥈' : (idx === 2 ? '🥉' : `#${idx + 1}`));
+          row.innerHTML = `
+            <td><strong>${medal}</strong></td>
+            <td><strong>${p.name}</strong></td>
+            <td>Lv.${p.level}</td>
+            <td>${p.xp}</td>
+            <td style="color: #f87171; font-weight: bold;">${p.pvpKills}</td>
+            <td style="color: #94a3b8;">${p.deaths}</td>
+          `;
+          tbody.appendChild(row);
+        });
+      } else {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #94a3b8;">Keine Spielerdaten verfügbar</td></tr>';
+      }
+    }
+
+    if (this.isHost) {
+      if (hostControls) hostControls.classList.remove('hidden');
+      if (playerNotice) playerNotice.classList.add('hidden');
+    } else {
+      if (hostControls) hostControls.classList.add('hidden');
+      if (playerNotice) playerNotice.classList.remove('hidden');
+    }
+
+    modal.classList.remove('hidden');
+  }
+
+  hideMatchResultsModal() {
+    const modal = document.getElementById('match-results-modal');
+    if (modal) modal.classList.add('hidden');
   }
 }
 

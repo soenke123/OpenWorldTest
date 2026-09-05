@@ -418,6 +418,69 @@ export class CombatManager {
       }
     }
 
+    // Check collision with remote players (LAN Multiplayer PvP)
+    if (this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
+      const curDim = this.game.currentDimension || 'overworld';
+      for (const remotePlayer of this.game.remotePlayers.values()) {
+        if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
+
+        const dx = remotePlayer.x - hitbox.x;
+        const dy = remotePlayer.y - hitbox.y;
+        const dist = Math.hypot(dx, dy);
+
+        let inRange = false;
+        if (isSpin) {
+          inRange = dist <= (hitbox.radius + remotePlayer.radius + 4);
+        } else if (isThrust) {
+          const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
+          const sideDist = Math.abs(-dx * Math.sin(hitbox.angle) + dy * Math.cos(hitbox.angle));
+          inRange = (forwardDot > 0 && forwardDot <= hitbox.range + remotePlayer.radius && sideDist <= (hitbox.width || 22) + remotePlayer.radius);
+        } else {
+          const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
+          const angleDiff = Math.abs(Math.atan2(dy, dx) - hitbox.angle);
+          const normAngleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+          inRange = (dist <= hitbox.radius + remotePlayer.radius && Math.abs(normAngleDiff) <= 0.95);
+        }
+
+        if (inRange) {
+          hitAny = true;
+          let dmg = 25;
+          if (hitbox.type === 'slash2' || hitbox.type === 'bear_claw2') dmg = 35;
+          if (isThrust) dmg = 52;
+          if (isSpin) dmg = 68;
+
+          const meleeBonus = (this.game?.player?.skills?.melee || 0) * 4;
+          dmg += meleeBonus;
+
+          if (hitbox.damageMultiplier) {
+            dmg = Math.round(dmg * hitbox.damageMultiplier);
+          } else if (hitbox.damage) {
+            dmg = hitbox.damage;
+          }
+
+          const angle = isSpin ? Math.atan2(dy, dx) : hitbox.angle;
+          let kb = hitbox.knockback || (isThrust ? 120 : (isSpin ? 140 : 80));
+          if (hitbox.knockbackMultiplier) {
+            kb = Math.round(kb * hitbox.knockbackMultiplier);
+          }
+
+          // Shield block check
+          if (remotePlayer.shieldActive) {
+            this.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 16, 90);
+            this.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 16, '#38bdf8');
+            dmg = Math.round(dmg * 0.2); // 80% Schadensreduktion
+          } else {
+            this.addHitSparks(remotePlayer.x, remotePlayer.y, '#ef4444', 12, 70);
+            this.addFloatingText(`-${dmg}`, remotePlayer.x, remotePlayer.y - 14, '#f87171');
+          }
+
+          const kbX = Math.cos(angle) * (kb * 0.4);
+          const kbY = Math.sin(angle) * (kb * 0.4);
+          this.game.network.sendPvPHit(remotePlayer.id, dmg, kbX, kbY);
+        }
+      }
+    }
+
     // Heavy thrust or spin attack camera shake impact
     if (hitAny && this.game && this.game.camera) {
       if (isThrust) {
@@ -606,6 +669,38 @@ export class CombatManager {
         }
       }
 
+      // Check collision with remote players (PvP)
+      let hitRemotePlayer = false;
+      if (!hitEnemy && this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
+        const curDim = this.game.currentDimension || 'overworld';
+        for (const remotePlayer of this.game.remotePlayers.values()) {
+          if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
+
+          if (Math.hypot(remotePlayer.x - arrow.x, remotePlayer.y - arrow.y) <= (remotePlayer.radius + 6)) {
+            let dmg = arrow.isCharged ? 45 : 22;
+            const kb = arrow.isCharged ? 140 : 70;
+
+            if (remotePlayer.shieldActive) {
+              this.addHitSparks(arrow.x, arrow.y, '#38bdf8', 14, 80);
+              this.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 18, '#38bdf8');
+              dmg = 0;
+            } else {
+              this.addHitSparks(arrow.x, arrow.y, '#ef4444', 12, 70);
+              this.addFloatingText(`-${dmg}`, remotePlayer.x, remotePlayer.y - 14, '#f87171');
+            }
+
+            if (dmg > 0) {
+              const kbX = Math.cos(arrow.angle) * kb * 0.3;
+              const kbY = Math.sin(arrow.angle) * kb * 0.3;
+              this.game.network.sendPvPHit(remotePlayer.id, dmg, kbX, kbY);
+            }
+
+            hitRemotePlayer = true;
+            break;
+          }
+        }
+      }
+
       // Check dummy hit
       let hitDummy = false;
       if (this.game.currentDimension === 'overworld') {
@@ -627,7 +722,7 @@ export class CombatManager {
       const tY = Math.floor(arrow.y / TILE_SIZE);
       const hitWall = this.isArrowObstacle(map, tX, tY);
 
-      if (hitDummy || hitEnemy || hitWall || arrow.distTraveled >= arrow.maxRange) {
+      if (hitDummy || hitEnemy || hitRemotePlayer || hitWall || arrow.distTraveled >= arrow.maxRange) {
         const curTile = map.getGroundTile ? map.getGroundTile(tX, tY) : (map.ground ? map.ground[tY]?.[tX] : 0);
         const inWater = this.isWaterOrAbyssTile(curTile) && !hitEnemy && !hitDummy && !hitWall;
 

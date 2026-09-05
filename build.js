@@ -17,6 +17,9 @@ const files = [
   'js/camera.js',
   'js/minimap.js',
   'js/touchControls.js',
+  'js/remotePlayer.js',
+  'js/network.js',
+  'js/spectator.js',
   'js/combat.js',
   'js/game.js'
 ];

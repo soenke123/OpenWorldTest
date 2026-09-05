@@ -508,6 +508,11 @@
               <span>Weiter →</span>
             </button>
           </div>
+          <div class="wizard-host-row">
+            <button id="btn-start-as-host" class="btn-wizard-host" title="Als Spielleiter zuschauen und die Runde leiten">
+              <span>👑 Als Spielleiter (Host / Spectator) starten</span>
+            </button>
+          </div>
         </div>
 
         <!-- STEP 2: Charakter wählen (Große Figuren, keine Namen, keine Texte) -->
@@ -552,6 +557,119 @@
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- =======================================================
+         HOST & SPECTATOR HUD (LAN Match Coordinator)
+         ======================================================= -->
+    <div id="spectator-hud" class="spectator-hud-panel hidden">
+      <div class="spectator-header">
+        <div class="sp-header-left">
+          <span class="sp-crown-icon">👑</span>
+          <span class="sp-title">Spielleiter (Spectator)</span>
+        </div>
+        <div class="sp-header-right">
+          <button id="btn-toggle-qr" class="btn-sp-icon" title="QR-Code für Handys anzeigen/verstecken">📱 QR-Code</button>
+        </div>
+      </div>
+
+      <!-- LAN Connect Card -->
+      <div class="spectator-connect-card">
+        <div class="sp-conn-label">📲 Beitritts-Link für Handys/PCs:</div>
+        <div class="sp-conn-row">
+          <span id="spectator-lan-ip" class="sp-lan-ip">Lade IP...</span>
+          <button id="btn-copy-join-link" class="btn-sp-copy" title="Link in Zwischenablage kopieren"><span>📋 Kopieren</span></button>
+        </div>
+        <!-- QR Code Preview Wrapper -->
+        <div id="spectator-qr-wrapper" class="spectator-qr-wrapper">
+          <img id="spectator-qr-img" class="spectator-qr-img" alt="QR-Code zum Beitreten">
+          <div class="sp-qr-hint">Mit Handy-Kamera scannen zum Beitreten!</div>
+        </div>
+      </div>
+
+      <!-- Match Controls -->
+      <div class="spectator-controls-card">
+        <div class="sp-world-row">
+          <label for="spectator-world-select">🗺️ Welt:</label>
+          <select id="spectator-world-select" class="sp-select"></select>
+        </div>
+        <div class="sp-actions-row">
+          <button id="btn-host-end-game" class="btn-host-action btn-end">🛑 Spiel beenden</button>
+          <button id="btn-host-new-round" class="btn-host-action btn-new">🔄 Runde starten</button>
+        </div>
+      </div>
+
+      <!-- Players List -->
+      <div class="spectator-players-section">
+        <div class="sp-section-title">👥 Verbundene Spieler</div>
+        <div id="spectator-players-list" class="spectator-players-list">
+          <div class="spectator-no-players">Warte auf Mitspieler...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Killfeed Notifications -->
+    <div id="killfeed-container" class="killfeed-container"></div>
+
+    <!-- =======================================================
+         MATCH RESULTS MODAL (Siegerehrung)
+         ======================================================= -->
+    <div id="match-results-modal" class="char-modal-backdrop hidden">
+      <div class="char-modal-dialog results-modal-dialog">
+        <div class="results-modal-header">
+          <h1 class="results-modal-title">🏆 SIEGEREHRUNG 🏆</h1>
+          <p class="results-modal-sub">Das Spiel wurde beendet! Hier sind die Champions der Runde:</p>
+        </div>
+
+        <!-- Podium: Highest Level & Most Kills -->
+        <div class="results-podium-grid">
+          <!-- Level King -->
+          <div class="podium-card level-king">
+            <div class="podium-crown">👑</div>
+            <div class="podium-category">Höchstes Level</div>
+            <div id="podium-level-name" class="podium-player-name">-</div>
+            <div id="podium-level-stat" class="podium-stat">Level 1</div>
+          </div>
+
+          <!-- PvP Champion -->
+          <div class="podium-card kill-champ">
+            <div class="podium-crown">⚔️</div>
+            <div class="podium-category">Meiste PvP-Kills</div>
+            <div id="podium-kills-name" class="podium-player-name">-</div>
+            <div id="podium-kills-stat" class="podium-stat">0 Kills</div>
+          </div>
+        </div>
+
+        <!-- Full Scoreboard Table -->
+        <div class="results-table-wrapper">
+          <table class="results-table">
+            <thead>
+              <tr>
+                <th>Rang</th>
+                <th>Held</th>
+                <th>Level</th>
+                <th>XP</th>
+                <th>Kills</th>
+                <th>Tode</th>
+              </tr>
+            </thead>
+            <tbody id="results-table-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Host vs Player Footer -->
+        <div class="results-footer">
+          <div id="results-host-controls" class="results-host-controls hidden">
+            <button id="btn-results-new-round" class="btn-start-game">
+              <span class="start-btn-icon">🌍</span>
+              <span class="start-btn-text">Neue Runde starten</span>
+            </button>
+          </div>
+          <div id="results-player-notice" class="results-player-notice">
+            ⏳ Warte auf den Spielleiter für die nächste Runde...
+          </div>
+        </div>
       </div>
     </div>
   </div>

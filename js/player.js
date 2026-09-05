@@ -145,6 +145,10 @@ export class Player {
       this.elevation = 0;
       this.visualElevation = 0;
     }
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendRespawn(this.x, this.y);
+    }
   }
 
   addXp(amount) {
@@ -1424,6 +1428,65 @@ export class Player {
 
     if (this.hp <= 0) {
       this.die('enemy');
+    }
+
+    return 'hit';
+  }
+
+  takePvPDamage(amount, kbX = 0, kbY = 0, attackerId = null) {
+    if (this.isDead) return 'dead';
+
+    // 1. Dash-I-Frames
+    if (this.dash && this.dash.active) {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('💨 AUSGEWICHEN!', this.x, this.y - 18, '#67e8f9');
+      }
+      return 'dodged';
+    }
+
+    // 2. Schild-Block
+    if (this.shield && this.shield.active && this.shield.energy > 0) {
+      const shieldSkill = this.skills?.shield || 0;
+      const blockEfficiency = Math.max(0.45, 0.85 - shieldSkill * 0.05);
+      this.shield.energy = Math.max(0, this.shield.energy - amount * blockEfficiency);
+      this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
+      if (this.game && this.game.combat) {
+        this.game.combat.addHitSparks(this.x, this.y, '#38bdf8', 14);
+        this.game.combat.addFloatingText('🛡️ GEBLOCKT!', this.x, this.y - 18, '#38bdf8');
+      }
+      if (this.shield.energy <= 0) {
+        this.shield.broken = true;
+        this.shield.stunTimer = COMBAT_CONFIG.SHIELD_BREAK_STUN || 1.2;
+        this.shield.active = false;
+        if (this.game && this.game.combat) {
+          this.game.combat.addFloatingText('💥 SCHILD ZERBROCHEN!', this.x, this.y - 26, '#ef4444');
+        }
+      }
+      return 'blocked';
+    }
+
+    // 3. Voller PvP-Treffer
+    this.hp = Math.max(0, this.hp - amount);
+    this.hitFlash = 0.3;
+    this.invulnTimer = 0.35;
+
+    // Knockback
+    if (kbX !== 0 || kbY !== 0) {
+      if (!this.checkCollision(this.x + kbX, this.y)) this.x += kbX;
+      if (!this.checkCollision(this.x, this.y + kbY)) this.y += kbY;
+    }
+
+    if (this.game && this.game.combat) {
+      this.game.combat.addHitSparks(this.x, this.y - 8, '#ef4444', 16);
+      this.game.combat.addFloatingText(`-${Math.round(amount)} HP`, this.x, this.y - 22, '#ef4444');
+    }
+
+    if (this.game && this.game.camera) {
+      this.game.camera.shake(6, 0.22);
+    }
+
+    if (this.hp <= 0) {
+      this.die('pvp');
     }
 
     return 'hit';

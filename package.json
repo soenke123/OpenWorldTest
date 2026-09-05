@@ -6,5 +6,9 @@
   "scripts": {
     "build": "node build.js",
     "start": "node server.js"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4",
+    "ws": "^8.21.3"
   }
 }
