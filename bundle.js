@@ -1,6 +1,6 @@
 (function() {
 
-// --- constants.js ---
+// --- js/constants.js ---
 // 16x16 Tile Size for fine, detailed pixel-art and organic shapes
 const TILE_SIZE = 16;
 
@@ -196,6 +196,7 @@ const PLAYER_CONFIG = {
   BASE_SPEED: 135,
   SPRINT_MULTIPLIER: 1.5,
   RADIUS: 5.5,
+  MAX_HP: 100,
   CANOPY_REVEAL_RADIUS: 52 // Exakter, scharfer Sichtkreis
 };
 
@@ -236,8 +237,25 @@ const COMBAT_CONFIG = {
   ARROW_PICKUP_RADIUS: 16
 };
 
+// Enemy AI & Gameplay Settings
+const ENEMY_CONFIG = {
+  DETECTION_RADIUS_DEFAULT: 135,
+  DETECTION_RADIUS_SCOUT: 180,
+  DEAGGRO_RADIUS: 240,
+  WANDER_RADIUS: 42,
+  PACK_CALL_RADIUS: 110,
+  ATTACK_TELEGRAPH_TIME: 0.45,
+  ATTACK_RECOVERY_TIME: 0.65
+};
 
-// --- noise.js ---
+const LOOT_TYPES = {
+  HEART: 'heart',
+  ARROW: 'arrow',
+  SPIRIT_GEM: 'spirit_gem'
+};
+
+
+// --- js/noise.js ---
 // Fast 2D Simplex/Perlin-style Gradient Noise for organic terrain generation
 class Noise2D {
   constructor(seed = 12345) {
@@ -311,7 +329,2351 @@ class Noise2D {
 }
 
 
-// --- sprites.js ---
+// --- bestiary.js ---
+/**
+ * Ocarina of Brawls - Bestiarium & Monster-Handbuch
+ * 20 detaillierte, prozedural animierte Gegner-Modelle im "Süßen Dark Ghibli 2.5D Papercraft"-Stil
+ * Inspiriert von Prinzessin Mononoke, Chihiros Reise ins Zauberland, Totoro und japanischer Mythologie
+ */
+
+// =============================================================================
+// GHIBLI PAPERCRAFT DRAWING HELPERS
+// =============================================================================
+
+/** Zeichnet weichen Papierschatten unter dem Wesen */
+function drawPaperShadow(ctx, cx, cy, rx, ry, alpha = 0.28) {
+  ctx.save();
+  ctx.fillStyle = `rgba(15, 23, 42, ${alpha})`;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Zeichnet ausdrucksstarke Ghibli-Anime-Augen mit Glanzpunkten und Wangen-Rouge */
+function drawGhibliEyes(ctx, lx, rx, y, r, dx = 0, dy = 0, isBlinking = false, blush = true) {
+  ctx.save();
+  if (isBlinking) {
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.arc(lx, y, r, Math.PI * 0.1, Math.PI * 0.9);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(rx, y, r, Math.PI * 0.1, Math.PI * 0.9);
+    ctx.stroke();
+  } else {
+    // Sklera / Weiß
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(lx, y, r * 1.05, r * 1.25, 0, 0, Math.PI * 2);
+    ctx.ellipse(rx, y, r * 1.05, r * 1.25, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Iris / Dunkel
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(lx + dx, y + dy, r * 0.75, 0, Math.PI * 2);
+    ctx.arc(rx + dx, y + dy, r * 0.75, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Glanzpunkte (Specular highlights)
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(lx + dx - r * 0.25, y + dy - r * 0.25, r * 0.3, 0, Math.PI * 2);
+    ctx.arc(rx + dx - r * 0.25, y + dy - r * 0.25, r * 0.3, 0, Math.PI * 2);
+    ctx.arc(lx + dx + r * 0.2, y + dy + r * 0.2, r * 0.15, 0, Math.PI * 2);
+    ctx.arc(rx + dx + r * 0.2, y + dy + r * 0.2, r * 0.15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Sanftes Wangen-Rouge (Blush)
+  if (blush) {
+    ctx.fillStyle = 'rgba(251, 113, 133, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(lx - r * 0.8, y + r * 0.8, r * 0.75, r * 0.38, -0.15, 0, Math.PI * 2);
+    ctx.ellipse(rx + r * 0.8, y + r * 0.8, r * 0.75, r * 0.38, 0.15, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Zeichnet eine feine Porzellanmaske mit Zinnober-Kitsune-/Mononoke-Malereien */
+function drawPorcelainMask(ctx, cx, cy, w, h, style = 'fox') {
+  ctx.save();
+  // Weicher Maskenschatten
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.beginPath();
+  ctx.ellipse(cx + 1, cy + 1, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Weißes Porzellan
+  ctx.fillStyle = '#fdfbf7';
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Zinnoberrote Ritual-Malerei
+  ctx.fillStyle = '#e11d48';
+  ctx.strokeStyle = '#e11d48';
+  ctx.lineWidth = 1.4;
+
+  if (style === 'fox') {
+    // Kitsune-Augenbrauen und Wangenwirbel
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.3, cy - h * 0.15);
+    ctx.quadraticCurveTo(cx - w * 0.15, cy - h * 0.35, cx - w * 0.05, cy - h * 0.15);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx + w * 0.3, cy - h * 0.15);
+    ctx.quadraticCurveTo(cx + w * 0.15, cy - h * 0.35, cx + w * 0.05, cy - h * 0.15);
+    ctx.stroke();
+
+    // Rote Wangenstreifen
+    ctx.beginPath();
+    ctx.moveTo(cx - w * 0.4, cy + h * 0.1);
+    ctx.lineTo(cx - w * 0.15, cy + h * 0.18);
+    ctx.moveTo(cx + w * 0.4, cy + h * 0.1);
+    ctx.lineTo(cx + w * 0.15, cy + h * 0.18);
+    ctx.stroke();
+  } else if (style === 'noh') {
+    // Kaonashi / No-Face Tränenpunkte
+    ctx.beginPath();
+    ctx.ellipse(cx - w * 0.22, cy - h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + w * 0.22, cy - h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx - w * 0.22, cy + h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx + w * 0.22, cy + h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Augen-Schlitze
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.ellipse(cx - w * 0.2, cy - h * 0.05, w * 0.12, h * 0.06, 0.1, 0, Math.PI * 2);
+  ctx.ellipse(cx + w * 0.2, cy - h * 0.05, w * 0.12, h * 0.06, -0.1, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/** Zeichnet einen niedlichen kleinen Kodama (Baumgeist mit Wackelkopf) */
+function drawKodama(ctx, x, y, tilt = 0, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  // Kleiner milchweißer Körper
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.ellipse(0, 4, 3, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Wackelkopf
+  ctx.translate(0, -2);
+  ctx.rotate(tilt);
+  ctx.fillStyle = '#f8fafc';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 5, 4.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Neugierige hohle Augen & Mund
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.arc(-2, -0.5, 0.9, 0, Math.PI * 2);
+  ctx.arc(2, -0.5, 0.9, 0, Math.PI * 2);
+  ctx.arc(0, 1.8, 0.75, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/** Zeichnet einen flauschigen Rußmännchen-Begleiter (Susuwatari) */
+function drawSootSprite(ctx, x, y, r, time, holdingCandy = false) {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Flauschige Stachelspitzen
+  ctx.fillStyle = '#09090b';
+  ctx.beginPath();
+  const spikes = 10;
+  for (let i = 0; i < spikes; i++) {
+    const angle = (i / spikes) * Math.PI * 2;
+    const spikeR = r + Math.sin(time * 8 + i * 2) * 1.5;
+    const px = Math.cos(angle) * spikeR;
+    const py = Math.sin(angle) * spikeR;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  // Zentraler runder Körper
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Große Kulleraugen
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(-r * 0.35, -r * 0.15, r * 0.38, 0, Math.PI * 2);
+  ctx.arc(r * 0.35, -r * 0.15, r * 0.38, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Pupillen (blicken neugierig)
+  const pLook = Math.sin(time * 3) * 0.5;
+  ctx.fillStyle = '#09090b';
+  ctx.beginPath();
+  ctx.arc(-r * 0.35 + pLook, -r * 0.15, r * 0.18, 0, Math.PI * 2);
+  ctx.arc(r * 0.35 + pLook, -r * 0.15, r * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Konpeitō (Stern-Zuckerchen in den Pfötchen)
+  if (holdingCandy) {
+    const candyY = r * 0.7;
+    ctx.fillStyle = '#fde047';
+    ctx.beginPath();
+    ctx.arc(0, candyY, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fbbf24';
+    ctx.beginPath();
+    ctx.arc(-1, candyY - 1, 1, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+/** Zeichnet eine traditionelle japanische Papierlaterne (Chōchin) */
+function drawPaperLantern(ctx, x, y, w, h, time, glowColor = '#f59e0b') {
+  ctx.save();
+  ctx.translate(x, y);
+
+  // Weicher Lichtschein
+  ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+  ctx.beginPath();
+  ctx.arc(0, 0, Math.max(w, h) * 0.9 + Math.sin(time * 4) * 2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Aufhängung
+  ctx.strokeStyle = '#451a03';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(0, -h * 0.6);
+  ctx.lineTo(0, -h * 0.4);
+  ctx.stroke();
+
+  // Laternenkörper (Rot / Pergament)
+  ctx.fillStyle = '#dc2626';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w * 0.5, h * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Warmes inneres Licht
+  ctx.fillStyle = glowColor;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, w * 0.28, h * 0.28, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bambus-Rippen
+  ctx.strokeStyle = '#7f1d1d';
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.ellipse(0, -h * 0.2, w * 0.42, h * 0.12, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, h * 0.2, w * 0.42, h * 0.12, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Quaste unten
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(-1, h * 0.45, 2, 4);
+
+  ctx.restore();
+}
+
+/** Zeichnet ein zartes Kirschblütenblatt (Sakura) */
+function drawSakuraPetal(ctx, x, y, rot, scale = 1) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = '#fbcfe8';
+  ctx.beginPath();
+  ctx.moveTo(0, -4);
+  ctx.quadraticCurveTo(3, -2, 2, 3);
+  ctx.quadraticCurveTo(0, 5, -2, 3);
+  ctx.quadraticCurveTo(-3, -2, 0, -4);
+  ctx.fill();
+  ctx.restore();
+}
+
+// =============================================================================
+// BESTIARY DATA (20 ENEMY MODELS - GHIBLI PAPERCRAFT EDITION)
+// =============================================================================
+
+const BESTIARY_DATA = [
+  // =========================================================================
+  // 1. FERNKAMPF (RANGE)
+  // =========================================================================
+  {
+    id: 'moss_archer',
+    name: 'Waldläufer-Schütze',
+    title: 'Kitsune Moss Ranger',
+    category: 'range',
+    categoryName: '🏹 Fernkampf',
+    biome: 'Grasland / Dichter Wald',
+    biomeBadge: 'Grasland',
+    badgeClass: 'badge-grass',
+    variants: ['Waldgrün (Standard)', 'Wüstensand (Ockergelb)', 'Schneetarn (Polarweiß)'],
+    stats: { hp: 45, maxHp: 50, atk: 18, spd: 'Schnell', rng: '180px (Hoch)' },
+    behavior: 'Lauert lautlos im Geäst und feuert treffsichere Moospfeile. Nähert sich der Spieler auf unter 35px, springt er mit einer geschickten Rückwärtsrolle ins Blattwerk.',
+    counter: 'Mit erhobenem Schild vorrücken, um die Pfeile abprallen zu lassen. Im Moment seines Nachladens mit einem schnellen Dash zuschlagen.',
+    lore: 'Trägt eine handgeschnitzte Kitsune-Porzellanmaske. Auf seiner Schulter reist stets ein kleiner Kodama-Baumgeist mit, der ihm die Windrichtung zuflüstert.',
+    palette: { primary: '#15803d', secondary: '#166534', cloth: '#22c55e', bow: '#854d0e', skin: '#fde047' },
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const breath = Math.sin(time * 3) * 1.5;
+      const isAttacking = state === 'attack';
+      const isWalking = state === 'walk';
+      const walkCycle = Math.sin(time * 8) * 3;
+
+      drawPaperShadow(ctx, cx, cy + 18, 13, 4.5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Kodama auf linker Schulter
+      const kodamaTilt = Math.sin(time * 2.5) * 0.25;
+      drawKodama(ctx, cx - 11, cy - 2 + breath * 0.6, kodamaTilt, 0.9);
+
+      // Beine & gefaltete Lederstiefel
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.roundRect(cx - 5.5, cy + 8, 3.2, 9 + (isWalking ? walkCycle : 0), 1.5);
+      ctx.roundRect(cx + 2.5, cy + 8, 3.2, 9 - (isWalking ? walkCycle : 0), 1.5);
+      ctx.fill();
+
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.roundRect(cx - 6.5, cy + 15 + (isWalking ? walkCycle : 0), 4.5, 3.2, 1.2);
+      ctx.roundRect(cx + 1.5, cy + 15 - (isWalking ? walkCycle : 0), 4.5, 3.2, 1.2);
+      ctx.fill();
+
+      // Körper / Gestufter Blatt-Poncho
+      ctx.fillStyle = '#166534';
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, cy - 3 + breath);
+      ctx.quadraticCurveTo(cx - 10, cy + 11 + breath, cx - 4, cy + 12 + breath);
+      ctx.quadraticCurveTo(cx, cy + 13 + breath, cx + 4, cy + 12 + breath);
+      ctx.quadraticCurveTo(cx + 10, cy + 11 + breath, cx + 8, cy - 3 + breath);
+      ctx.closePath();
+      ctx.fill();
+
+      // Innere Blattlage (hellgrün gestuft)
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy + 1 + breath);
+      ctx.quadraticCurveTo(cx, cy + 11 + breath, cx + 5, cy + 1 + breath);
+      ctx.closePath();
+      ctx.fill();
+
+      // Gürtel & Eichel-Schnalle
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(cx - 7, cy + 6 + breath, 14, 2);
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(cx, cy + 7 + breath, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Köcher mit zarten Papier-Pfeilfedern
+      ctx.fillStyle = '#92400e';
+      ctx.fillRect(cx - 10, cy - 7 + breath, 3.5, 12);
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(cx - 11, cy - 11 + breath, 1.8, 4);
+      ctx.fillRect(cx - 8.5, cy - 10 + breath, 1.8, 4);
+
+      // Kapuze mit Fuchsohren
+      ctx.fillStyle = '#14532d';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 6 + breath, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Kapuzenspitze geschwungen
+      ctx.beginPath();
+      ctx.moveTo(cx - 3, cy - 12 + breath);
+      ctx.quadraticCurveTo(cx - 8, cy - 16 + breath, cx - 11, cy - 14 + breath);
+      ctx.lineTo(cx + 1, cy - 11 + breath);
+      ctx.closePath();
+      ctx.fill();
+
+      // Kitsune Porzellan-Halbmaske mit roten Zeichen
+      drawPorcelainMask(ctx, cx, cy - 6 + breath, 10, 8.5, 'fox');
+
+      // Bogen aus Birkenholz mit Sakura-Band
+      const bowPull = isAttacking ? Math.sin(time * 12) * 4.5 : 0;
+      const bowX = cx + 8 + (isAttacking ? 3 : 0);
+      const bowY = cy + 2 + breath;
+
+      ctx.strokeStyle = '#854d0e';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(bowX, bowY, 11, -Math.PI / 2.2, Math.PI / 2.2);
+      ctx.stroke();
+
+      // Sakura-Bändchen am Bogenhorn
+      drawSakuraPetal(ctx, bowX - 2, bowY - 11, Math.sin(time * 4) * 0.4, 0.8);
+
+      // Bogensehne
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(bowX - 4, bowY - 10);
+      ctx.lineTo(bowX - 8 - bowPull, bowY);
+      ctx.lineTo(bowX - 4, bowY + 10);
+      ctx.stroke();
+
+      // Leuchtender Waldpfeil bei Angriff
+      if (isAttacking) {
+        ctx.strokeStyle = '#4ade80';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(bowX - 8 - bowPull, bowY);
+        ctx.lineTo(bowX + 11, bowY);
+        ctx.stroke();
+
+        ctx.fillStyle = '#bbf7d0';
+        ctx.beginPath();
+        ctx.moveTo(bowX + 13, bowY);
+        ctx.lineTo(bowX + 9, bowY - 2.5);
+        ctx.lineTo(bowX + 9, bowY + 2.5);
+        ctx.fill();
+      }
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'spore_spitter',
+    name: 'Sporen-Spucker',
+    title: 'Spore Dumpling Yokai',
+    category: 'range',
+    categoryName: '🏹 Fernkampf',
+    biome: 'Sumpf & Pilzgrotten',
+    biomeBadge: 'Sumpf',
+    badgeClass: 'badge-swamp',
+    variants: ['Giftgrün (Standard)', 'Neon-Lila (Tiefsteinhöhle)', 'Gletscherblau (Frostpilz)'],
+    stats: { hp: 55, maxHp: 60, atk: 22, spd: 'Langsam', rng: '160px (Bogen)' },
+    behavior: 'Ein pummeliger Pilzgeist, der friedlich im Moos döst, bei Störung jedoch zischende Leuchtsporen im hohen Bogen spuckt. Hinterlässt beim Aufprall glitzernden Nebel.',
+    counter: 'Die bogenförmigen Flugbahnen sind langsam. Seitlich ausweichen und den kurzen Moment nutzen, in dem er nach dem Spucken erschöpft seufzt.',
+    lore: 'Seine samtige Haube duftet nach feuchtem Waldboden und süßen Blaubeeren. Mag es besonders, wenn man ihn sanft am Stiel krault.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const isWalking = state === 'walk';
+      const breath = Math.sin(time * 3.5) * 1.5;
+      const squash = isAttacking ? Math.sin(time * 10) * 3 : (isWalking ? Math.sin(time * 8) * 1.5 : 0);
+
+      drawPaperShadow(ctx, cx, cy + 16, 14, 5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // 4 zarte Wurzelbeinchen
+      ctx.fillStyle = '#451a03';
+      for (let i = -1.5; i <= 1.5; i += 1) {
+        const footWiggle = isWalking ? Math.sin(time * 8 + i * 1.5) * 2.5 : 0;
+        ctx.beginPath();
+        ctx.ellipse(cx + i * 5.5, cy + 13 + footWiggle, 2.2, 3.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Runder, samtiger Pilzkörper (Deep Indigo & Magenta)
+      ctx.fillStyle = '#581c87';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 4 - squash * 0.5, 13 + breath * 0.5, 11 + squash, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bauchbereich heller (Fliederfarbenes Pergament)
+      ctx.fillStyle = '#a855f7';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 6 - squash * 0.5, 9, 7 + squash * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Mintgrüne Leucht-Polkapunkte
+      ctx.fillStyle = '#6ee7b7';
+      ctx.beginPath();
+      ctx.arc(cx - 7, cy + 1, 2.5, 0, Math.PI * 2);
+      ctx.arc(cx + 7, cy + 3, 2, 0, Math.PI * 2);
+      ctx.arc(cx - 2, cy + 8, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Kamin-Mund auf dem Kopf
+      ctx.fillStyle = '#3b0764';
+      ctx.beginPath();
+      ctx.moveTo(cx - 6, cy - 6);
+      ctx.quadraticCurveTo(cx - 8, cy - 13 - squash, cx - 5, cy - 14 - squash);
+      ctx.lineTo(cx + 5, cy - 14 - squash);
+      ctx.quadraticCurveTo(cx + 8, cy - 13 - squash, cx + 6, cy - 6);
+      ctx.closePath();
+      ctx.fill();
+
+      // Mündungsschlund mit zartem Leuchten
+      ctx.fillStyle = '#34d399';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - 14 - squash, 6, 2.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Niedliche schläfrige Kulleraugen
+      const blink = Math.sin(time * 1.8) > 0.95;
+      drawGhibliEyes(ctx, cx - 4.5, cx + 4.5, cy + 2 - squash * 0.4, 2.4, 0, 0.4, blink, true);
+
+      // Schwebende Sporenbläschen
+      if (isAttacking) {
+        // Große leuchtende Sporen-Kugel
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath();
+        ctx.arc(cx, cy - 22 - squash, 5.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#bbf7d0';
+        ctx.beginPath();
+        ctx.arc(cx - 1.5, cy - 23.5 - squash, 2, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Zarte kleine Schwebepartikel
+        const bubbleY = (time * 18) % 24;
+        ctx.fillStyle = 'rgba(110, 231, 183, 0.7)';
+        ctx.beginPath();
+        ctx.arc(cx + Math.sin(time * 3) * 4, cy - 16 - bubbleY, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.filter = 'none';
+    }
+  },
+
+  // =========================================================================
+  // 2. BOSS / TANK / MONSTER (KOLOSS)
+  // =========================================================================
+  {
+    id: 'boulder_troll',
+    name: 'Moos-Koloss',
+    title: 'Laputa Stone Guardian',
+    category: 'boss',
+    categoryName: '🛡️ Koloss / Boss',
+    biome: 'Felsgebirge & Berggipfel',
+    biomeBadge: 'Gebirge',
+    badgeClass: 'badge-mountain',
+    variants: ['Granit-Moos (Standard)', 'Vulkanasche (Basaltschwarz)', 'Marmorglanz (Alabaster)'],
+    stats: { hp: 120, maxHp: 120, atk: 35, spd: 'Schwerfällig', rng: '50px (Flächen-Beben)' },
+    behavior: 'Uralter Steingolem, bewachsen mit Moos und Miniatur-Bonsai. Stampft im Takt der Bergadern. Rammt beide Fäuste in die Erde für verheerende Stoßwellen.',
+    counter: 'Seine wuchtigen Schläge haben lange Vorbereitung. Während er ausholt, hinter ihn rollen und den moosfreien Riss an seinem Rücken attackieren.',
+    lore: 'Wacht seit Jahrhunderten über zerfallene Himmelsruinen. Kleine Glühwürmchen schlafen nachts geborgen in seinen Steinfugen.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const breath = Math.sin(time * 2) * 1.2;
+      const isAttacking = state === 'attack';
+      const isWalking = state === 'walk';
+      const sway = isWalking ? Math.sin(time * 4) * 3 : 0;
+
+      drawPaperShadow(ctx, cx, cy + 22, 22, 7);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Uralter runder Felskörper (Slate Grey Papercraft)
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.ellipse(cx + sway * 0.3, cy + 3 + breath, 18, 16, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Steinstruktur / Geschichtete Felsplatten
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.ellipse(cx + sway * 0.3, cy + 1 + breath, 15, 12, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Moosdecke auf Schultern und Kopf (Lush Moss)
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.ellipse(cx + sway * 0.3, cy - 9 + breath, 14, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.ellipse(cx - 3 + sway * 0.3, cy - 10 + breath, 8, 4, -0.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bonsai-Zweiglein mit 3 Blättern auf rechter Schulter
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(cx + 8 + sway * 0.3, cy - 10 + breath);
+      ctx.quadraticCurveTo(cx + 14 + sway * 0.3, cy - 15 + breath, cx + 12 + sway * 0.3, cy - 19 + breath);
+      ctx.stroke();
+
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.ellipse(cx + 12 + sway * 0.3, cy - 20 + breath, 2.5, 1.5, 0.4, 0, Math.PI * 2);
+      ctx.ellipse(cx + 15 + sway * 0.3, cy - 16 + breath, 2.2, 1.4, -0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Uralte leuchtende Bernstein-Augenschlitze (Laputa Look)
+      const eyeBlink = Math.sin(time * 1.5) > 0.94;
+      if (!eyeBlink) {
+        ctx.fillStyle = '#fbbf24';
+        ctx.beginPath();
+        ctx.ellipse(cx - 5 + sway * 0.3, cy - 1 + breath, 3, 1.8, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx + 5 + sway * 0.3, cy - 1 + breath, 3, 1.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(cx - 5 + sway * 0.3, cy - 1 + breath, 1.2, 0, Math.PI * 2);
+        ctx.arc(cx + 5 + sway * 0.3, cy - 1 + breath, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Massive Steinfäuste
+      const armLift = isAttacking ? Math.sin(time * 8) * 12 : 0;
+      ctx.fillStyle = '#1e293b';
+      // Linke Faust
+      ctx.beginPath();
+      ctx.ellipse(cx - 16 + sway, cy + 12 + breath - armLift, 6.5, 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Rechte Faust
+      ctx.beginPath();
+      ctx.ellipse(cx + 16 + sway, cy + 12 + breath - armLift, 6.5, 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Umkreisende Glühwürmchen (Totoro / Waldgeist-Touch)
+      const fireflyAngle = time * 2;
+      const ffx = cx + Math.cos(fireflyAngle) * 22;
+      const ffy = cy + Math.sin(fireflyAngle) * 9 + breath;
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(ffx, ffy, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'frost_giant',
+    name: 'Yeti-Wächter',
+    title: 'Frosthorn Snow Totoro',
+    category: 'boss',
+    categoryName: '🛡️ Koloss / Boss',
+    biome: 'Gletscher & Schneegipfel',
+    biomeBadge: 'Schnee',
+    badgeClass: 'badge-ice',
+    variants: ['Gletscherweiß (Standard)', 'Polar-Nacht (Arktis-Blau)', 'Kristallquarz (Türkis)'],
+    stats: { hp: 135, maxHp: 135, atk: 38, spd: 'Langsam', rng: '65px (Eis-Keule)' },
+    behavior: 'Ein gemütlicher, flauschiger Schnee-Yeti mit mächtigen Eis-Widderhörnern. Schwingt eine uralte Eiskristall-Keule und beschwört sanfte Schneewirbel.',
+    counter: 'Feuer- und Spreng-Angriffe schmelzen seine Schneefell-Rüstung. Im Moment seines Keulenschwungs unter seinen Beinen durchrollen.',
+    lore: 'An seinem linken Horn baumelt eine alte rote Papierlaterne, die ihm ein verlorener Wanderer einst zum Dank schenkte. Das Licht erlischt niemals.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const breath = Math.sin(time * 2.2) * 1.5;
+      const isAttacking = state === 'attack';
+      const isWalking = state === 'walk';
+      const step = isWalking ? Math.sin(time * 6) * 3 : 0;
+
+      drawPaperShadow(ctx, cx, cy + 22, 20, 6);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Flauschiger schneeweißer Wolkenkörper (Totoro Snow Silhouette)
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 5 + breath, 18, 16, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 3 + breath, 16, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bauchfell mit Eis-Tönung
+      ctx.fillStyle = '#e0f2fe';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 7 + breath, 11, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Kulleraugen & blaue Stupsnase
+      drawGhibliEyes(ctx, cx - 5.5, cx + 5.5, cy - 2 + breath, 2.5, 0, 0.2, false, false);
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2.5 + breath, 2.5, 1.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Transparente Gletscher-Widderhörner
+      ctx.strokeStyle = '#7dd3fc';
+      ctx.lineWidth = 3.5;
+      ctx.lineCap = 'round';
+      // Rechtes Horn
+      ctx.beginPath();
+      ctx.arc(cx + 12, cy - 9 + breath, 8, -Math.PI * 0.2, Math.PI * 0.7);
+      ctx.stroke();
+      // Linkes Horn
+      ctx.beginPath();
+      ctx.arc(cx - 12, cy - 9 + breath, 8, Math.PI * 0.3, Math.PI * 1.2);
+      ctx.stroke();
+
+      // Rote Papierlaterne am linken Horn (schwankend im Wind)
+      const lanternSwing = Math.sin(time * 3) * 0.25;
+      drawPaperLantern(ctx, cx - 18 + lanternSwing * 6, cy - 3 + breath, 8, 10, time, '#fef08a');
+
+      // Eiskristall-Keule in der rechten Pranke
+      const clubSwing = isAttacking ? Math.sin(time * 8) * 20 : 0;
+      ctx.save();
+      ctx.translate(cx + 16, cy + 4 + breath);
+      ctx.rotate(clubSwing * Math.PI / 180);
+      // Holzgriff
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-2, -14, 4, 18);
+      // Glänzender Eisblock
+      ctx.fillStyle = '#38bdf8';
+      ctx.beginPath();
+      ctx.roundRect(-6, -22, 12, 10, 2);
+      ctx.fill();
+      ctx.fillStyle = '#e0f2fe';
+      ctx.fillRect(-4, -20, 4, 4);
+      ctx.restore();
+
+      // Flauschige Schneefüße
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.ellipse(cx - 8, cy + 18 + step, 6, 4, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 8, cy + 18 - step, 6, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.filter = 'none';
+    }
+  },
+
+  // =========================================================================
+  // 3. REPTILIEN & SCHLANGEN (REPTILE)
+  // =========================================================================
+  {
+    id: 'slithering_viper',
+    name: 'Smaragd-Natter',
+    title: 'Jade Ribbon Dragon',
+    category: 'reptile',
+    categoryName: '🐍 Reptilien & Schlangen',
+    biome: 'Dschungel & Feuchtgebiete',
+    biomeBadge: 'Dschungel',
+    badgeClass: 'badge-grass',
+    variants: ['Smaragdgrün (Standard)', 'Amethyst (Giftviper)', 'Goldkobra (Wüste)'],
+    stats: { hp: 50, maxHp: 50, atk: 24, spd: 'Sehr Schnell', rng: '30px (Giftbiss)' },
+    behavior: 'Gleitet in weichen, eleganten Sinuswellen lautlos durchs Gras. Schnellt blitzartig vor für einen giftigen Überraschungsbiss.',
+    counter: 'Ihre Gleitbahn ist vorhersehbar. Im Moment ihres Ausholens zur Seite hechten und mit einem Rundumschlag den Schwanz treffen.',
+    lore: 'Eine heilige Bote des Waldgeistes. Auf ihrer Schwanzspitze reitet ein winziger Kodama mit einem Seerosenblatt als Sonnenschirm.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const isWalking = state === 'walk';
+      const speed = isWalking ? 6.5 : (isAttacking ? 8 : 4);
+
+      drawPaperShadow(ctx, cx, cy + 16, 22, 5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // 8 geschmeidige Jade-Körperscheiben in Sinuswellen
+      const segments = 8;
+      const points = [];
+
+      for (let i = segments - 1; i >= 0; i--) {
+        const segWave = Math.sin(time * speed - i * 0.55);
+        const px = cx + segWave * (12 + (segments - i) * 0.8);
+        const py = cy + 12 - i * 3.5;
+        const rad = 3.5 + (1 - i / segments) * 4;
+
+        points.push({ x: px, y: py, r: rad });
+
+        // Bauchtönung (Creme-Pergament)
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(px, py + 1.5, rad * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Jadegrüner Rückenschuppen-Körper
+        ctx.fillStyle = i % 2 === 0 ? '#059669' : '#10b981';
+        ctx.beginPath();
+        ctx.arc(px, py, rad, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Feine goldene Zierflecken
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(px, py - rad * 0.3, rad * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Reitender Kodama auf dem letzten Schwanzsegment! (Ghibli-Charm Pur)
+      const tail = points[0];
+      drawKodama(ctx, tail.x, tail.y - 6, Math.sin(time * 3) * 0.3, 0.75);
+
+      // Edler Drachen- / Schlangenkopf
+      const head = points[points.length - 1];
+      const headX = isAttacking ? head.x + Math.sin(time * 12) * 5 : head.x;
+      const headY = head.y - 3;
+
+      ctx.fillStyle = '#047857';
+      ctx.beginPath();
+      ctx.ellipse(headX, headY, 7.5, 5.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rubinrote Glasaugen
+      ctx.fillStyle = '#f43f5e';
+      ctx.beginPath();
+      ctx.arc(headX - 3.5, headY - 1.5, 2, 0, Math.PI * 2);
+      ctx.arc(headX + 3.5, headY - 1.5, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(headX - 4, headY - 2, 0.8, 0, Math.PI * 2);
+      ctx.arc(headX + 3, headY - 2, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Goldene Fühler / Schnurrhaare
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(headX - 4, headY - 3);
+      ctx.quadraticCurveTo(headX - 8, headY - 8, headX - 6, headY - 11);
+      ctx.moveTo(headX + 4, headY - 3);
+      ctx.quadraticCurveTo(headX + 8, headY - 8, headX + 6, headY - 11);
+      ctx.stroke();
+
+      // Zarte gespaltene Zunge bei Zischen
+      if (Math.sin(time * 6) > 0.4) {
+        ctx.strokeStyle = '#fb7185';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(headX, headY + 4);
+        ctx.lineTo(headX, headY + 8);
+        ctx.lineTo(headX - 2, headY + 10);
+        ctx.moveTo(headX, headY + 8);
+        ctx.lineTo(headX + 2, headY + 10);
+        ctx.stroke();
+      }
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'dune_maw',
+    name: 'Dünen-Schlund',
+    title: 'Terracotta Sand Lotus',
+    category: 'reptile',
+    categoryName: '🐍 Reptilien & Schlangen',
+    biome: 'Wüste & Sanddünen',
+    biomeBadge: 'Wüste',
+    badgeClass: 'badge-desert',
+    variants: ['Terrakotta (Standard)', 'Obsidian (Vulkansand)', 'Geisterweiß (Kalköde)'],
+    stats: { hp: 80, maxHp: 80, atk: 30, spd: 'Stationär', rng: '45px (Boden-Verschlingen)' },
+    behavior: 'Bricht wie eine blühende Keramik-Wüstenlotus aus dem Treibsand hervor. Erzeugt wirbelnde Sandtrichter und schnappt mit glatten Perlzähnen zu.',
+    counter: 'Auf die zarten Blütenblätter am Kragen zielen, wenn sich der Schlund öffnet. Bomben direkt in seinen Sandtrichter werfen.',
+    lore: 'Aus antiken Terrakotta-Scherben und goldenen Kintsugi-Adern geformt. Sammelt Tautropfen der Wüstennächte in seinem Blütenkelch.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const breath = Math.sin(time * 3) * 1.5;
+      const mawOpen = isAttacking ? 6 + Math.sin(time * 12) * 3 : 2 + Math.sin(time * 3) * 1;
+
+      // Wirbelnder Sandtrichter am Boden
+      ctx.fillStyle = 'rgba(217, 119, 6, 0.35)';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 16, 20 + Math.sin(time * 4) * 2, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Segmentierter Terrakotta-Hals
+      for (let i = 0; i < 3; i++) {
+        const segY = cy + 12 - i * 6 + breath;
+        ctx.fillStyle = i % 2 === 0 ? '#c2410c' : '#ea580c';
+        ctx.beginPath();
+        ctx.ellipse(cx, segY, 14 - i * 2, 5, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // Kintsugi-Goldader
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 6 + i * 2, segY);
+        ctx.lineTo(cx + 4 - i, segY + 2);
+        ctx.stroke();
+      }
+
+      // Lotus-Blütenblätter (Korallen-Rosa & Gold)
+      const petals = 6;
+      ctx.fillStyle = '#fb7185';
+      for (let p = 0; p < petals; p++) {
+        const angle = (p / petals) * Math.PI * 2;
+        const petX = cx + Math.cos(angle) * (11 + mawOpen);
+        const petY = cy - 2 + Math.sin(angle) * (5 + mawOpen * 0.4) + breath;
+        ctx.beginPath();
+        ctx.ellipse(petX, petY, 4.5, 3, angle, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Innerer Schlund (Tiefes Dunkel mit leuchtendem Sonnenkern)
+      ctx.fillStyle = '#1c1917';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - 2 + breath, 10 + mawOpen * 0.5, 6 + mawOpen * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Goldener Sonnen-Nektarkern
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 2 + breath, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Kreis glatter weißer Perlzähne
+      ctx.fillStyle = '#f8fafc';
+      for (let t = 0; t < 8; t++) {
+        const tAngle = (t / 8) * Math.PI * 2;
+        const tx = cx + Math.cos(tAngle) * (7 + mawOpen * 0.4);
+        const ty = cy - 2 + Math.sin(tAngle) * (4 + mawOpen * 0.25) + breath;
+        ctx.beginPath();
+        ctx.arc(tx, ty, 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Zwei neugierige Bernstein-Augen an den Seiten
+      drawGhibliEyes(ctx, cx - 11, cx + 11, cy - 6 + breath, 2, 0, 0, false, false);
+
+      ctx.filter = 'none';
+    }
+  },
+
+  // =========================================================================
+  // 4. MAGIER & KULTISTEN (MAGE)
+  // =========================================================================
+  {
+    id: 'pyromancer',
+    name: 'Laternen-Pyromant',
+    title: 'Paper Lantern Wraith',
+    category: 'mage',
+    categoryName: '🔮 Magier & Gelehrte',
+    biome: 'Vulkanland & Brandruinen',
+    biomeBadge: 'Vulkan',
+    badgeClass: 'badge-vulcano',
+    variants: ['Feuerrot (Standard)', 'Seelenblau (Geisterflamme)', 'Giftgrün (Hexenfeuer)'],
+    stats: { hp: 40, maxHp: 40, atk: 26, spd: 'Mittel', rng: '140px (Flammenwirbel)' },
+    behavior: 'Schwebender Geistermönch mit einer traditionellen roten Chōchin-Laterne als Kopf. Wird von zwei verspielten Flämmchen-Begleitern (Hi-no-Tama) umtanzt.',
+    counter: 'Feuersäulen kündigen sich durch kleine Funkenwirbel am Boden an. Im Schwebemodus mit Pfeilen aus der Distanz unterbrechen.',
+    lore: 'Sein Laternenkopf lächelt stets sanft, selbst im heißesten Gefecht. Die zwei kleinen Flämmchen bringen ihm getrocknete Teeblätter zum Verglühen.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const floatBob = Math.sin(time * 2.5) * 3;
+
+      drawPaperShadow(ctx, cx, cy + 18, 12, 4);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Flatterndes Indigo-Papiergewand mit Talismanen
+      ctx.fillStyle = '#1e1b4b';
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, cy - 2 + floatBob);
+      ctx.quadraticCurveTo(cx - 12, cy + 14 + floatBob, cx - 6, cy + 17 + floatBob);
+      ctx.quadraticCurveTo(cx, cy + 15 + floatBob, cx + 6, cy + 17 + floatBob);
+      ctx.quadraticCurveTo(cx + 12, cy + 14 + floatBob, cx + 8, cy - 2 + floatBob);
+      ctx.closePath();
+      ctx.fill();
+
+      // Goldene Talisman-Schärfe
+      ctx.fillStyle = '#fde047';
+      ctx.fillRect(cx - 2, cy + 2 + floatBob, 4, 10);
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(cx - 1, cy + 4 + floatBob, 2, 2);
+      ctx.fillRect(cx - 1, cy + 8 + floatBob, 2, 2);
+
+      // Kopf ist eine leuchtende rote Papierlaterne (Chōchin)
+      drawPaperLantern(ctx, cx, cy - 8 + floatBob, 14, 15, time, '#fef08a');
+
+      // Freundliches Lächel-Gesicht auf der Laterne ausgeschnitten
+      ctx.fillStyle = '#451a03';
+      ctx.beginPath();
+      ctx.arc(cx - 3, cy - 9 + floatBob, 1.2, 0, Math.PI * 2);
+      ctx.arc(cx + 3, cy - 9 + floatBob, 1.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy - 7 + floatBob, 2, 0.1, Math.PI * 0.9);
+      ctx.stroke();
+
+      // Zwei niedliche tanzende Flämmchen-Geister (Hi-no-Tama / Calcifers)
+      const f1Angle = time * 3;
+      const f2Angle = time * 3 + Math.PI;
+
+      const drawFlameSprite = (fx, fy, scale = 1) => {
+        ctx.save();
+        ctx.translate(fx, fy);
+        ctx.scale(scale, scale);
+        // Flammenkörper
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.arc(0, 2, 4, 0, Math.PI * 2);
+        ctx.moveTo(0, -5);
+        ctx.quadraticCurveTo(4, -1, 3, 3);
+        ctx.quadraticCurveTo(-4, -1, 0, -5);
+        ctx.fill();
+        // Leuchtendes Gelb
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(0, 2, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        // Zwei kleine Pünktchen-Augen
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(-1.2, 1.5, 0.6, 0, Math.PI * 2);
+        ctx.arc(1.2, 1.5, 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      };
+
+      const flameRadius = isAttacking ? 18 + Math.sin(time * 10) * 4 : 14;
+      drawFlameSprite(cx + Math.cos(f1Angle) * flameRadius, cy + floatBob + Math.sin(f1Angle) * 6, 0.9);
+      drawFlameSprite(cx + Math.cos(f2Angle) * flameRadius, cy + floatBob + Math.sin(f2Angle) * 6, 0.9);
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'star_astromancer',
+    name: 'Wolken-Astrologe',
+    title: 'Celestial Owl Sage',
+    category: 'mage',
+    categoryName: '🔮 Magier & Gelehrte',
+    biome: 'Himmelsinseln & Sternwarte',
+    biomeBadge: 'Himmel',
+    badgeClass: 'badge-sky',
+    variants: ['Mitternachtsblau (Standard)', 'Mondsilber (Vollmond)', 'Aurora (Nordlicht)'],
+    stats: { hp: 50, maxHp: 50, atk: 28, spd: 'Mittel', rng: '150px (Sternschnuppen)' },
+    behavior: 'Ein weiser Eulen-Mönch im Sternen-Kimono. Schwebt auf einer zarten rosa Traumwolke und beschwört leuchtende Sternschnuppen-Kaskaden.',
+    counter: 'Seine Sternschnuppen schlagen mit kurzer Verzögerung ein. Nach den Einschlägen ist er kurz geblendet – perfekte Zeit für Kombo-Angriffe.',
+    lore: 'Trägt einen Kegelhut aus Reisstroh mit kleinen Papier-Glücksstreifen (O-Mikuji). Kennt jeden Stern der Geisterwelt beim Vornamen.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const cloudBob = Math.sin(time * 2.2) * 2.5;
+
+      drawPaperShadow(ctx, cx, cy + 20, 16, 5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Zartrosa fluffige Traumwolke (Pink Spirit Cloud)
+      ctx.fillStyle = '#fbcfe8';
+      ctx.beginPath();
+      ctx.arc(cx - 8, cy + 12 + cloudBob, 7, 0, Math.PI * 2);
+      ctx.arc(cx, cy + 10 + cloudBob, 9, 0, Math.PI * 2);
+      ctx.arc(cx + 8, cy + 12 + cloudBob, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Kleiner weiser Eulen-Körper im Mitternachts-Kimono
+      ctx.fillStyle = '#1e3a8a';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 1 + cloudBob, 10, 11, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Goldene Sternen-Muster auf dem Kimono
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(cx - 4, cy + 4 + cloudBob, 1, 0, Math.PI * 2);
+      ctx.arc(cx + 3, cy + 6 + cloudBob, 1.2, 0, Math.PI * 2);
+      ctx.arc(cx - 1, cy + 8 + cloudBob, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Flauschige weiße Brustfedern
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2 + cloudBob, 5, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Große, weise goldene Eulenaugen & Schnabel
+      drawGhibliEyes(ctx, cx - 4, cx + 4, cy - 4 + cloudBob, 2.6, 0, 0, false, false);
+
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 2 + cloudBob);
+      ctx.lineTo(cx - 1.5, cy - 0.5 + cloudBob);
+      ctx.lineTo(cx + 1.5, cy - 0.5 + cloudBob);
+      ctx.fill();
+
+      // Kegelhut aus Reisstroh (Kasa) mit O-Mikuji Papierstreifen
+      ctx.fillStyle = '#d97706';
+      ctx.beginPath();
+      ctx.moveTo(cx - 13, cy - 6 + cloudBob);
+      ctx.lineTo(cx, cy - 14 + cloudBob);
+      ctx.lineTo(cx + 13, cy - 6 + cloudBob);
+      ctx.closePath();
+      ctx.fill();
+
+      // Glücks-Papierstreifen am Hutrand
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillRect(cx - 8, cy - 5 + cloudBob, 2, 5);
+      ctx.fillRect(cx + 6, cy - 5 + cloudBob, 2, 5);
+
+      // Knorriges Holzstabsystem mit kreisendem Sternkristall
+      const staffX = cx + 12;
+      const staffY = cy + cloudBob;
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.moveTo(staffX, staffY + 10);
+      ctx.lineTo(staffX, staffY - 10);
+      ctx.stroke();
+
+      // Kreisender 8-zackiger Stern
+      const starRot = time * 3;
+      ctx.save();
+      ctx.translate(staffX, staffY - 14);
+      ctx.rotate(starRot);
+      ctx.fillStyle = isAttacking ? '#facc15' : '#38bdf8';
+      for (let s = 0; s < 4; s++) {
+        ctx.rotate(Math.PI / 4);
+        ctx.fillRect(-1, -4, 2, 8);
+      }
+      ctx.restore();
+
+      ctx.filter = 'none';
+    }
+  },
+
+  // =========================================================================
+  // 5. BLOBS & SLIMES (BLOB)
+  // =========================================================================
+  {
+    id: 'green_slime',
+    name: 'Tau-Tropfen Blob',
+    title: 'Acorn Dewdrop Slime',
+    category: 'blob',
+    categoryName: '🧪 Blobs & Schleime',
+    biome: 'Grasland & Feuchtwiesen',
+    biomeBadge: 'Grasland',
+    badgeClass: 'badge-grass',
+    variants: ['Smaragd-Tau (Standard)', 'Honig-Gelee (Wüste)', 'Frost-Träne (Schnee)'],
+    stats: { hp: 35, maxHp: 35, atk: 12, spd: 'Mittel', rng: '25px (Körper-Platscher)' },
+    behavior: 'Ein herziges, transparentes Tropfen-Wesen mit einem kleinen Eichelkern und Kleeblatt im Bauch. Hüpft fröhlich und teilt sich bei Gefahr kurz in zwei Mini-Tröpfchen.',
+    counter: 'Mit einfachen Schwerthieben schnell besiegbar. Vorsicht beim Zerschlagen: Mini-Blobs hüpfen flink davon!',
+    lore: 'Entsteht aus Morgentautropfen auf uralten Eichenblättern. Kitzelt sanft an den Zehen und liebt sonnige Waldlichtungen.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const isWalking = state === 'walk';
+      const squish = Math.sin(time * 5) * (isWalking ? 3.5 : 1.8);
+      const hop = isWalking ? Math.abs(Math.sin(time * 5)) * 6 : 0;
+
+      drawPaperShadow(ctx, cx, cy + 16, 15 + squish, 5 - squish * 0.2);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      const blobY = cy + 4 - hop;
+
+      // Transparenter Smaragd-Gelee-Körper
+      ctx.fillStyle = 'rgba(34, 197, 94, 0.88)';
+      ctx.beginPath();
+      ctx.moveTo(cx, blobY - 14 - squish);
+      ctx.bezierCurveTo(cx + 14 + squish, blobY - 10, cx + 16 + squish, blobY + 11, cx, blobY + 12 + squish * 0.5);
+      ctx.bezierCurveTo(cx - 16 - squish, blobY + 11, cx - 14 - squish, blobY - 10, cx, blobY - 14 - squish);
+      ctx.fill();
+
+      // Eingeschlossene goldene Eichel im Geleebauch (Ghibli-Detail!)
+      ctx.fillStyle = '#b45309';
+      ctx.beginPath();
+      ctx.ellipse(cx - 3, blobY + 2, 3, 4, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.arc(cx - 4, blobY - 1, 2.5, 0, Math.PI);
+      ctx.fill();
+
+      // Glanz-Highlight auf dem Gelee (Papercraft-Glanz)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.beginPath();
+      ctx.ellipse(cx - 6, blobY - 6, 4, 2, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Wackelndes 4-blättriges Kleeblatt auf dem Kopf
+      const leafSway = Math.sin(time * 4) * 0.3;
+      ctx.save();
+      ctx.translate(cx, blobY - 14 - squish);
+      ctx.rotate(leafSway);
+      ctx.fillStyle = '#15803d';
+      ctx.fillRect(-0.8, -4, 1.6, 5);
+      ctx.fillStyle = '#4ade80';
+      ctx.beginPath();
+      ctx.arc(-2, -5, 2, 0, Math.PI * 2);
+      ctx.arc(2, -5, 2, 0, Math.PI * 2);
+      ctx.arc(0, -7, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Riesen-Kulleraugen & niedlicher Katzenmund
+      drawGhibliEyes(ctx, cx - 5, cx + 5, blobY - 1, 2.8, 0, 0, false, true);
+
+      // Kleiner süßer Mund
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(cx - 1.2, blobY + 4, 1.2, 0.2, Math.PI * 0.9);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + 1.2, blobY + 4, 1.2, 0.2, Math.PI * 0.9);
+      ctx.stroke();
+
+      // Bei Angriff: Zwei winzige jubelnde Baby-Tröpfchen hüpfen an den Seiten!
+      if (isAttacking) {
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.arc(cx - 16, blobY + 6, 4, 0, Math.PI * 2);
+        ctx.arc(cx + 16, blobY + 6, 4, 0, Math.PI * 2);
+        ctx.fill();
+        drawGhibliEyes(ctx, cx - 17, cx - 15, blobY + 5, 1, 0, 0, false, false);
+        drawGhibliEyes(ctx, cx + 15, cx + 17, blobY + 5, 1, 0, 0, false, false);
+      }
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'tar_mire',
+    name: 'Teer-Schlamm',
+    title: 'Susuwatari Soot Overlord',
+    category: 'blob',
+    categoryName: '🧪 Blobs & Schleime',
+    biome: 'Sumpf & Teergruben',
+    biomeBadge: 'Sumpf',
+    badgeClass: 'badge-swamp',
+    variants: ['Tiefschwarz (Standard)', 'Pech-Violett (Abyss)', 'Kupferlack (Erzsumpf)'],
+    stats: { hp: 70, maxHp: 70, atk: 20, spd: 'Sehr Langsam', rng: '40px (Kleb-Pfütze)' },
+    behavior: 'Eine große kuschelige Rußmännchen-Königin (Susuwatari) aus samtigem Tintenflaum. Umgeben von flinken kleinen Rußmännchen, die bunte Zuckerchen tragen.',
+    counter: 'Seine klebrige Hülle verlangsamt Nahkämpfer. Mit Fackeln oder Feuerschwert anzünden, um die Tintenhülle zu verbrennen.',
+    lore: 'Lebt in verlassenen Dachböden und alten Kaminen. Versteckt glitzernde Sternbonbons (Konpeitō) in seinem weichen Tintenbauch.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const breath = Math.sin(time * 3) * 1.5;
+
+      drawPaperShadow(ctx, cx, cy + 18, 18, 5.5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Großer flauschiger Ruß-Körper (Susuwatari Queen)
+      drawSootSprite(ctx, cx, cy + 4 + breath, 14, time, false);
+
+      // Große verdutzte Kulleraugen blicken umher
+      const lookX = Math.sin(time * 2) * 1.5;
+      drawGhibliEyes(ctx, cx - 5, cx + 5, cy + 2 + breath, 3.2, lookX, 0, false, false);
+
+      // 3 kleine flinke Rußmännchen-Kinder um sie herum!
+      // 1. Rußmännchen links mit Sternzuckerchen (Konpeitō)
+      drawSootSprite(ctx, cx - 18, cy + 14 + Math.sin(time * 6) * 1.5, 4, time, true);
+
+      // 2. Rußmännchen rechts hüpfend
+      drawSootSprite(ctx, cx + 17, cy + 12 + Math.abs(Math.sin(time * 7)) * -3, 3.5, time, false);
+
+      // 3. Rußmännchen vorne neugierig
+      drawSootSprite(ctx, cx + 2, cy + 17, 3, time, false);
+
+      // Bei Angriff: Pustet sich auf und sprüht kleine harmlose Zuckerchen!
+      if (isAttacking) {
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(time * 12) * 14, cy - 10 + Math.sin(time * 12) * 6, 2, 0, Math.PI * 2);
+        ctx.arc(cx - Math.cos(time * 12) * 14, cy - 8 - Math.sin(time * 12) * 6, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.filter = 'none';
+    }
+  },
+
+  // =========================================================================
+  // 6. WILDTIERE (BEAST)
+  // =========================================================================
+  {
+    id: 'dire_wolf',
+    name: 'Schattenwolf',
+    title: 'Okami Spirit Wolf',
+    category: 'beast',
+    categoryName: '🐺 Wilde Bestien',
+    biome: 'Dunkelwald & Taiga',
+    biomeBadge: 'Dunkelwald',
+    badgeClass: 'badge-grass',
+    variants: ['Nachtschwarz (Standard)', 'Schneeweiß (Tundra)', 'Blutmond (Karmesin)'],
+    stats: { hp: 60, maxHp: 60, atk: 28, spd: 'Sehr Schnell', rng: '35px (Anspring-Biss)' },
+    behavior: 'Ein majestätischer Geisterwolf, inspiriert vom Wolfsgott aus Prinzessin Mononoke und Okami. Trägt heilige Shimenawa-Seile mit Zickzack-Papier.',
+    counter: 'Reißt beim Anspringen die Deckung auf. Exakt im Moment seines Sprungs zur Seite rollen und von der Flanke attackieren.',
+    lore: 'Beschützt heilige Schreine im tiefen Wald. Heult nur bei Neumond, wenn die Geisterbrücke zur Anderswelt offen steht.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const isWalking = state === 'walk';
+      const breath = Math.sin(time * 3) * 1.2;
+      const gallop = isWalking ? Math.sin(time * 9) * 3 : 0;
+
+      drawPaperShadow(ctx, cx, cy + 18, 18, 5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Geschwungener buschiger Geister-Schweif
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(cx - 10, cy + 6 + breath);
+      ctx.quadraticCurveTo(cx - 20, cy - 2 + Math.sin(time * 4) * 4, cx - 22, cy - 10);
+      ctx.quadraticCurveTo(cx - 14, cy - 4, cx - 8, cy + 8 + breath);
+      ctx.fill();
+
+      // Beine
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(cx - 8, cy + 8, 3, 10 + gallop);
+      ctx.fillRect(cx + 6, cy + 8, 3, 10 - gallop);
+
+      // Wolfskörper (Elegantes tiefdunkles Pergament mit weißer Brust)
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 5 + breath, 13, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Weiße Brustpartie
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.ellipse(cx + 4, cy + 4 + breath, 6, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Heiliges Shimenawa-Seil mit Shide-Papieranhängern um den Hals
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.ellipse(cx + 6, cy + 2 + breath, 5, 6, 0.4, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Weiße Zickzack-Papieranhänger (Shide)
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx + 7, cy + 6 + breath, 2, 4);
+      ctx.fillRect(cx + 4, cy + 7 + breath, 2, 3.5);
+
+      // Edler Wolfskopf mit spitzen Ohren
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(cx + 9, cy - 4 + breath, 7, 5.5, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Spitze aufmerksame Ohren
+      ctx.beginPath();
+      ctx.moveTo(cx + 5, cy - 8 + breath);
+      ctx.lineTo(cx + 7, cy - 15 + breath);
+      ctx.lineTo(cx + 10, cy - 7 + breath);
+      ctx.moveTo(cx + 10, cy - 8 + breath);
+      ctx.lineTo(cx + 13, cy - 14 + breath);
+      ctx.lineTo(cx + 14, cy - 6 + breath);
+      ctx.fill();
+
+      // Zinnoberrote Ritual-Kriegsbemalung um die Augen (Mononoke Look)
+      ctx.strokeStyle = '#e11d48';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(cx + 7, cy - 5 + breath);
+      ctx.lineTo(cx + 12, cy - 3 + breath);
+      ctx.stroke();
+
+      // Bernstein-Glanzaugen
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(cx + 10, cy - 4 + breath, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx + 9.5, cy - 4.5 + breath, 0.7, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'emperor_scorpion',
+    name: 'Kaiser-Skorpion',
+    title: 'Porcelain Jade Scorpion',
+    category: 'beast',
+    categoryName: '🐺 Wilde Bestien',
+    biome: 'Wüste & Felsenschluchten',
+    biomeBadge: 'Wüste',
+    badgeClass: 'badge-desert',
+    variants: ['Smaragd-Chitin (Standard)', 'Obsidianschwarz (Abyss)', 'Kupfererz (Mine)'],
+    stats: { hp: 75, maxHp: 75, atk: 25, spd: 'Mittel', rng: '45px (Schwanzstachel)' },
+    behavior: 'Ein Tempelwächter-Skorpion aus antiker Seladon-Keramik. Seine Scheren ähneln zarten Lotusknospen; sein Stachelschwanz trägt eine leuchtende Spinnenlilien-Laterne.',
+    counter: 'Blockt frontale Schläge mit den Keramikscheren ab. Umkreisen und den weichen Ansatz des Stachelschwanzes anvisieren.',
+    lore: 'Wurde vor Jahrtausenden von Kaiserlichen Kunsthandwerkern geschaffen, um Juwelenkammern vor Grabräubern zu beschützen.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const breath = Math.sin(time * 3) * 1.2;
+
+      drawPaperShadow(ctx, cx, cy + 18, 19, 5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // 6 feine Scherenschreitbeine
+      ctx.strokeStyle = '#065f46';
+      ctx.lineWidth = 1.6;
+      for (let i = -1; i <= 1; i++) {
+        const legSway = Math.sin(time * 6 + i * 2) * 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 6, cy + 4 + i * 4);
+        ctx.lineTo(cx - 15, cy + 8 + legSway);
+        ctx.lineTo(cx - 18, cy + 16);
+        ctx.moveTo(cx + 6, cy + 4 + i * 4);
+        ctx.lineTo(cx + 15, cy + 8 - legSway);
+        ctx.lineTo(cx + 18, cy + 16);
+        ctx.stroke();
+      }
+
+      // Seladon-Jade Panzerplatte mit Kintsugi-Linien
+      ctx.fillStyle = '#065f46';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 6 + breath, 11, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#0d9488';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 5 + breath, 9, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Kintsugi Goldriss
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx - 4, cy + 4 + breath);
+      ctx.lineTo(cx + 2, cy + 7 + breath);
+      ctx.stroke();
+
+      // Lotus-Scherenarme vorne
+      const drawLotusClaw = (clawX, clawY, angle) => {
+        ctx.save();
+        ctx.translate(clawX, clawY);
+        ctx.rotate(angle);
+        ctx.fillStyle = '#0d9488';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 6, 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fb7185'; // Rosa Lotusspitze
+        ctx.beginPath();
+        ctx.arc(3, -1, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      };
+
+      const clawClick = Math.sin(time * 5) * 0.2;
+      drawLotusClaw(cx - 12, cy - 2 + breath, -0.4 + clawClick);
+      drawLotusClaw(cx + 12, cy - 2 + breath, 0.4 - clawClick);
+
+      // Geschwungener Skorpionschwanz
+      const tailWhip = isAttacking ? Math.sin(time * 12) * 15 : Math.sin(time * 3) * 4;
+      ctx.strokeStyle = '#047857';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + 10 + breath);
+      ctx.quadraticCurveTo(cx - 8, cy - 6, cx - 4 + tailWhip * 0.3, cy - 14 + breath);
+      ctx.stroke();
+
+      // Spinnenlilien-Laterne an der Stachelspitze (Higanbana Lantern)
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.arc(cx - 4 + tailWhip * 0.3, cy - 15 + breath, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glänzender Gift-Tautropfen
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(cx - 4 + tailWhip * 0.3, cy - 17 + breath, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'tusk_boar',
+    name: 'Grasland-Wildschwein',
+    title: 'Mossback Forest Boar',
+    category: 'beast',
+    categoryName: '🐺 Wilde Bestien',
+    biome: 'Grasland & Hügelland',
+    biomeBadge: 'Grasland',
+    badgeClass: 'badge-grass',
+    variants: ['Erdbraun (Standard)', 'Moosrücken (Uralter Wald)', 'Alabaster-Hauer (Schnee)'],
+    stats: { hp: 70, maxHp: 70, atk: 22, spd: 'Mittel (Schneller Ansturm)', rng: '30px (Hauer-Stoß)' },
+    behavior: 'Ein pummeliges Waldhüter-Wildschwein mit Moosdecke und Kirschblüten auf dem Rücken. Schnaubt gemütlich, stürmt bei Bedrohung wie ein Rammbock vor.',
+    counter: 'Beim Ansturm kann es nicht lenken. Rechtzeitig zur Seite springen; prallt es gegen einen Felsen, ist es für 3 Sekunden benommen.',
+    lore: 'Schläft am liebsten unter alten Kastanienbäumen. Kleine Waldvögel baden gerne in den weichen Pfützen seiner Trittspuren.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const isWalking = state === 'walk';
+      const breath = Math.sin(time * 3.5) * 1.5;
+      const trot = isWalking ? Math.sin(time * 9) * 3 : 0;
+
+      drawPaperShadow(ctx, cx, cy + 18, 18, 6);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // 4 kurze, stämmige Beinchen
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(cx - 9, cy + 8, 4, 9 + trot);
+      ctx.fillRect(cx + 6, cy + 8, 4, 9 - trot);
+
+      // Runder kuscheliger Wildschweinkörper (Warm Cocoa Brown)
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 4 + breath, 15, 11, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Saftige Moosdecke auf dem Rücken
+      ctx.fillStyle = '#15803d';
+      ctx.beginPath();
+      ctx.ellipse(cx - 2, cy - 3 + breath, 12, 5, -0.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Eingebettete Sakura-Kirschblütenblätter im Moos
+      drawSakuraPetal(ctx, cx - 6, cy - 5 + breath, 0.3, 0.8);
+      drawSakuraPetal(ctx, cx + 2, cy - 4 + breath, -0.4, 0.7);
+
+      // Kuschelige Schlappohren
+      ctx.fillStyle = '#542307';
+      ctx.beginPath();
+      ctx.ellipse(cx + 4, cy - 4 + breath, 3, 5, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glänzende schwarze Schnauze mit Nüstern
+      ctx.fillStyle = '#1c1917';
+      ctx.beginPath();
+      ctx.ellipse(cx + 13, cy + 4 + breath, 4.5, 3.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.arc(cx + 12.5, cy + 3.5 + breath, 0.8, 0, Math.PI * 2);
+      ctx.arc(cx + 14.5, cy + 3.5 + breath, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Weiße geschwungene Elfenbeinhauer
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(cx + 11, cy + 6 + breath);
+      ctx.quadraticCurveTo(cx + 16, cy + 8 + breath, cx + 15, cy + 1 + breath);
+      ctx.stroke();
+
+      // Kulleraugen mit Glanz
+      drawGhibliEyes(ctx, cx + 7, cx + 7, cy - 1 + breath, 2, 0, 0, false, false);
+
+      // Dampfwölkchen aus der Schnauze
+      if (Math.sin(time * 3) > 0.5) {
+        ctx.fillStyle = 'rgba(248, 250, 252, 0.6)';
+        ctx.beginPath();
+        ctx.arc(cx + 18, cy + 2 + breath, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'cave_weaver',
+    name: 'Höhlen-Krallenspinne',
+    title: 'Dew-Drop Silk Weaver',
+    category: 'beast',
+    categoryName: '🐺 Wilde Bestien',
+    biome: 'Höhlensysteme & Grotten',
+    biomeBadge: 'Höhle',
+    badgeClass: 'badge-cave',
+    variants: ['Tiefsteinschwarz (Standard)', 'Kristallblau (Eishöhle)', 'Glühwurm-Gelb (Biolumineszenz)'],
+    stats: { hp: 45, maxHp: 45, atk: 18, spd: 'Schnell (Kletternd)', rng: '100px (Spinnennetz-Schuss)' },
+    behavior: 'Ein zuckersüßes flauschiges Ruß-Spinnchen mit bunten Ringelsöckchen an den Beinen. Schwingt an einem elastischen Silberfaden und verwebt glitzernde Tautropfen.',
+    counter: 'Feuer entzündet ihre Seidennetze sofort. Wenn sie sich am Faden herablässt, mit dem Schild abfangen und mit dem Schwert kontern.',
+    lore: 'Ihre Netze klingen wie feine Harfensaiten, wenn der Höhlenwind hindurchweht. Höhlenforscher lauschen oft stundenlang ihrer Musik.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const bungeeBob = Math.sin(time * 4) * (isAttacking ? 6 : 2.5);
+
+      drawPaperShadow(ctx, cx, cy + 22, 14, 4);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Glänzender silberner Seidenfaden nach oben
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 22);
+      ctx.lineTo(cx, cy - 4 + bungeeBob);
+      ctx.stroke();
+
+      // 6 spindeldürre Beinchen mit gestreiften Ringelsöckchen
+      for (let i = -1; i <= 1; i++) {
+        const legWave = Math.sin(time * 5 + i * 2) * 3;
+        // Links
+        ctx.strokeStyle = '#09090b';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(cx - 5, cy + bungeeBob + i * 3);
+        ctx.lineTo(cx - 14, cy - 3 + bungeeBob + legWave);
+        ctx.lineTo(cx - 18, cy + 12 + bungeeBob);
+        ctx.stroke();
+        // Ringelsöckchen rot-weiß
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(cx - 19, cy + 10 + bungeeBob, 2.5, 2.5);
+
+        // Rechts
+        ctx.beginPath();
+        ctx.moveTo(cx + 5, cy + bungeeBob + i * 3);
+        ctx.lineTo(cx + 14, cy - 3 + bungeeBob - legWave);
+        ctx.lineTo(cx + 18, cy + 12 + bungeeBob);
+        ctx.stroke();
+        // Ringelsöckchen rot-weiß
+        ctx.fillRect(cx + 16.5, cy + 10 + bungeeBob, 2.5, 2.5);
+      }
+
+      // Flauschiger runder Pom-Pom Spinnenkörper
+      drawSootSprite(ctx, cx, cy + bungeeBob, 9, time, false);
+
+      // Große, neugierige Anime-Augen & 4 winzige Stirn-Pünktchen
+      drawGhibliEyes(ctx, cx - 3.5, cx + 3.5, cy - 1 + bungeeBob, 2.2, 0, 0, false, true);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx - 4, cy - 5 + bungeeBob, 0.8, 0, Math.PI * 2);
+      ctx.arc(cx - 1.5, cy - 6 + bungeeBob, 0.8, 0, Math.PI * 2);
+      ctx.arc(cx + 1.5, cy - 6 + bungeeBob, 0.8, 0, Math.PI * 2);
+      ctx.arc(cx + 4, cy - 5 + bungeeBob, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.filter = 'none';
+    }
+  },
+
+  // =========================================================================
+  // 7. LEEREN-WESEN & GEISTER (VOID)
+  // =========================================================================
+  {
+    id: 'void_reaper',
+    name: 'Leeren-Verschlinger',
+    title: 'Kaonashi Shadow Reaper',
+    category: 'void',
+    categoryName: '🌑 Leeren-Wesen & Geister',
+    biome: 'Leerenwelt & Risszonen',
+    biomeBadge: 'Leere',
+    badgeClass: 'badge-void',
+    variants: ['Obsidian-Violett (Standard)', 'Blut-Astral (Karmesin-Nebel)', 'Sternenstaub (Kosmisch)'],
+    stats: { hp: 95, maxHp: 95, atk: 34, spd: 'Mittel', rng: '60px (Doppelklingen-Wirbel)' },
+    behavior: 'Direkt inspiriert von Ohngesicht (Kaonashi). Eine geheimnisvolle Schattengestalt mit weißer Porzellanmaske und violetten Tränen. Führt zwei ätherische Sternenkatanas.',
+    counter: 'Seine Klingenwirbel haben eine rhythmische Pause. Genau nach dem zweiten Schwung öffnet sich seine Schattengestalt für Gegentreffer.',
+    lore: 'Sucht in der Leere nach vergessenen Kindheitserinnerungen. Bietet Reisenden schweigend glitzernde Sternsteine auf seiner Handfläche an.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const floatBob = Math.sin(time * 2.2) * 3;
+
+      drawPaperShadow(ctx, cx, cy + 20, 15, 4.5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Elegantes Kaonashi Schatten-Gewand (Deep Violet-Black Silhouette)
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.moveTo(cx - 9, cy - 10 + floatBob);
+      ctx.quadraticCurveTo(cx - 16, cy + 12 + floatBob, cx - 11, cy + 19 + floatBob);
+      ctx.quadraticCurveTo(cx, cy + 16 + floatBob, cx + 11, cy + 19 + floatBob);
+      ctx.quadraticCurveTo(cx + 16, cy + 12 + floatBob, cx + 9, cy - 10 + floatBob);
+      ctx.closePath();
+      ctx.fill();
+
+      // Schwebende Tintenrauch-Fransen am Saum
+      ctx.fillStyle = '#3b0764';
+      for (let i = -2; i <= 2; i++) {
+        const wispY = Math.sin(time * 4 + i) * 2;
+        ctx.beginPath();
+        ctx.arc(cx + i * 4.5, cy + 17 + floatBob + wispY, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Ovale Porzellanmaske mit violetten Kaonashi-Tränen
+      drawPorcelainMask(ctx, cx, cy - 6 + floatBob, 12, 14, 'noh');
+
+      // Ätherische Sternen-Katana-Klingen (Translucent Violet Light)
+      const bladeGlow = isAttacking ? '#c084fc' : '#818cf8';
+      const bladeSwing = isAttacking ? Math.sin(time * 12) * 25 : 0;
+
+      ctx.save();
+      ctx.translate(cx + 12, cy + 2 + floatBob);
+      ctx.rotate((25 + bladeSwing) * Math.PI / 180);
+      ctx.strokeStyle = bladeGlow;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(3, -12, 1, -22);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.translate(cx - 12, cy + 2 + floatBob);
+      ctx.rotate((-25 - bladeSwing) * Math.PI / 180);
+      ctx.strokeStyle = bladeGlow;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(-3, -12, -1, -22);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'gazer_of_the_void',
+    name: 'Auge des Abgrunds',
+    title: 'Celestial Moon-Jelly',
+    category: 'void',
+    categoryName: '🌑 Leeren-Wesen & Geister',
+    biome: 'Leerenwelt & Risszonen',
+    biomeBadge: 'Leere',
+    badgeClass: 'badge-void',
+    variants: ['Galaxie-Iris (Standard)', 'Supernova (Gold-Orange)', 'Polarlicht (Smaragdgrün)'],
+    stats: { hp: 65, maxHp: 65, atk: 26, spd: 'Schwebend Schnell', rng: '160px (Kosmischer Strahl)' },
+    behavior: 'Eine ätherische Himmels-Mondqualle mit einer gläsernen Sternenglocke. In ihrem Zentrum ruht ein wohlwollendes kosmisches Auge, das Starlight-Strahlen bündelt.',
+    counter: 'Vor dem Strahl schließt sich seine Glocke für eine Sekunde. Hinter eine Felsbarriere stellen und danach seine weichen Quallententakel treffen.',
+    lore: 'Fiel in einer Neumondnacht aus dem Sternenmeer herab. Summt eine Melodie, die an uralte Spieluhren erinnert.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const pulse = Math.sin(time * 2.5) * 2;
+      const floatY = cy - 2 + Math.sin(time * 2) * 3;
+
+      drawPaperShadow(ctx, cx, cy + 20, 14, 4);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // 5 wallende Seidententakel mit Sternenstaub
+      ctx.strokeStyle = 'rgba(192, 132, 252, 0.7)';
+      ctx.lineWidth = 1.6;
+      for (let i = -2; i <= 2; i++) {
+        const wave = Math.sin(time * 4 - i * 0.8) * 4;
+        ctx.beginPath();
+        ctx.moveTo(cx + i * 4, floatY + 6);
+        ctx.quadraticCurveTo(cx + i * 5 + wave, floatY + 14, cx + i * 3 - wave, floatY + 22);
+        ctx.stroke();
+      }
+
+      // Transparente gläserne Quallenglocke (Glass Dome)
+      ctx.fillStyle = 'rgba(139, 92, 246, 0.35)';
+      ctx.beginPath();
+      ctx.arc(cx, floatY - 2, 14 + pulse * 0.4, Math.PI, 0);
+      ctx.quadraticCurveTo(cx + 12, floatY + 6, cx, floatY + 7);
+      ctx.quadraticCurveTo(cx - 12, floatY + 6, cx - 14 - pulse * 0.4, floatY - 2);
+      ctx.fill();
+
+      // Kosmisches Großauge im Inneren
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(cx, floatY - 2, 9, 6.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Galaxie-Iris (Irisierend Violett & Gold)
+      ctx.fillStyle = '#7c3aed';
+      ctx.beginPath();
+      ctx.arc(cx, floatY - 2, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#fde047';
+      ctx.beginPath();
+      ctx.arc(cx, floatY - 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glanzpunkte
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx - 1.5, floatY - 3.5, 1.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Zarter Mondsichel-Anhänger auf dem Scheitel
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(cx, floatY - 17, 3, 0.5, Math.PI * 1.5);
+      ctx.stroke();
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'abyss_tentacle',
+    name: 'Schatten-Tentakel',
+    title: 'Bell-Spirit Vine',
+    category: 'void',
+    categoryName: '🌑 Leeren-Wesen & Geister',
+    biome: 'Leerenwelt & Risszonen',
+    biomeBadge: 'Leere',
+    badgeClass: 'badge-void',
+    variants: ['Tiefsee-Schwarz (Standard)', 'Giftmorast (Smaragdgrün)', 'Glutasche (Rubinrot)'],
+    stats: { hp: 55, maxHp: 50, atk: 22, spd: 'Stationär', rng: '50px (Peitschenhieb)' },
+    behavior: 'Bricht aus einem moosbewachsenen Steinbrunnen hervor. An seiner gewundenen Spitze baumelt eine antike bronzene Shinto-Tempelglocke (Suzu), die bei Hieben silbern läutet.',
+    counter: 'Wenn sich die Ranke spiralig zusammenzieht, bereitet sie den Peitschenhieb vor. Sofort zurückweichen und nach dem Aufprall die Glocke attackieren.',
+    lore: 'Entspringt den Wurzeln eines versunkenen Glockenturms. Ihr Läuten klingt wie Regentropfen auf Tempeldächern.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const coilSpeed = isAttacking ? 8 : 3.5;
+      const coil = Math.sin(time * coilSpeed) * 6;
+
+      // Steinbrunnen / Rissportal am Boden
+      ctx.fillStyle = '#334155';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 16, 14, 5.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 15, 11, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Elegante, gewundene Tintenranke
+      ctx.strokeStyle = '#2e1065';
+      ctx.lineWidth = 5.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + 15);
+      ctx.quadraticCurveTo(cx - 10 + coil, cy + 3, cx + 4 - coil, cy - 6);
+      ctx.quadraticCurveTo(cx + 12 - coil, cy - 14, cx - 2 + coil * 0.5, cy - 18);
+      ctx.stroke();
+
+      // Zarte lumineszierende Pflaumenblüten-Saugnäpfe (Plum Blossoms)
+      ctx.fillStyle = '#e879f9';
+      ctx.beginPath();
+      ctx.arc(cx - 6 + coil * 0.7, cy + 5, 2.2, 0, Math.PI * 2);
+      ctx.arc(cx + 4 - coil * 0.5, cy - 4, 2, 0, Math.PI * 2);
+      ctx.arc(cx + 8 - coil, cy - 12, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Antike bronzene Tempelglocke (Suzu) an der Spitze
+      const bellX = cx - 2 + coil * 0.5;
+      const bellY = cy - 18;
+
+      ctx.fillStyle = '#f59e0b';
+      ctx.beginPath();
+      ctx.arc(bellX, bellY, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rotes Seidenband & Schallwellen
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(bellX - 1, bellY + 3, 2, 4);
+
+      if (Math.sin(time * 5) > 0.6) {
+        ctx.strokeStyle = 'rgba(253, 224, 71, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(bellX, bellY, 7, -0.5, Math.PI * 0.8);
+        ctx.stroke();
+      }
+
+      ctx.filter = 'none';
+    }
+  },
+
+  // =========================================================================
+  // 8. ELITE & ELEMENTARE (ELITE)
+  // =========================================================================
+  {
+    id: 'cursed_knight',
+    name: 'Origami-Krieger',
+    title: 'Cursed Paper Samurai',
+    category: 'elite',
+    categoryName: '⚔️ Elite & Elementare',
+    biome: 'Antike Tempel & Burgruinen',
+    biomeBadge: 'Tempel',
+    badgeClass: 'badge-mountain',
+    variants: ['Karmesin-Gold (Standard)', 'Schatten-Obsidian (Nacht)', 'Kaiser-Jade (Grün)'],
+    stats: { hp: 100, maxHp: 100, atk: 36, spd: 'Mittel-Schnell', rng: '55px (Kalligraphie-Hieb)' },
+    behavior: 'Ein lebendiges Origami-Kunstwerk aus gefaltetem Washi-Papier. Trägt einen imposanten Kabuto-Helm mit goldener Mondsichel und führt ein federleichtes Odachi-Schwert.',
+    counter: 'Seine Iaijutsu-Schläge durchdringen leichte Schilde. Genau im Moment seines Ziehens parieren, um seine Papierrüstung zu destabilisieren.',
+    lore: 'Wurde vor Jahrhunderten gefaltet, um den Tempel der Kirschblüten zu bewachen. Jeder seiner Schwerthiebe hinterlässt flüchtige schwarze Tuschezeichen in der Luft.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const breath = Math.sin(time * 3) * 1.2;
+
+      drawPaperShadow(ctx, cx, cy + 19, 16, 5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Gefaltete Papier-Rüstungsbeine
+      ctx.fillStyle = '#18181b';
+      ctx.fillRect(cx - 6, cy + 9, 4, 9);
+      ctx.fillRect(cx + 2, cy + 9, 4, 9);
+
+      // Karmesinrote Washi-Brustpanzerung mit Goldkante
+      ctx.fillStyle = '#7f1d1d';
+      ctx.beginPath();
+      ctx.moveTo(cx - 9, cy - 2 + breath);
+      ctx.lineTo(cx - 11, cy + 10 + breath);
+      ctx.lineTo(cx + 11, cy + 10 + breath);
+      ctx.lineTo(cx + 9, cy - 2 + breath);
+      ctx.closePath();
+      ctx.fill();
+
+      // Goldene Faltleisten
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 9, cy + 3 + breath);
+      ctx.lineTo(cx + 9, cy + 3 + breath);
+      ctx.moveTo(cx - 10, cy + 7 + breath);
+      ctx.lineTo(cx + 10, cy + 7 + breath);
+      ctx.stroke();
+
+      // Schulterplatten (Sode)
+      ctx.fillStyle = '#991b1b';
+      ctx.beginPath();
+      ctx.roundRect(cx - 14, cy - 1 + breath, 5, 8, 1);
+      ctx.roundRect(cx + 9, cy - 1 + breath, 5, 8, 1);
+      ctx.fill();
+
+      // Kabuto-Helm mit stolzer goldener Mondsichel (Date Masamune Look)
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 6 + breath, 7, Math.PI, 0);
+      ctx.fill();
+
+      // Goldene Mondsichel auf der Stirn
+      ctx.strokeStyle = '#fde047';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(cx, cy - 13 + breath, 8, 0.4, Math.PI * 0.8);
+      ctx.stroke();
+
+      // Kitsune-Halbmaske unter dem Helm
+      drawPorcelainMask(ctx, cx, cy - 4 + breath, 9, 7, 'fox');
+
+      // Geschwungenes Odachi-Papierschwert mit Tusche-Schweif
+      const swordSwing = isAttacking ? Math.sin(time * 12) * 45 : 0;
+      ctx.save();
+      ctx.translate(cx + 11, cy + 4 + breath);
+      ctx.rotate((-20 + swordSwing) * Math.PI / 180);
+      // Griff
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(-1.5, 0, 3, 7);
+      // Klinge
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.quadraticCurveTo(4, -14, 2, -26);
+      ctx.stroke();
+
+      // Schwarzer Kalligraphie-Tuschestreif bei Hieb
+      if (isAttacking) {
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.8)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, -12, 16, -Math.PI * 0.8, -Math.PI * 0.2);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'sky_harpy',
+    name: 'Wolken-Harpyie',
+    title: 'Tengu Feather Maiden',
+    category: 'elite',
+    categoryName: '⚔️ Elite & Elementare',
+    biome: 'Himmelsinseln & Bergpass',
+    biomeBadge: 'Himmel',
+    badgeClass: 'badge-sky',
+    variants: ['Himmelsblau (Standard)', 'Sonnenuntergang (Rosa-Gold)', 'Gewittersturm (Stahlgrau)'],
+    stats: { hp: 80, maxHp: 80, atk: 30, spd: 'Sehr Schnell (Fliegend)', rng: '110px (Windklingen-Fächer)' },
+    behavior: 'Eine anmutige Wind-Tengu-Maid mit gefalteten Papierkranich-Flügeln. Schwingt einen heiligen Federfächer (Hauchiwa) und entfesselt wirbelnde Kirschblüten-Stürme.',
+    counter: 'Ihre Windwirbel stoßen Helden zurück. Mit dem Schild blocken und sie im Landemoment mit Wirbelattacken zu Boden zwingen.',
+    lore: 'Webt den Morgennebel über den Tälern. Wenn sie mit ihrem Federfächer winkt, fallen die ersten Kirschblüten des Frühlings.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const wingFlap = Math.sin(time * 6) * 7;
+      const floatBob = Math.sin(time * 3) * 3;
+
+      drawPaperShadow(ctx, cx, cy + 20, 15, 4);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Majestätische Papierkranich-Flügel (Origami Wing Feathers)
+      ctx.fillStyle = '#e0f2fe';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1;
+      // Linker Flügel
+      ctx.beginPath();
+      ctx.moveTo(cx - 6, cy + floatBob);
+      ctx.lineTo(cx - 24, cy - 10 + floatBob + wingFlap);
+      ctx.lineTo(cx - 18, cy + 4 + floatBob + wingFlap * 0.5);
+      ctx.lineTo(cx - 12, cy + 8 + floatBob);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Rechter Flügel
+      ctx.beginPath();
+      ctx.moveTo(cx + 6, cy + floatBob);
+      ctx.lineTo(cx + 24, cy - 10 + floatBob + wingFlap);
+      ctx.lineTo(cx + 18, cy + 4 + floatBob + wingFlap * 0.5);
+      ctx.lineTo(cx + 12, cy + 8 + floatBob);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Zartes Feder-Kimono-Kleidchen
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.moveTo(cx - 6, cy - 2 + floatBob);
+      ctx.lineTo(cx - 8, cy + 14 + floatBob);
+      ctx.lineTo(cx + 8, cy + 14 + floatBob);
+      ctx.lineTo(cx + 6, cy - 2 + floatBob);
+      ctx.closePath();
+      ctx.fill();
+
+      // Rosa Kirschblüten-Schärfe
+      ctx.fillStyle = '#f472b6';
+      ctx.fillRect(cx - 6, cy + 3 + floatBob, 12, 2.5);
+
+      // Sanftes Anime-Gesicht mit wehendem schwarzen Haar
+      drawGhibliEyes(ctx, cx - 3.5, cx + 3.5, cy - 6 + floatBob, 2.2, 0, 0, false, true);
+
+      // Zarte Vogelmaske schräg auf der Stirn (Tengu-Mask)
+      ctx.fillStyle = '#fdfbf7';
+      ctx.beginPath();
+      ctx.ellipse(cx + 4, cy - 11 + floatBob, 4, 3, 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.moveTo(cx + 7, cy - 11 + floatBob);
+      ctx.lineTo(cx + 11, cy - 10 + floatBob);
+      ctx.lineTo(cx + 7, cy - 9 + floatBob);
+      ctx.fill();
+
+      // Heiliger Federfächer (Hauchiwa)
+      const fanX = cx - 11;
+      const fanY = cy + 2 + floatBob;
+      ctx.fillStyle = '#fbcfe8';
+      ctx.beginPath();
+      ctx.arc(fanX, fanY, 7, Math.PI * 0.8, Math.PI * 1.8);
+      ctx.lineTo(fanX, fanY);
+      ctx.fill();
+
+      // Umherwirbelnde Kirschblüten bei Windangriff
+      if (isAttacking) {
+        drawSakuraPetal(ctx, cx + 14, cy - 6 + floatBob, time * 4, 1);
+        drawSakuraPetal(ctx, cx - 14, cy + 8 + floatBob, -time * 3, 0.8);
+      }
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'lava_core',
+    name: 'Magma-Funke',
+    title: 'Calcifer Flame Sprite',
+    category: 'elite',
+    categoryName: '⚔️ Elite & Elementare',
+    biome: 'Vulkan & Magmakammern',
+    biomeBadge: 'Vulkan',
+    badgeClass: 'badge-vulcano',
+    variants: ['Feuer-Orange (Standard)', 'Blau-Plasma (Gleißend)', 'Smaragd-Flamme (Giftvulkan)'],
+    stats: { hp: 75, maxHp: 75, atk: 32, spd: 'Schnell (Pulsierend)', rng: '120px (Funken-Feuerwerk)' },
+    behavior: 'Eine direkte liebevolle Hommage an Calcifer aus Das wandelnde Schloss! Ein warmes, übermütiges Flämmchen mit Kulleraugen, umringt von schwebenden Obsidian-Kieseln.',
+    counter: 'Wasser- und Eiszauber kühlen seinen Glutkern sofort ab. Im abgekühlten Zustand kann er 4 Sekunden lang keine Funken spucken.',
+    lore: 'Schläft am liebsten auf alten Speckpfannen und beschwert sich lautstark über schlechtes Brennholz. Knistert vor Freude, wenn man ihn lobt.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const flameDance = Math.sin(time * 9) * 2;
+      const breath = Math.sin(time * 4) * 1.5;
+
+      drawPaperShadow(ctx, cx, cy + 18, 14, 4);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // Äußere lodernde Flammenkrone (Karmesinrot)
+      ctx.fillStyle = '#dc2626';
+      ctx.beginPath();
+      ctx.arc(cx, cy + 4, 13 + breath, 0, Math.PI);
+      ctx.quadraticCurveTo(cx - 14, cy - 10 + flameDance, cx - 4, cy - 16);
+      ctx.quadraticCurveTo(cx, cy - 10, cx + 4, cy - 18 + flameDance);
+      ctx.quadraticCurveTo(cx + 14, cy - 10, cx + 13 + breath, cy + 4);
+      ctx.fill();
+
+      // Warmer oranger Herzkörper (Calcifer Orange)
+      ctx.fillStyle = '#f97316';
+      ctx.beginPath();
+      ctx.arc(cx, cy + 4, 10 + breath * 0.8, 0, Math.PI);
+      ctx.quadraticCurveTo(cx - 10, cy - 7 + flameDance, cx - 2, cy - 13);
+      ctx.quadraticCurveTo(cx + 10, cy - 7, cx + 10 + breath * 0.8, cy + 4);
+      ctx.fill();
+
+      // Heller sonnengelber Glutkern
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(cx, cy + 5, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Expressives, fröhliches Calcifer-Gesicht!
+      // Große Kulleraugen blicken aufgeregt nach oben
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(cx - 4.5, cy - 1, 3.2, 4.2, -0.1, 0, Math.PI * 2);
+      ctx.ellipse(cx + 4.5, cy - 1, 3.2, 4.2, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(cx - 4.5, cy - 2, 1.8, 0, Math.PI * 2);
+      ctx.arc(cx + 4.5, cy - 2, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(cx - 5.2, cy - 2.8, 0.8, 0, Math.PI * 2);
+      ctx.arc(cx + 3.8, cy - 2.8, 0.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Breites herzliches Grinsen mit zwei winzigen süßen Zähnchen!
+      ctx.fillStyle = '#451a03';
+      ctx.beginPath();
+      ctx.arc(cx, cy + 4, 4.2, 0.1, Math.PI * 0.9);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx - 2, cy + 4, 1.5, 1.5);
+      ctx.fillRect(cx + 0.5, cy + 4, 1.5, 1.5);
+
+      // Kleine gestikulierende Flämmchen-Ärmchen
+      ctx.fillStyle = '#f97316';
+      ctx.beginPath();
+      ctx.arc(cx - 10, cy + 3 + flameDance, 2.5, 0, Math.PI * 2);
+      ctx.arc(cx + 10, cy + 3 - flameDance, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 4 schwebende Obsidian-Kieselsteine in 3D-Umlaufbahn
+      const numStones = 4;
+      for (let s = 0; s < numStones; s++) {
+        const stoneAngle = time * 3 + (s / numStones) * Math.PI * 2;
+        const sx = cx + Math.cos(stoneAngle) * (18 + (isAttacking ? 6 : 0));
+        const sy = cy + 4 + Math.sin(stoneAngle) * 7;
+
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2.4, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.arc(sx, sy, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.filter = 'none';
+    }
+  }
+];
+
+// =============================================================================
+// BESTIARY UI MANAGER
+// =============================================================================
+
+class BestiaryManager {
+  constructor(container = 'bestiary-grid') {
+    if (typeof container === 'string') {
+      this.container = document.getElementById(container);
+    } else if (container && (container.nodeType || typeof container.querySelector === 'function')) {
+      this.container = container;
+    } else {
+      this.container = document.getElementById('bestiary-grid');
+    }
+
+    this.currentCategory = 'all';
+    this.enemyStates = {};
+    this.canvases = {};
+
+    BESTIARY_DATA.forEach(enemy => {
+      this.enemyStates[enemy.id] = {
+        animTime: Math.random() * 5,
+        state: 'idle', // 'idle' | 'walk' | 'attack'
+        hitTimer: 0
+      };
+    });
+
+    if (this.container) {
+      this.init();
+    }
+  }
+
+  init() {
+    if (!this.container) {
+      this.container = document.getElementById('bestiary-grid');
+    }
+    if (!this.container) return;
+    this.wireFilterPills();
+    this.renderCards();
+  }
+
+  wireFilterPills() {
+    const pills = document.querySelectorAll('.bestiary-filter-btn, .filter-pill');
+    pills.forEach(pill => {
+      pill.onclick = () => {
+        pills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        this.currentCategory = pill.dataset.category || pill.dataset.filter || 'all';
+        this.renderCards();
+      };
+    });
+  }
+
+  renderCards() {
+    if (!this.container) {
+      this.container = document.getElementById('bestiary-grid');
+    }
+    if (!this.container) return;
+    if (typeof this.container.replaceChildren === 'function') {
+      this.container.replaceChildren();
+    } else {
+      this.container.innerHTML = '';
+      while (this.container.firstChild) {
+        this.container.removeChild(this.container.firstChild);
+      }
+    }
+    this.canvases = {};
+
+    const filtered = this.currentCategory === 'all'
+      ? BESTIARY_DATA
+      : BESTIARY_DATA.filter(e => e.category === this.currentCategory);
+
+    filtered.forEach(enemy => {
+      const st = this.enemyStates[enemy.id];
+      const card = document.createElement('div');
+      card.className = 'enemy-card';
+      card.dataset.id = enemy.id;
+
+      card.innerHTML = `
+        <div class="enemy-card-header">
+          <div class="enemy-title-group">
+            <h3>${enemy.name}</h3>
+            <span class="enemy-eng-title">${enemy.title}</span>
+          </div>
+          <div class="enemy-badges-group">
+            <span class="enemy-badge badge-role">${enemy.categoryName}</span>
+            <span class="enemy-badge ${enemy.badgeClass}">${enemy.biomeBadge}</span>
+          </div>
+        </div>
+
+        <div class="enemy-preview-stage">
+          <canvas id="enemy-canvas-${enemy.id}" class="enemy-canvas" width="80" height="80"></canvas>
+          <div id="dmg-float-${enemy.id}" class="dmg-float"></div>
+          
+          <div class="enemy-stage-controls">
+            <button class="stage-btn btn-anim-toggle" title="Animation umschalten">
+              <span class="anim-icon">▶</span> Modus: <span class="anim-state-label">${st.state.toUpperCase()}</span>
+            </button>
+            <button class="stage-btn btn-hit-test" title="Treffer testen (Hit Flash)">
+              💥 Treffer
+            </button>
+          </div>
+        </div>
+
+        <div class="enemy-stats-panel">
+          <div class="stat-bar-row">
+            <span class="stat-label">Leben</span>
+            <div class="stat-track"><div class="stat-fill fill-hp" style="width: ${Math.min(100, (enemy.stats.hp / 140) * 100)}%"></div></div>
+            <span class="stat-num">${enemy.stats.hp}</span>
+          </div>
+          <div class="stat-bar-row">
+            <span class="stat-label">Angriff</span>
+            <div class="stat-track"><div class="stat-fill fill-atk" style="width: ${Math.min(100, (enemy.stats.atk / 45) * 100)}%"></div></div>
+            <span class="stat-num">${enemy.stats.atk}</span>
+          </div>
+          <div class="stat-chips-row">
+            <span class="stat-chip">Tempo: <b>${enemy.stats.spd}</b></span>
+            <span class="stat-chip">Reichweite: <b>${enemy.stats.rng.split(' ')[0]}</b></span>
+          </div>
+        </div>
+
+        <div class="enemy-tactics-box">
+          <div class="tactic-item"><span class="tactic-icon">⚔️</span> <span>${enemy.behavior}</span></div>
+          <div class="tactic-item counter-item"><span class="tactic-icon">🛡️</span> <span><strong>Konter:</strong> ${enemy.counter}</span></div>
+        </div>
+
+        <div class="enemy-variants-row">
+          <span class="variants-title">🎨 Farbvarianten:</span>
+          ${enemy.variants.map(v => `<span class="variant-pill">${v}</span>`).join('')}
+        </div>
+
+        <div class="enemy-lore-quote">„${enemy.lore}“</div>
+      `;
+
+      this.container.appendChild(card);
+
+      const canvas = card.querySelector(`#enemy-canvas-${enemy.id}`);
+      if (canvas) {
+        this.canvases[enemy.id] = canvas;
+      }
+
+      // Wire interactive buttons
+      const btnAnim = card.querySelector('.btn-anim-toggle');
+      const labelAnim = card.querySelector('.anim-state-label');
+      if (btnAnim && labelAnim) {
+        btnAnim.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const nextState = st.state === 'idle' ? 'walk' : (st.state === 'walk' ? 'attack' : 'idle');
+          st.state = nextState;
+          labelAnim.textContent = nextState.toUpperCase();
+        });
+      }
+
+      const btnHit = card.querySelector('.btn-hit-test');
+      const dmgFloat = card.querySelector(`#dmg-float-${enemy.id}`);
+      if (btnHit) {
+        btnHit.addEventListener('click', (e) => {
+          e.stopPropagation();
+          st.hitTimer = 0.25; // White flash
+          if (dmgFloat) {
+            dmgFloat.textContent = `-${Math.floor(Math.random() * 14 + 18)}!`;
+            dmgFloat.classList.remove('anim-float');
+            void dmgFloat.offsetWidth; // Trigger reflow for re-animation
+            dmgFloat.classList.add('anim-float');
+            setTimeout(() => {
+              dmgFloat.classList.remove('anim-float');
+            }, 650);
+          }
+        });
+      }
+    });
+  }
+
+  update(dt) {
+    BESTIARY_DATA.forEach(enemy => {
+      const st = this.enemyStates[enemy.id];
+      if (!st) return;
+      st.animTime += dt;
+      if (st.hitTimer > 0) st.hitTimer -= dt;
+
+      const canvas = this.canvases[enemy.id];
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        // Smooth paper rendering for curved Ghibli vector aesthetics
+        ctx.imageSmoothingEnabled = true;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Render enemy centered in 80x80 canvas (center at 40, 42)
+        enemy.render(ctx, 40, 42, st.animTime, st.state, Math.max(0, st.hitTimer));
+      }
+    });
+  }
+}
+
+
+// --- js/sprites.js ---
 
 function createTileCanvas(width = TILE_SIZE, height = TILE_SIZE) {
   const canvas = document.createElement('canvas');
@@ -2026,7 +4388,7 @@ class SpriteManager {
 }
 
 
-// --- caveMap.js ---
+// --- js/caveMap.js ---
 
 class CaveMap {
   constructor(id = 'main_complex') {
@@ -2503,7 +4865,7 @@ class CaveMap {
 }
 
 
-// --- cloudMap.js ---
+// --- js/cloudMap.js ---
 
 class CloudMap {
   constructor() {
@@ -2738,7 +5100,7 @@ class CloudMap {
 }
 
 
-// --- map.js ---
+// --- js/map.js ---
 
 class WorldMap {
   constructor() {
@@ -3821,7 +6183,925 @@ class WorldMap {
 }
 
 
-// --- player.js ---
+// --- js/enemies.js ---
+
+// Index BESTIARY_DATA by ID for quick O(1) lookup
+const BESTIARY_MAP = {};
+BESTIARY_DATA.forEach(def => {
+  BESTIARY_MAP[def.id] = def;
+});
+
+/**
+ * EnemyEntity - Ein lebendiges, animiertes Monster in der Spielwelt
+ */
+class EnemyEntity {
+  constructor(typeId, x, y, dimension = DIMENSIONS.OVERWORLD, packId = null, options = {}) {
+    this.def = BESTIARY_MAP[typeId];
+    if (!this.def) {
+      throw new Error(`Unbekannter Gegner-Typ: ${typeId}`);
+    }
+
+    this.id = options.id || `${typeId}_${Math.random().toString(36).substr(2, 7)}`;
+    this.typeId = typeId;
+    this.name = this.def.name;
+    this.title = this.def.title;
+    this.category = this.def.category;
+    this.dimension = dimension;
+    this.packId = packId;
+
+    // Welt-Position (in Pixeln)
+    this.x = x;
+    this.y = y;
+    this.homeX = x;
+    this.homeY = y;
+    this.vx = 0;
+    this.vy = 0;
+    this.elevation = options.elevation || 0;
+
+    // Hitbox-Radius
+    if (this.category === 'boss') {
+      this.radius = 16;
+    } else if (this.category === 'reptile' || this.category === 'beast') {
+      this.radius = 10;
+    } else if (this.typeId === 'green_slime' || this.typeId === 'cave_weaver') {
+      this.radius = 7;
+    } else {
+      this.radius = 9;
+    }
+
+    // Werte aus Bestiarium
+    this.maxHp = this.def.stats.hp || 50;
+    this.hp = this.maxHp;
+    this.atk = this.def.stats.atk || 20;
+
+    // Geschwindigkeit
+    const spdStr = this.def.stats.spd || 'Mittel';
+    if (spdStr.includes('Sehr Schnell')) this.baseSpeed = 92;
+    else if (spdStr.includes('Schnell')) this.baseSpeed = 74;
+    else if (spdStr.includes('Mittel')) this.baseSpeed = 52;
+    else if (spdStr.includes('Langsam')) this.baseSpeed = 34;
+    else if (spdStr.includes('Schwerfällig')) this.baseSpeed = 24;
+    else if (spdStr.includes('Stationär')) this.baseSpeed = 0;
+    else this.baseSpeed = 48;
+
+    // Reichweite
+    const rngStr = this.def.stats.rng || '40px';
+    const parsedRng = parseInt(rngStr, 10);
+    this.attackRange = isNaN(parsedRng) ? 40 : parsedRng;
+
+    // KI & Animationsstatus
+    this.state = 'idle'; // 'idle' | 'walk' | 'alert' | 'attack' | 'cooldown' | 'hurt' | 'dead'
+    this.animTime = Math.random() * 5;
+    this.hitFlash = 0;
+    this.telegraphTimer = 0;
+    this.cooldownTimer = Math.random() * 1.5;
+    this.wanderTimer = Math.random() * 2 + 1;
+    this.wanderTarget = { x, y };
+
+    this.alertEmoteTimer = 0;
+    this.facing = 'down';
+
+    // Boar Charge State
+    this.chargeDir = { x: 0, y: 0 };
+    this.isCharging = false;
+    this.chargeTimer = 0;
+  }
+
+  update(dt, player, map, enemyManager, combatManager) {
+    if (this.state === 'dead') return;
+
+    this.animTime += dt;
+    if (this.hitFlash > 0) this.hitFlash -= dt;
+    if (this.cooldownTimer > 0) this.cooldownTimer -= dt;
+    if (this.alertEmoteTimer > 0) this.alertEmoteTimer -= dt;
+
+    // Nur in der aktiven Dimension berechnen
+    if (this.dimension !== enemyManager.game.currentDimension) return;
+
+    // Distanz zum Spieler
+    const dx = player.x - this.x;
+    const dy = player.y - this.y;
+    const distToPlayer = Math.hypot(dx, dy);
+
+    // Ausrichtung
+    if (Math.abs(dx) > Math.abs(dy)) {
+      this.facing = dx > 0 ? 'right' : 'left';
+    } else {
+      this.facing = dy > 0 ? 'down' : 'up';
+    }
+
+    // Wenn KI deaktiviert (z.B. friedlicher Show-Modus)
+    if (!enemyManager.aiActive) {
+      this.state = 'idle';
+      return;
+    }
+
+    // Erfassungsreichweite
+    const detectionRange = (this.category === 'range' || this.typeId === 'star_astromancer')
+      ? ENEMY_CONFIG.DETECTION_RADIUS_SCOUT
+      : ENEMY_CONFIG.DETECTION_RADIUS_DEFAULT;
+
+    // =========================================================================
+    // 1. ZUSTANDSAUTOMAT (FSM)
+    // =========================================================================
+
+    // A) Wenn im Angriff oder Telegraphieren
+    if (this.state === 'attack') {
+      this.telegraphTimer -= dt;
+
+      // Spezial: Wildschwein-Ansturm (Charge)
+      if (this.typeId === 'tusk_boar' && this.isCharging) {
+        this.chargeTimer -= dt;
+        const cSpeed = this.baseSpeed * 2.6;
+        const nextX = this.x + this.chargeDir.x * cSpeed * dt;
+        const nextY = this.y + this.chargeDir.y * cSpeed * dt;
+
+        // Kollision beim Stürmen
+        const tx = Math.floor(nextX / TILE_SIZE);
+        const ty = Math.floor(nextY / TILE_SIZE);
+        const hitWall = map.isSolid ? map.isSolid(tx, ty) : false;
+
+        if (hitWall || this.chargeTimer <= 0) {
+          // Betäubung bei Wandaufprall
+          this.isCharging = false;
+          this.state = 'idle';
+          this.cooldownTimer = hitWall ? 2.5 : 1.2;
+          if (hitWall && combatManager) {
+            combatManager.addHitSparks(this.x, this.y, '#f59e0b', 12);
+            combatManager.addFloatingText('💫 BENOMMEN!', this.x, this.y - 18, '#fde047');
+          }
+        } else {
+          this.x = nextX;
+          this.y = nextY;
+          // Prüfe Treffer auf Spieler während des Ansturms
+          if (Math.hypot(player.x - this.x, player.y - this.y) <= (this.radius + player.radius + 4)) {
+            this.hitPlayer(player, combatManager, this.atk * 1.3, this.chargeDir);
+            this.isCharging = false;
+            this.state = 'idle';
+            this.cooldownTimer = 1.5;
+          }
+        }
+        return;
+      }
+
+      if (this.telegraphTimer <= 0) {
+        this.executeAttack(player, combatManager, enemyManager);
+        this.state = 'idle';
+        this.cooldownTimer = ENEMY_CONFIG.ATTACK_RECOVERY_TIME + Math.random() * 0.4;
+      }
+      return;
+    }
+
+    // B) Aggro & Annäherung
+    const isAggro = distToPlayer <= detectionRange;
+
+    if (isAggro && !player.isDead) {
+      // Wenn frisch aufgeschreckt -> Alarm-Emote und Rudel alarmieren!
+      if (this.state === 'idle' || this.state === 'wander') {
+        this.alertEmoteTimer = 1.0;
+        enemyManager.alertPack(this.packId, this.x, this.y);
+      }
+
+      // Bereite Angriff vor, wenn in Angriffsreichweite
+      if (distToPlayer <= this.attackRange && this.cooldownTimer <= 0) {
+        this.startAttack(player, combatManager);
+        return;
+      }
+
+      // Bewegung zum Spieler (wenn nicht stationär)
+      if (this.baseSpeed > 0) {
+        this.state = 'walk';
+        let moveX = dx / (distToPlayer || 1);
+        let moveY = dy / (distToPlayer || 1);
+
+        // Fernkämpfer halten Abstand! Weichen zurück, wenn Spieler zu nah (< 45px)
+        if (this.category === 'range' && distToPlayer < 45) {
+          moveX = -moveX;
+          moveY = -moveY;
+        }
+
+        this.moveWithCollision(moveX, moveY, this.baseSpeed, dt, map);
+      } else {
+        this.state = 'idle';
+      }
+    } else {
+      // C) Friedliches Umherstreifen (Wander) nahe Heimatort
+      this.wanderTimer -= dt;
+      if (this.wanderTimer <= 0) {
+        this.wanderTimer = Math.random() * 3 + 2;
+        const angle = Math.random() * Math.PI * 2;
+        const wDist = Math.random() * ENEMY_CONFIG.WANDER_RADIUS;
+        this.wanderTarget = {
+          x: this.homeX + Math.cos(angle) * wDist,
+          y: this.homeY + Math.sin(angle) * wDist
+        };
+      }
+
+      const distToWander = Math.hypot(this.wanderTarget.x - this.x, this.wanderTarget.y - this.y);
+      if (distToWander > 8 && this.baseSpeed > 0) {
+        this.state = 'walk';
+        const wdx = (this.wanderTarget.x - this.x) / distToWander;
+        const wdy = (this.wanderTarget.y - this.y) / distToWander;
+        this.moveWithCollision(wdx, wdy, this.baseSpeed * 0.45, dt, map);
+      } else {
+        this.state = 'idle';
+      }
+    }
+  }
+
+  moveWithCollision(dirX, dirY, speed, dt, map) {
+    const nextX = this.x + dirX * speed * dt;
+    const nextY = this.y + dirY * speed * dt;
+
+    // X-Achse
+    const tx1 = Math.floor((nextX + (dirX > 0 ? this.radius : -this.radius)) / TILE_SIZE);
+    const ty1 = Math.floor(this.y / TILE_SIZE);
+    if (!map.isSolid || !map.isSolid(tx1, ty1)) {
+      this.x = nextX;
+    }
+
+    // Y-Achse
+    const tx2 = Math.floor(this.x / TILE_SIZE);
+    const ty2 = Math.floor((nextY + (dirY > 0 ? this.radius : -this.radius)) / TILE_SIZE);
+    if (!map.isSolid || !map.isSolid(tx2, ty2)) {
+      this.y = nextY;
+    }
+  }
+
+  startAttack(player, combatManager) {
+    this.state = 'attack';
+    this.telegraphTimer = ENEMY_CONFIG.ATTACK_TELEGRAPH_TIME;
+
+    // Optisches Telegraphing (Warnkreis / Funken)
+    if (combatManager) {
+      combatManager.addHitSparks(this.x, this.y - 4, '#fbbf24', 6);
+    }
+
+    // Vorbereitung für Wildschwein
+    if (this.typeId === 'tusk_boar') {
+      const dx = player.x - this.x;
+      const dy = player.y - this.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      this.chargeDir = { x: dx / dist, y: dy / dist };
+    }
+  }
+
+  executeAttack(player, combatManager, enemyManager) {
+    const dx = player.x - this.x;
+    const dy = player.y - this.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+
+    // =========================================================================
+    // SPEZIFISCHE ATTACKEN ALLER 20 MODELLE
+    // =========================================================================
+    switch (this.typeId) {
+      // 1. Waldläufer-Schütze: Moospfeil
+      case 'moss_archer':
+        if (combatManager) {
+          combatManager.fireEnemyProjectile({
+            type: 'moss_arrow',
+            x: this.x,
+            y: this.y - 2,
+            dirX,
+            dirY,
+            speed: 240,
+            damage: this.atk,
+            color: '#22c55e',
+            radius: 4,
+            maxDist: 220
+          });
+        }
+        break;
+
+      // 2. Sporen-Spucker: Sporen-Ball mit Giftnebel
+      case 'spore_spitter':
+        if (combatManager) {
+          combatManager.fireEnemyProjectile({
+            type: 'spore_blob',
+            x: this.x,
+            y: this.y - 12,
+            dirX,
+            dirY,
+            speed: 160,
+            damage: this.atk,
+            color: '#a855f7',
+            radius: 6,
+            maxDist: 180,
+            spawnsPuddle: true
+          });
+        }
+        break;
+
+      // 3. Moos-Koloss: Erdbeben-Bodenstampfer (Schockwelle)
+      case 'boulder_troll':
+        if (combatManager) {
+          combatManager.createShockwave(this.x, this.y + 8, 48, this.atk, '#15803d');
+          enemyManager.game.camera.shake(4.5, 0.22);
+        }
+        break;
+
+      // 4. Yeti-Wächter: Eiskeulen-Frostwelle
+      case 'frost_giant':
+        if (combatManager) {
+          combatManager.createShockwave(this.x, this.y + 8, 55, this.atk, '#38bdf8', true); // Slows player
+          enemyManager.game.camera.shake(5.0, 0.25);
+        }
+        break;
+
+      // 5. Smaragd-Natter: Blitzschneller Giftzahn-Vorstoß
+      case 'slithering_viper':
+        if (dist <= 38) {
+          this.hitPlayer(player, combatManager, this.atk, { x: dirX, y: dirY });
+        }
+        break;
+
+      // 6. Dünen-Schlund: Lotus-Maw Einschnappen mit Sandfontäne
+      case 'dune_maw':
+        if (combatManager) {
+          combatManager.createShockwave(this.x, this.y, 42, this.atk, '#d97706');
+        }
+        break;
+
+      // 7. Laternen-Pyromant: Feuriger Lampion-Feuerball
+      case 'pyromancer':
+        if (combatManager) {
+          combatManager.fireEnemyProjectile({
+            type: 'fireball',
+            x: this.x,
+            y: this.y - 6,
+            dirX,
+            dirY,
+            speed: 210,
+            damage: this.atk,
+            color: '#f97316',
+            radius: 6,
+            maxDist: 200
+          });
+        }
+        break;
+
+      // 8. Wolken-Astrologe: Fallende Sternschnuppe am Spielerort
+      case 'star_astromancer':
+        if (combatManager) {
+          combatManager.spawnCelestialStrike(player.x, player.y, this.atk);
+        }
+        break;
+
+      // 9. Tau-Tropfen Blob: Weicher Gelee-Platscher
+      case 'green_slime':
+        if (dist <= 30) {
+          this.hitPlayer(player, combatManager, this.atk, { x: dirX, y: dirY });
+        }
+        break;
+
+      // 10. Teer-Schlamm: Rußkugel-Schuss
+      case 'tar_mire':
+        if (combatManager) {
+          combatManager.fireEnemyProjectile({
+            type: 'ink_ball',
+            x: this.x,
+            y: this.y,
+            dirX,
+            dirY,
+            speed: 180,
+            damage: this.atk,
+            color: '#0f172a',
+            radius: 5,
+            maxDist: 160
+          });
+        }
+        break;
+
+      // 11. Schattenwolf: Mononoke-Hechtsprung
+      case 'dire_wolf':
+        // Schneller Vorwärtssprung
+        this.x += dirX * 22;
+        this.y += dirY * 22;
+        if (Math.hypot(player.x - this.x, player.y - this.y) <= 32) {
+          this.hitPlayer(player, combatManager, this.atk, { x: dirX, y: dirY });
+        }
+        break;
+
+      // 12. Kaiser-Skorpion: Lotus-Scherenschlag & Stachel
+      case 'emperor_scorpion':
+        if (dist <= 42) {
+          this.hitPlayer(player, combatManager, this.atk, { x: dirX, y: dirY });
+        }
+        break;
+
+      // 13. Grasland-Wildschwein: Sturm-Anlauf aktivieren
+      case 'tusk_boar':
+        this.isCharging = true;
+        this.chargeTimer = 1.4;
+        this.state = 'attack'; // bleibt während des Sturms im Angriffsmodus
+        break;
+
+      // 14. Höhlen-Krallenspinne: Verlangsamender Seidenfaden-Schuss
+      case 'cave_weaver':
+        if (combatManager) {
+          combatManager.fireEnemyProjectile({
+            type: 'web_shot',
+            x: this.x,
+            y: this.y,
+            dirX,
+            dirY,
+            speed: 230,
+            damage: this.atk,
+            color: '#e2e8f0',
+            radius: 6,
+            maxDist: 180,
+            slowsPlayer: true
+          });
+        }
+        break;
+
+      // 15. Leeren-Verschlinger: Kaonashi Sternenklingen-Schnitt
+      case 'void_reaper':
+        if (dist <= 48) {
+          this.hitPlayer(player, combatManager, this.atk, { x: dirX, y: dirY });
+          if (combatManager) {
+            combatManager.addSlashEffect('slash1', player.x, player.y, Math.atan2(dirY, dirX), 24);
+          }
+        }
+        break;
+
+      // 16. Auge des Abgrunds: Kosmischer Starlight-Strahl
+      case 'gazer_of_the_void':
+        if (combatManager) {
+          combatManager.fireEnemyProjectile({
+            type: 'void_beam',
+            x: this.x,
+            y: this.y - 2,
+            dirX,
+            dirY,
+            speed: 290,
+            damage: this.atk,
+            color: '#c084fc',
+            radius: 5,
+            maxDist: 240
+          });
+        }
+        break;
+
+      // 17. Schatten-Tentakel: Tempelglocken-Peitschenhieb
+      case 'abyss_tentacle':
+        if (dist <= 48) {
+          this.hitPlayer(player, combatManager, this.atk, { x: dirX, y: dirY });
+          if (combatManager) {
+            combatManager.addHitSparks(this.x, this.y, '#f59e0b', 14);
+          }
+        }
+        break;
+
+      // 18. Origami-Krieger: Iaijutsu Mondsichel-Tuschehieb
+      case 'cursed_knight':
+        if (dist <= 46) {
+          this.hitPlayer(player, combatManager, this.atk, { x: dirX, y: dirY });
+          if (combatManager) {
+            combatManager.addSlashEffect('thrust', player.x, player.y, Math.atan2(dirY, dirX), 28);
+          }
+        }
+        break;
+
+      // 19. Wolken-Harpyie: Sakura-Windböen-Fächer
+      case 'sky_harpy':
+        if (combatManager) {
+          combatManager.fireEnemyProjectile({
+            type: 'wind_petal',
+            x: this.x,
+            y: this.y,
+            dirX,
+            dirY,
+            speed: 260,
+            damage: this.atk,
+            color: '#f472b6',
+            radius: 7,
+            maxDist: 210,
+            knockbackPlayer: 220
+          });
+        }
+        break;
+
+      // 20. Magma-Funke: Calcifer Feuerwerk-Funken
+      case 'lava_core':
+        if (combatManager) {
+          for (let s = -1; s <= 1; s++) {
+            const spreadAngle = Math.atan2(dirY, dirX) + s * 0.3;
+            combatManager.fireEnemyProjectile({
+              type: 'fire_spark',
+              x: this.x,
+              y: this.y,
+              dirX: Math.cos(spreadAngle),
+              dirY: Math.sin(spreadAngle),
+              speed: 220,
+              damage: this.atk * 0.65,
+              color: '#facc15',
+              radius: 4,
+              maxDist: 180
+            });
+          }
+        }
+        break;
+
+      default:
+        if (dist <= 35) {
+          this.hitPlayer(player, combatManager, this.atk, { x: dirX, y: dirY });
+        }
+        break;
+    }
+  }
+
+  hitPlayer(player, combatManager, damage, dir) {
+    if (!player || player.isDead) return;
+
+    // 1. Dash-Ausweich-Unverwundbarkeit (I-Frames)
+    if (player.dash && player.dash.active) {
+      if (combatManager) {
+        combatManager.addFloatingText('💨 AUSGEWICHEN!', player.x, player.y - 16, '#67e8f9');
+      }
+      return;
+    }
+
+    // 2. Schild-Block
+    if (player.shield && player.shield.active && player.shield.energy > 0) {
+      player.shield.energy = Math.max(0, player.shield.energy - damage * 0.7);
+      if (combatManager) {
+        combatManager.addHitSparks(player.x, player.y, '#38bdf8', 16);
+        combatManager.addFloatingText('🛡️ GEBLOCKT!', player.x, player.y - 18, '#38bdf8');
+      }
+      // Schild-Betäubung bei Bruch
+      if (player.shield.energy <= 0) {
+        player.shield.broken = true;
+        player.shield.stunTimer = 1.2;
+        player.shield.active = false;
+        if (combatManager) {
+          combatManager.addFloatingText('💥 SCHILD ZERBROCHEN!', player.x, player.y - 26, '#ef4444');
+        }
+      }
+      return;
+    }
+
+    // 3. Voller Treffer auf Spieler
+    player.takeDamage(damage, dir);
+  }
+
+  takeDamage(amount, knockbackAngle, knockbackForce, combatManager) {
+    if (this.state === 'dead') return;
+
+    this.hp -= amount;
+    this.hitFlash = 0.25;
+
+    // Knockback
+    if (this.baseSpeed > 0) {
+      this.x += Math.cos(knockbackAngle) * (knockbackForce * 0.08);
+      this.y += Math.sin(knockbackAngle) * (knockbackForce * 0.08);
+    }
+
+    // Treffer-Partikel
+    if (combatManager) {
+      combatManager.addHitSparks(this.x, this.y - 4, '#ef4444', 10);
+      combatManager.addFloatingText(`-${Math.round(amount)}!`, this.x, this.y - 18, '#f87171');
+    }
+
+    // Tod prüfen
+    if (this.hp <= 0) {
+      this.die(combatManager);
+    }
+  }
+
+  die(combatManager) {
+    this.state = 'dead';
+    this.hp = 0;
+
+    // Poof / Konfetti-Partikelwolke
+    if (combatManager) {
+      combatManager.addDefeatPoof(this.x, this.y, this.category);
+    }
+  }
+
+  render(ctx, t, night) {
+    if (this.state === 'dead') return;
+
+    const renderState = (this.state === 'walk' || this.isCharging)
+      ? 'walk'
+      : (this.state === 'attack' ? 'attack' : 'idle');
+
+    // Zeichne das prozedurale Ghibli-Papercraft-Wesen
+    this.def.render(ctx, this.x, this.y, this.animTime, renderState, Math.max(0, this.hitFlash));
+
+    // Alarm-Emote `!` über dem Kopf
+    if (this.alertEmoteTimer > 0) {
+      ctx.save();
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y - 24, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('!', this.x, this.y - 24);
+      ctx.restore();
+    }
+
+    // Lebensbalken über dem Kopf (nur wenn verletzt)
+    if (this.hp < this.maxHp && this.hp > 0) {
+      const barW = 24;
+      const barH = 3.5;
+      const barX = this.x - barW / 2;
+      const barY = this.y - 18;
+      const hpPct = Math.max(0, this.hp / this.maxHp);
+
+      ctx.save();
+      // Hintergrund
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+      // Füllung
+      ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
+      ctx.fillRect(barX, barY, barW * hpPct, barH);
+      ctx.restore();
+    }
+  }
+}
+
+/**
+ * EnemyManager - Koordiniert alle Spawns, Gruppen und Dimensionen
+ */
+class EnemyManager {
+  constructor(game) {
+    this.game = game;
+    this.enemies = [];
+    this.lootItems = [];
+    this.aiActive = true;
+
+    this.initSpawns();
+  }
+
+  initSpawns() {
+    this.enemies = [];
+    this.lootItems = [];
+
+    // =========================================================================
+    // OVERWORLD SPAWNS NACH BIOMEN & GRUPPEN
+    // =========================================================================
+
+    // 1. Grasland & Lichtungen (nahe Spawn 30, 45)
+    // 3er-Gruppe Tau-Tropfen Blobs (Green Slimes)
+    this.spawnPack('green_slime', 38 * TILE_SIZE, 46 * TILE_SIZE, 3, 24, DIMENSIONS.OVERWORLD, 'pack_slimes');
+
+    // 2er-Gruppe Waldhüter-Wildschweine (Tusk Boars)
+    this.spawnPack('tusk_boar', 22 * TILE_SIZE, 38 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_boars');
+
+    // 2er-Gruppe Waldläufer-Schützen (Moss Archers) am Waldsaum
+    this.spawnPack('moss_archer', 17 * TILE_SIZE, 28 * TILE_SIZE, 2, 26, DIMENSIONS.OVERWORLD, 'pack_archers');
+
+    // 2. Dichter Dunkelwald (Nordwesten)
+    // 3er-Rudel Okami-Schattenwölfe (Dire Wolves)
+    this.spawnPack('dire_wolf', 24 * TILE_SIZE, 15 * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_wolves');
+
+    // 3. Wüste & Treibsand (Südwesten)
+    // Solo: Dünen-Schlund (Dune Maw)
+    this.spawnEnemy('dune_maw', 25 * TILE_SIZE, 68 * TILE_SIZE, DIMENSIONS.OVERWORLD, null);
+
+    // 2er-Gruppe Kaiser-Skorpione (Emperor Scorpions)
+    this.spawnPack('emperor_scorpion', 16 * TILE_SIZE, 74 * TILE_SIZE, 2, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions');
+
+    // 4. Schnee & Eisberge (Nordosten)
+    // Koloss: Yeti-Wächter (Frost Giant)
+    this.spawnEnemy('frost_giant', 88 * TILE_SIZE, 16 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, { elevation: 1 });
+
+    // 5. Düsterer Sumpf (Südosten)
+    // 2er-Gruppe Sporen-Spucker (Spore Spitters)
+    this.spawnPack('spore_spitter', 68 * TILE_SIZE, 62 * TILE_SIZE, 2, 26, DIMENSIONS.OVERWORLD, 'pack_spores');
+
+    // 2er-Gruppe Smaragd-Nattern (Slithering Vipers) am Sumpfteich
+    this.spawnPack('slithering_viper', 82 * TILE_SIZE, 60 * TILE_SIZE, 2, 30, DIMENSIONS.OVERWORLD, 'pack_vipers');
+
+    // Teer-Schlamm Königin (Tar Mire) mit Rußmännchen
+    this.spawnEnemy('tar_mire', 95 * TILE_SIZE, 75 * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_tar');
+
+    // 6. Felsgebirge & Bergpfade (Höhenebene +1, +2)
+    // Koloss: Moos-Koloss (Boulder Troll) am Bergpass
+    this.spawnEnemy('boulder_troll', 56 * TILE_SIZE, 28 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, { elevation: 1 });
+
+    // 2er-Wache Origami-Krieger (Cursed Paper Knights)
+    this.spawnPack('cursed_knight', 70 * TILE_SIZE, 35 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_samurai', { elevation: 1 });
+
+    // 7. Die Leere / Void (Osten)
+    // 2er-Patrouille Leeren-Verschlinger (Void Reapers)
+    this.spawnPack('void_reaper', 108 * TILE_SIZE, 45 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers');
+
+    // Schwebende Mondqualle: Auge des Abgrunds (Gazer of the Void)
+    this.spawnEnemy('gazer_of_the_void', 115 * TILE_SIZE, 55 * TILE_SIZE, DIMENSIONS.OVERWORLD, null);
+
+    // Brunnen-Falle: Schatten-Tentakel (Abyss Tentacle)
+    this.spawnEnemy('abyss_tentacle', 118 * TILE_SIZE, 38 * TILE_SIZE, DIMENSIONS.OVERWORLD, null);
+
+    // 8. Brand- & Vulkanzone (Zwischen Felsen und Wüste)
+    // Laternen-Pyromant mit 2 Calcifer-Feuerdämonen
+    this.spawnEnemy('pyromancer', 85 * TILE_SIZE, 36 * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire');
+    this.spawnEnemy('lava_core', 83 * TILE_SIZE, 38 * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire');
+    this.spawnEnemy('lava_core', 87 * TILE_SIZE, 38 * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire');
+
+    // =========================================================================
+    // HÖHLEN-SPAWNS (CAVES DIMENSION)
+    // =========================================================================
+    // 3er-Gruppe Höhlen-Krallenspinnen (Cave Weavers)
+    this.spawnPack('cave_weaver', 32 * TILE_SIZE, 26 * TILE_SIZE, 3, 30, DIMENSIONS.CAVES, 'pack_cave_spiders');
+
+    // =========================================================================
+    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION)
+    // =========================================================================
+    // Wolken-Astrologe (Star Astromancer) auf hoher Traumwolke
+    this.spawnEnemy('star_astromancer', 45 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, null);
+
+    // 2er-Patrouille Wolken-Harpyien (Sky Harpies)
+    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 32 * TILE_SIZE, 2, 34, DIMENSIONS.CLOUDS, 'pack_harpies');
+  }
+
+  spawnEnemy(typeId, x, y, dimension = DIMENSIONS.OVERWORLD, packId = null, options = {}) {
+    const enemy = new EnemyEntity(typeId, x, y, dimension, packId, options);
+    this.enemies.push(enemy);
+    return enemy;
+  }
+
+  spawnPack(typeId, centerX, centerY, count = 2, radius = 26, dimension = DIMENSIONS.OVERWORLD, packId = null, options = {}) {
+    const pack = packId || `pack_${typeId}_${Math.random().toString(36).substr(2, 5)}`;
+    const created = [];
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      const dist = Math.random() * radius * 0.6 + radius * 0.4;
+      const ex = centerX + Math.cos(angle) * dist;
+      const ey = centerY + Math.sin(angle) * dist;
+      const enemy = new EnemyEntity(typeId, ex, ey, dimension, pack, options);
+      this.enemies.push(enemy);
+      created.push(enemy);
+    }
+    return created;
+  }
+
+  alertPack(packId, fromX, fromY) {
+    if (!packId) return;
+    this.enemies.forEach(e => {
+      if (e.packId === packId && e.state !== 'dead') {
+        const dist = Math.hypot(e.x - fromX, e.y - fromY);
+        if (dist <= ENEMY_CONFIG.PACK_CALL_RADIUS) {
+          e.alertEmoteTimer = 1.0;
+          if (e.state === 'idle' || e.state === 'wander') {
+            e.state = 'walk';
+          }
+        }
+      }
+    });
+  }
+
+  dropLoot(x, y) {
+    // 1. Herz-Beere (❤️ +25 HP)
+    if (Math.random() > 0.35) {
+      this.lootItems.push({
+        type: LOOT_TYPES.HEART,
+        x: x + (Math.random() - 0.5) * 12,
+        y: y + (Math.random() - 0.5) * 12,
+        life: 25.0,
+        bobOffset: Math.random() * Math.PI * 2
+      });
+    }
+
+    // 2. Köcher-Pfeile (🏹 +3 Pfeile)
+    if (Math.random() > 0.45) {
+      this.lootItems.push({
+        type: LOOT_TYPES.ARROW,
+        x: x + (Math.random() - 0.5) * 14,
+        y: y + (Math.random() - 0.5) * 14,
+        life: 25.0,
+        bobOffset: Math.random() * Math.PI * 2
+      });
+    }
+
+    // 3. Sternenstaub / Geist-Juwel (⭐ Glanzpartikel)
+    this.lootItems.push({
+      type: LOOT_TYPES.SPIRIT_GEM,
+      x,
+      y,
+      life: 20.0,
+      bobOffset: Math.random() * Math.PI * 2
+    });
+  }
+
+  update(dt, player, map, combatManager) {
+    const curDim = this.game.currentDimension;
+
+    // 1. Update Enemies
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const enemy = this.enemies[i];
+      if (enemy.dimension !== curDim) continue;
+
+      enemy.update(dt, player, map, this, combatManager);
+
+      // Bei Tod Loot droppen und aus Liste entfernen
+      if (enemy.state === 'dead') {
+        this.dropLoot(enemy.x, enemy.y);
+        this.enemies.splice(i, 1);
+      }
+    }
+
+    // 2. Update Loot Items
+    for (let i = this.lootItems.length - 1; i >= 0; i--) {
+      const item = this.lootItems[i];
+      item.life -= dt;
+      if (item.life <= 0) {
+        this.lootItems.splice(i, 1);
+        continue;
+      }
+
+      // Pickup durch Spieler
+      const dist = Math.hypot(player.x - item.x, player.y - item.y);
+      if (dist <= 16 && !player.isDead) {
+        if (item.type === LOOT_TYPES.HEART) {
+          if (player.hp < player.maxHp) {
+            player.hp = Math.min(player.maxHp, player.hp + 25);
+            combatManager.addFloatingText('❤️ +25 LEBEN', player.x, player.y - 20, '#4ade80');
+            combatManager.addHitSparks(player.x, player.y, '#4ade80', 12);
+            this.lootItems.splice(i, 1);
+          }
+        } else if (item.type === LOOT_TYPES.ARROW) {
+          if (player.ranged && player.ranged.ammo < 30) {
+            player.ranged.ammo = Math.min(30, player.ranged.ammo + 3);
+            combatManager.addFloatingText('🏹 +3 PFEILE', player.x, player.y - 20, '#38bdf8');
+            combatManager.addHitSparks(player.x, player.y, '#38bdf8', 10);
+            this.lootItems.splice(i, 1);
+          }
+        } else if (item.type === LOOT_TYPES.SPIRIT_GEM) {
+          combatManager.addFloatingText('⭐ GEIST-FUNKE', player.x, player.y - 20, '#fde047');
+          combatManager.addHitSparks(player.x, player.y, '#facc15', 14);
+          this.lootItems.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  getActiveEnemies() {
+    const curDim = this.game.currentDimension;
+    return this.enemies.filter(e => e.dimension === curDim && e.state !== 'dead');
+  }
+
+  renderLoot(ctx, t) {
+    const curDim = this.game.currentDimension;
+    this.lootItems.forEach(item => {
+      const bob = Math.sin(t * 4 + item.bobOffset) * 2.5;
+
+      ctx.save();
+      ctx.translate(item.x, item.y + bob);
+
+      // Papierschatten
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.25)';
+      ctx.beginPath();
+      ctx.ellipse(0, 4 - bob * 0.4, 5, 2.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (item.type === LOOT_TYPES.HEART) {
+        // Herz-Beere
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.moveTo(0, 2);
+        ctx.bezierCurveTo(-4, -2, -4, -6, 0, -4);
+        ctx.bezierCurveTo(4, -6, 4, -2, 0, 2);
+        ctx.fill();
+        ctx.fillStyle = '#fca5a5';
+        ctx.beginPath();
+        ctx.arc(-1.5, -4, 1, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (item.type === LOOT_TYPES.ARROW) {
+        // Pfeil-Bündel
+        ctx.strokeStyle = '#854d0e';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(-3, 3);
+        ctx.lineTo(3, -3);
+        ctx.stroke();
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-4, 2, 2, 2);
+      } else if (item.type === LOOT_TYPES.SPIRIT_GEM) {
+        // Stern-Juwel
+        ctx.fillStyle = '#fde047';
+        ctx.beginPath();
+        ctx.arc(0, 0, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(-0.8, -0.8, 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    });
+  }
+}
+
+
+// --- js/player.js ---
 
 class Player {
   constructor(x, y, map, game = null) {
@@ -3847,6 +7127,14 @@ class Player {
     this.isDead = false;
     this.deathTimer = 0;
     this.deathCount = 0;
+
+    // Health & Damage States
+    this.maxHp = PLAYER_CONFIG.MAX_HP || 100;
+    this.hp = this.maxHp;
+    this.hitFlash = 0;
+    this.invulnTimer = 0;
+    this.speedSlowTimer = 0;
+    this.speedSlowFactor = 1.0;
 
     this.particles = [];
 
@@ -3900,6 +7188,11 @@ class Player {
     this.lastTransitionTile = null;
     this.isDead = false;
     this.deathTimer = 0;
+    this.hp = this.maxHp;
+    this.hitFlash = 0;
+    this.invulnTimer = 0;
+    this.speedSlowTimer = 0;
+    this.speedSlowFactor = 1.0;
 
     // Reset combat states
     this.dash.active = false;
@@ -4345,6 +7638,16 @@ class Player {
       this.respawn();
     }
 
+    // Health & Status Timers
+    if (this.hitFlash > 0) this.hitFlash = Math.max(0, this.hitFlash - dt);
+    if (this.invulnTimer > 0) this.invulnTimer = Math.max(0, this.invulnTimer - dt);
+    if (this.speedSlowTimer > 0) {
+      this.speedSlowTimer = Math.max(0, this.speedSlowTimer - dt);
+      if (this.speedSlowTimer <= 0) {
+        this.speedSlowFactor = 1.0;
+      }
+    }
+
     // 1. Dash timers & ghost fading
     if (this.dash.cooldown > 0) this.dash.cooldown -= dt;
     if (this.dash.active) {
@@ -4532,6 +7835,9 @@ class Player {
       }
       if (this.melee.isSpinning) {
         speed *= 0.45;
+      }
+      if (this.speedSlowTimer > 0) {
+        speed *= this.speedSlowFactor;
       }
       this.currentSpeed = speed;
 
@@ -4830,6 +8136,74 @@ class Player {
     }
   }
 
+  takeDamage(amount, dir = null) {
+    if (this.isDead || this.invulnTimer > 0 || this.transition) return false;
+
+    // 1. Dash-Ausweich-Unverwundbarkeit (I-Frames)
+    if (this.dash && this.dash.active) {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('💨 AUSGEWICHEN!', this.x, this.y - 18, '#67e8f9');
+      }
+      return 'dodged';
+    }
+
+    // 2. Schild-Block
+    if (this.shield && this.shield.active && this.shield.energy > 0) {
+      this.shield.energy = Math.max(0, this.shield.energy - amount * 0.85);
+      this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
+      if (this.game && this.game.combat) {
+        this.game.combat.addHitSparks(this.x, this.y, '#38bdf8', 14);
+        this.game.combat.addFloatingText('🛡️ GEBLOCKT!', this.x, this.y - 18, '#38bdf8');
+      }
+      if (this.shield.energy <= 0) {
+        this.shield.broken = true;
+        this.shield.stunTimer = COMBAT_CONFIG.SHIELD_BREAK_STUN || 1.2;
+        this.shield.active = false;
+        if (this.game && this.game.combat) {
+          this.game.combat.addFloatingText('💥 SCHILD ZERBROCHEN!', this.x, this.y - 26, '#ef4444');
+        }
+      }
+      return 'blocked';
+    }
+
+    // 3. Voller Treffer
+    this.hp = Math.max(0, this.hp - amount);
+    this.hitFlash = 0.3;
+    this.invulnTimer = 0.45;
+
+    // Knockback
+    if (dir) {
+      const kx = dir.x || 0;
+      const ky = dir.y || 0;
+      const dist = Math.hypot(kx, ky) || 1;
+      this.x += (kx / dist) * 14;
+      this.y += (ky / dist) * 14;
+    }
+
+    if (this.game && this.game.combat) {
+      this.game.combat.addHitSparks(this.x, this.y - 8, '#ef4444', 16);
+      this.game.combat.addFloatingText(`-${Math.round(amount)} HP`, this.x, this.y - 22, '#ef4444');
+    }
+
+    if (this.game && this.game.camera) {
+      this.game.camera.shake(6, 0.22);
+    }
+
+    if (this.hp <= 0) {
+      this.die('enemy');
+    }
+
+    return 'hit';
+  }
+
+  applySlow(factor = 0.45, duration = 2.0) {
+    this.speedSlowFactor = factor;
+    this.speedSlowTimer = duration;
+    if (this.game && this.game.combat) {
+      this.game.combat.addFloatingText('❄️ VERLANGSAMT', this.x, this.y - 22, '#38bdf8');
+    }
+  }
+
   die(cause = 'void') {
     if (this.isDead) return;
     this.isDead = true;
@@ -5110,6 +8484,19 @@ class Player {
       }
     }
 
+    // Hit Flash Tint on Player Body
+    if (this.hitFlash > 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.65)';
+      ctx.beginPath();
+      ctx.moveTo(px, py - 21 + bob);
+      ctx.lineTo(px + 8, py - 3 + bob);
+      ctx.lineTo(px - 8, py - 3 + bob);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
     // 3. Handheld Paper Lantern on Bamboo Pole (Held during Dusk & Night AND always Underground in Caves)
     const isUnderground = (this.game && this.game.currentDimension === 'caves') ||
       (this.map && this.map.biome && typeof this.map.biome === 'string' && (this.map.biome.includes('Tiefenhöhlen') || this.map.biome.includes('Grotte') || this.map.biome.includes('Höhle')));
@@ -5388,7 +8775,7 @@ class Player {
 }
 
 
-// --- camera.js ---
+// --- js/camera.js ---
 
 class Camera {
   constructor(viewportWidth, viewportHeight) {
@@ -5503,7 +8890,7 @@ class Camera {
 }
 
 
-// --- minimap.js ---
+// --- js/minimap.js ---
 
 class Minimap {
   constructor(canvasElement, map) {
@@ -5743,7 +9130,7 @@ class Minimap {
 }
 
 
-// --- touchControls.js ---
+// --- js/touchControls.js ---
 class TouchControls {
   constructor(gameInput, onButtonPress = null) {
     this.input = gameInput;
@@ -5992,7 +9379,7 @@ class TouchControls {
 }
 
 
-// --- combat.js ---
+// --- js/combat.js ---
 
 class CombatManager {
   constructor(game) {
@@ -6002,6 +9389,13 @@ class CombatManager {
     this.slashEffects = [];
     this.hitSparks = [];
     this.floatingTexts = [];
+
+    // Enemy Attacks & Hazard Systems
+    this.enemyProjectiles = [];
+    this.shockwaves = [];
+    this.celestialStrikes = [];
+    this.hazardPuddles = [];
+    this.defeatPoofs = [];
 
     // Training Dummies for target practice & feedback
     this.dummies = [];
@@ -6093,9 +9487,118 @@ class CombatManager {
     }
   }
 
+  addHitSparks(x, y, color = '#facc15', count = 10, speed = 80) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const sp = Math.random() * speed + speed * 0.4;
+      this.hitSparks.push({
+        x,
+        y,
+        vx: Math.cos(angle) * sp,
+        vy: Math.sin(angle) * sp,
+        color,
+        size: Math.random() * 2.5 + 1.2,
+        life: 0.28,
+        maxLife: 0.28
+      });
+    }
+  }
+
+  addFloatingText(text, x, y, color = '#ffffff', duration = 0.65) {
+    this.floatingTexts.push({
+      text,
+      x,
+      y,
+      timer: 0,
+      duration,
+      color
+    });
+  }
+
+  addDefeatPoof(x, y, category = 'normal') {
+    const count = category === 'boss' ? 32 : 18;
+    const colors = category === 'boss' ? ['#facc15', '#f43f5e', '#a855f7', '#ffffff'] : ['#f8fafc', '#e2e8f0', '#cbd5e1', '#fef08a'];
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const sp = Math.random() * 70 + 20;
+      this.defeatPoofs.push({
+        x,
+        y,
+        vx: Math.cos(angle) * sp,
+        vy: Math.sin(angle) * sp - 25,
+        size: Math.random() * 4 + 2,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 8,
+        life: 0.65,
+        maxLife: 0.65
+      });
+    }
+  }
+
+  fireEnemyProjectile(config) {
+    this.enemyProjectiles.push({
+      type: config.type || 'generic',
+      x: config.x,
+      y: config.y,
+      dirX: config.dirX,
+      dirY: config.dirY,
+      speed: config.speed || 200,
+      damage: config.damage || 15,
+      color: config.color || '#ef4444',
+      radius: config.radius || 5,
+      maxDist: config.maxDist || 200,
+      distTraveled: 0,
+      trailTimer: 0,
+      spawnsPuddle: Boolean(config.spawnsPuddle),
+      slowsPlayer: Boolean(config.slowsPlayer),
+      knockbackPlayer: config.knockbackPlayer || 0
+    });
+  }
+
+  createShockwave(x, y, maxRadius, damage, color = '#f59e0b', slowsPlayer = false) {
+    this.shockwaves.push({
+      x,
+      y,
+      maxRadius,
+      currentRadius: 4,
+      damage,
+      color,
+      slowsPlayer,
+      duration: 0.42,
+      timer: 0,
+      hasHitPlayer: false
+    });
+  }
+
+  spawnCelestialStrike(targetX, targetY, damage) {
+    this.celestialStrikes.push({
+      targetX,
+      targetY,
+      damage,
+      delay: 0.75,
+      timer: 0,
+      impacted: false
+    });
+  }
+
+  spawnHazardPuddle(x, y, radius = 18, duration = 4.5, damage = 10, color = '#a855f7') {
+    this.hazardPuddles.push({
+      x,
+      y,
+      radius,
+      duration,
+      timer: 0,
+      damage,
+      color,
+      tickTimer: 0
+    });
+  }
+
   checkMeleeHits(hitbox) {
-    // Check collision with training dummies
     let hitAny = false;
+
+    // Check collision with training dummies
     for (const dummy of this.dummies) {
       if (this.game.currentDimension !== 'overworld') continue;
 
@@ -6122,6 +9625,42 @@ class CombatManager {
       if (inRange) {
         hitAny = true;
         this.applyHitToDummy(dummy, hitbox);
+      }
+    }
+
+    // Check collision with active enemies
+    if (this.game && this.game.enemyManager) {
+      const enemies = this.game.enemyManager.getActiveEnemies();
+      for (const enemy of enemies) {
+        const dx = enemy.x - hitbox.x;
+        const dy = enemy.y - hitbox.y;
+        const dist = Math.hypot(dx, dy);
+
+        let inRange = false;
+        if (hitbox.type === 'spin') {
+          inRange = dist <= (hitbox.radius + enemy.radius + 4);
+        } else if (hitbox.type === 'thrust') {
+          const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
+          const sideDist = Math.abs(-dx * Math.sin(hitbox.angle) + dy * Math.cos(hitbox.angle));
+          inRange = (forwardDot > 0 && forwardDot <= hitbox.range + enemy.radius && sideDist <= (hitbox.width || 22) + enemy.radius);
+        } else {
+          const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
+          const angleDiff = Math.abs(Math.atan2(dy, dx) - hitbox.angle);
+          const normAngleDiff = Math.atan2(Math.sin(angleDiff), Math.cos(angleDiff));
+          inRange = (dist <= hitbox.radius + enemy.radius && Math.abs(normAngleDiff) <= 0.95);
+        }
+
+        if (inRange) {
+          hitAny = true;
+          let dmg = 25;
+          if (hitbox.type === 'slash2') dmg = 35;
+          if (hitbox.type === 'thrust') dmg = 52;
+          if (hitbox.type === 'spin') dmg = 68;
+
+          const angle = hitbox.type === 'spin' ? Math.atan2(enemy.y - hitbox.y, enemy.x - hitbox.x) : hitbox.angle;
+          const kb = hitbox.knockback || (hitbox.type === 'thrust' ? 120 : (hitbox.type === 'spin' ? 140 : 80));
+          enemy.takeDamage(dmg, angle, kb, this);
+        }
       }
     }
 
@@ -6210,6 +9749,21 @@ class CombatManager {
         });
       }
 
+      // Check active enemies hit
+      let hitEnemy = false;
+      if (this.game && this.game.enemyManager) {
+        const enemies = this.game.enemyManager.getActiveEnemies();
+        for (const enemy of enemies) {
+          if (Math.hypot(enemy.x - arrow.x, enemy.y - arrow.y) <= (enemy.radius + 6)) {
+            const dmg = arrow.isCharged ? 45 : 22;
+            const kb = arrow.isCharged ? 160 : 85;
+            enemy.takeDamage(dmg, arrow.angle, kb, this);
+            hitEnemy = true;
+            break;
+          }
+        }
+      }
+
       // Check dummy hit
       let hitDummy = false;
       if (this.game.currentDimension === 'overworld') {
@@ -6231,7 +9785,7 @@ class CombatManager {
       const tY = Math.floor(arrow.y / TILE_SIZE);
       const hitWall = map.isSolid ? map.isSolid(tX, tY) : false;
 
-      if (hitDummy || hitWall || arrow.distTraveled >= arrow.maxRange) {
+      if (hitDummy || hitEnemy || hitWall || arrow.distTraveled >= arrow.maxRange) {
         // Arrow sticks in the ground!
         this.stuckArrows.push({
           x: arrow.x,
@@ -6358,6 +9912,145 @@ class CombatManager {
         }
       }
     }
+
+    // 7. Update Enemy Projectiles
+    for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
+      const proj = this.enemyProjectiles[i];
+      proj.x += proj.dirX * proj.speed * dt;
+      proj.y += proj.dirY * proj.speed * dt;
+      proj.distTraveled += proj.speed * dt;
+
+      // Trail particles
+      proj.trailTimer += dt;
+      if (proj.trailTimer >= 0.035) {
+        proj.trailTimer = 0;
+        this.hitSparks.push({
+          x: proj.x,
+          y: proj.y,
+          vx: -proj.dirX * 18 + (Math.random() - 0.5) * 12,
+          vy: -proj.dirY * 18 + (Math.random() - 0.5) * 12,
+          color: proj.color,
+          size: Math.random() * 2 + 1,
+          life: 0.22,
+          maxLife: 0.22
+        });
+      }
+
+      // Check collision with player
+      const distToPlayer = Math.hypot(player.x - proj.x, player.y - proj.y);
+      if (distToPlayer <= (proj.radius + player.radius) && !player.isDead) {
+        player.takeDamage(proj.damage, { x: proj.dirX, y: proj.dirY });
+        if (proj.slowsPlayer) player.applySlow(0.45, 2.5);
+        if (proj.knockbackPlayer) {
+          player.x += proj.dirX * 24;
+          player.y += proj.dirY * 24;
+        }
+        this.addHitSparks(proj.x, proj.y, proj.color, 12);
+        this.enemyProjectiles.splice(i, 1);
+        continue;
+      }
+
+      // Check wall collision or max distance
+      const tX = Math.floor(proj.x / TILE_SIZE);
+      const tY = Math.floor(proj.y / TILE_SIZE);
+      const hitWall = map.isSolid ? map.isSolid(tX, tY) : false;
+
+      if (hitWall || proj.distTraveled >= proj.maxDist) {
+        if (proj.spawnsPuddle) {
+          this.spawnHazardPuddle(proj.x, proj.y, 20, 5.0, 10, proj.color);
+        }
+        this.addHitSparks(proj.x, proj.y, proj.color, 8);
+        this.enemyProjectiles.splice(i, 1);
+      }
+    }
+
+    // 8. Update Shockwaves
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const sw = this.shockwaves[i];
+      sw.timer += dt;
+      sw.currentRadius = (sw.timer / sw.duration) * sw.maxRadius;
+
+      if (!sw.hasHitPlayer && !player.isDead) {
+        const dist = Math.hypot(player.x - sw.x, player.y - sw.y);
+        if (dist <= sw.currentRadius + player.radius && dist >= sw.currentRadius - 16) {
+          sw.hasHitPlayer = true;
+          const hitDir = { x: (player.x - sw.x) / (dist || 1), y: (player.y - sw.y) / (dist || 1) };
+          player.takeDamage(sw.damage, hitDir);
+          if (sw.slowsPlayer) player.applySlow(0.4, 2.5);
+        }
+      }
+
+      if (sw.timer >= sw.duration) {
+        this.shockwaves.splice(i, 1);
+      }
+    }
+
+    // 9. Update Celestial Strikes
+    for (let i = this.celestialStrikes.length - 1; i >= 0; i--) {
+      const cs = this.celestialStrikes[i];
+      cs.timer += dt;
+
+      if (cs.timer >= cs.delay && !cs.impacted) {
+        cs.impacted = true;
+        this.addHitSparks(cs.targetX, cs.targetY, '#facc15', 26, 120);
+        this.addHitSparks(cs.targetX, cs.targetY, '#38bdf8', 18, 90);
+        if (this.game.camera) this.game.camera.shake(6.5, 0.25);
+
+        const dist = Math.hypot(player.x - cs.targetX, player.y - cs.targetY);
+        if (dist <= 32 && !player.isDead) {
+          player.takeDamage(cs.damage, { x: 0, y: 1 });
+        }
+        this.celestialStrikes.splice(i, 1);
+      }
+    }
+
+    // 10. Update Hazard Puddles
+    for (let i = this.hazardPuddles.length - 1; i >= 0; i--) {
+      const pud = this.hazardPuddles[i];
+      pud.timer += dt;
+      pud.tickTimer += dt;
+
+      // Poison bubbles
+      if (Math.random() < 0.15) {
+        const pAng = Math.random() * Math.PI * 2;
+        const pDist = Math.random() * pud.radius;
+        this.hitSparks.push({
+          x: pud.x + Math.cos(pAng) * pDist,
+          y: pud.y + Math.sin(pAng) * pDist,
+          vx: (Math.random() - 0.5) * 8,
+          vy: -Math.random() * 15 - 5,
+          color: pud.color,
+          size: Math.random() * 2 + 1,
+          life: 0.35,
+          maxLife: 0.35
+        });
+      }
+
+      // Check player inside puddle
+      if (pud.tickTimer >= 0.5) {
+        pud.tickTimer = 0;
+        const dist = Math.hypot(player.x - pud.x, player.y - pud.y);
+        if (dist <= pud.radius && !player.isDead && player.invulnTimer <= 0) {
+          player.takeDamage(pud.damage * 0.4);
+        }
+      }
+
+      if (pud.timer >= pud.duration) {
+        this.hazardPuddles.splice(i, 1);
+      }
+    }
+
+    // 11. Update Defeat Poof Particles
+    for (let i = this.defeatPoofs.length - 1; i >= 0; i--) {
+      const p = this.defeatPoofs[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rotation += p.rotSpeed * dt;
+      p.life -= dt;
+      if (p.life <= 0) {
+        this.defeatPoofs.splice(i, 1);
+      }
+    }
   }
 
   // ==========================================================================
@@ -6365,12 +10058,190 @@ class CombatManager {
   // ==========================================================================
 
   render(ctx, bounds, t) {
+    this.renderHazardPuddles(ctx, t);
+    this.renderShockwaves(ctx, t);
+    this.renderCelestialStrikes(ctx, t);
     this.renderStuckArrows(ctx);
     this.renderTrainingDummies(ctx, t);
     this.renderFlyingArrows(ctx);
+    this.renderEnemyProjectiles(ctx, t);
+    this.renderDefeatPoofs(ctx);
     this.renderSlashEffects(ctx);
     this.renderSparks(ctx);
     this.renderFloatingTexts(ctx);
+  }
+
+  renderHazardPuddles(ctx, t) {
+    for (const pud of this.hazardPuddles) {
+      const alpha = Math.min(1.0, (pud.duration - pud.timer) / 0.5) * 0.65;
+      const pulse = Math.sin(t * 5 + pud.x) * 1.5;
+      const r = pud.radius + pulse;
+
+      ctx.save();
+      ctx.translate(pud.x, pud.y);
+
+      // Puddle base
+      ctx.fillStyle = pud.color;
+      ctx.globalAlpha = alpha * 0.55;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, r, r * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Outer ripple
+      ctx.strokeStyle = pud.color;
+      ctx.lineWidth = 1.4;
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.stroke();
+
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  renderShockwaves(ctx, t) {
+    for (const sw of this.shockwaves) {
+      const alpha = 1.0 - (sw.timer / sw.duration);
+      ctx.save();
+      ctx.strokeStyle = sw.color;
+      ctx.lineWidth = 3.0 * alpha;
+      ctx.globalAlpha = alpha * 0.85;
+      ctx.beginPath();
+      ctx.ellipse(sw.x, sw.y, sw.currentRadius, sw.currentRadius * 0.6, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  renderCelestialStrikes(ctx, t) {
+    for (const cs of this.celestialStrikes) {
+      const prog = cs.timer / cs.delay;
+      ctx.save();
+      ctx.translate(cs.targetX, cs.targetY);
+
+      // Ground magic rune / target circle
+      const r = 24 * (0.3 + prog * 0.7);
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.8;
+      ctx.globalAlpha = 0.4 + prog * 0.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 4 Star points
+      ctx.fillStyle = '#fde047';
+      for (let st = 0; st < 4; st++) {
+        const sAng = (st / 4) * Math.PI * 2 + t * 4;
+        ctx.fillRect(Math.cos(sAng) * r - 2, Math.sin(sAng) * r - 2, 4, 4);
+      }
+
+      // Falling star streak during second half
+      if (prog > 0.4) {
+        const fallProg = (prog - 0.4) / 0.6;
+        const starY = -120 * (1 - fallProg);
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(0, starY);
+        ctx.lineTo(0, starY - 24);
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(0, starY, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  renderEnemyProjectiles(ctx, t) {
+    for (const proj of this.enemyProjectiles) {
+      ctx.save();
+      ctx.translate(proj.x, proj.y);
+
+      const angle = Math.atan2(proj.dirY, proj.dirX);
+      ctx.rotate(angle);
+
+      if (proj.type === 'moss_arrow') {
+        // Green leaf-arrow
+        ctx.strokeStyle = '#15803d';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(-10, 0);
+        ctx.lineTo(6, 0);
+        ctx.stroke();
+
+        ctx.fillStyle = '#22c55e';
+        ctx.beginPath();
+        ctx.arc(6, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (proj.type === 'fireball' || proj.type === 'fire_spark') {
+        // Calcifer fire orb
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.arc(0, 0, proj.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(1, 0, proj.radius * 0.55, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (proj.type === 'ink_ball') {
+        // Soot droplet
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.arc(0, 0, proj.radius, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (proj.type === 'web_shot') {
+        // Web cluster
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(0, 0, proj.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(-proj.radius, 0); ctx.lineTo(proj.radius, 0);
+        ctx.moveTo(0, -proj.radius); ctx.lineTo(0, proj.radius);
+        ctx.stroke();
+      } else if (proj.type === 'void_beam') {
+        // Cosmic needle
+        ctx.fillStyle = '#c084fc';
+        ctx.fillRect(-12, -2, 24, 4);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-6, -1, 12, 2);
+      } else if (proj.type === 'wind_petal') {
+        // Sakura petal
+        ctx.fillStyle = '#f472b6';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 7, 3.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Default glowing magic orb
+        ctx.fillStyle = proj.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, proj.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  renderDefeatPoofs(ctx) {
+    for (const p of this.defeatPoofs) {
+      const alpha = p.life / p.maxLife;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1.0;
   }
 
   renderStuckArrows(ctx) {
@@ -6687,7 +10558,7 @@ class CombatManager {
 }
 
 
-// --- game.js ---
+// --- js/game.js ---
 
 class Game {
   constructor() {
@@ -6705,6 +10576,7 @@ class Game {
 
     this.touchControls = new TouchControls(this.input, (action, isDown) => this.handleTouchButton(action, isDown));
     this.combat = new CombatManager(this);
+    this.enemyManager = new EnemyManager(this);
 
     // Multi-Dimension Maps & Core Systems
     this.overworldMap = new WorldMap();
@@ -6735,6 +10607,7 @@ class Game {
     this.initAmbientParticles();
 
     // HUD Elements
+    this.hpStatEl = document.getElementById('hp-stat');
     this.biomeNameEl = document.getElementById('biome-name');
     this.speedStatEl = document.getElementById('speed-stat');
     this.deathStatEl = document.getElementById('death-stat');
@@ -6966,6 +10839,53 @@ class Game {
       });
     }
 
+    // 2b. Monster AI Toggle Button
+    const btnToggleAI = document.getElementById('btn-toggle-enemy-ai');
+    if (btnToggleAI) {
+      btnToggleAI.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.enemyManager) {
+          this.enemyManager.aiActive = !this.enemyManager.aiActive;
+          btnToggleAI.textContent = this.enemyManager.aiActive ? '👾 Monster-KI: Aktiv' : '💤 Monster-KI: Friedlich';
+          btnToggleAI.style.color = this.enemyManager.aiActive ? '#4ade80' : '#94a3b8';
+          this.showToast(this.enemyManager.aiActive ? '👾 Monster-KI aktiviert!' : '💤 Monster sind nun friedlich!');
+        }
+      });
+    }
+
+    // 2c. Respawn All Enemies Button
+    const btnRespawnEnemies = document.getElementById('btn-respawn-enemies');
+    if (btnRespawnEnemies) {
+      btnRespawnEnemies.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (this.enemyManager) {
+          this.enemyManager.initSpawns();
+          this.showToast('✨ Alle 20 Monster-Gruppen neu gespawnt!');
+        }
+      });
+    }
+
+    // 2d. Biome / Monster Quick Teleport Dropdown
+    const teleportSelect = document.getElementById('teleport-select');
+    if (teleportSelect) {
+      teleportSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (!val) return;
+        const [tx, ty, dim] = val.split(',');
+        const targetX = parseInt(tx, 10) * TILE_SIZE + 8;
+        const targetY = parseInt(ty, 10) * TILE_SIZE + 8;
+        if (dim !== this.currentDimension) {
+          this.switchDimension(dim, targetX, targetY);
+        } else {
+          this.player.x = targetX;
+          this.player.y = targetY;
+          this.camera.follow(targetX, targetY);
+        }
+        this.showToast(`🚀 Schnellreise zu (${tx}, ${ty})!`);
+        e.target.value = '';
+      });
+    }
+
     // 3. Zoom Controls (Herauszoomen / Heranzoomen)
     const btnZoomOut = document.getElementById('btn-zoom-out');
     const btnZoomIn = document.getElementById('btn-zoom-in');
@@ -7170,6 +11090,7 @@ class Game {
 
     this.spriteManager.update(dt);
     this.player.update(dt, this.input);
+    if (this.enemyManager) this.enemyManager.update(dt, this.player, this.map, this.combat);
     if (this.combat) this.combat.update(dt);
     this.camera.follow(this.player.x, this.player.y);
     this.camera.update(dt);
@@ -7365,6 +11286,15 @@ class Game {
           shieldStatEl.style.color = pct < 30 ? '#ef4444' : '#38bdf8';
         }
       }
+    }
+
+    // 3. Update Player HP display
+    if (this.hpStatEl && this.player) {
+      const curHp = Math.max(0, Math.round(this.player.hp));
+      const maxHp = this.player.maxHp || 100;
+      this.hpStatEl.textContent = `${curHp} / ${maxHp}`;
+      const hpPct = curHp / maxHp;
+      this.hpStatEl.style.color = hpPct > 0.5 ? '#4ade80' : (hpPct > 0.25 ? '#facc15' : '#ef4444');
     }
   }
 
@@ -8343,6 +12273,26 @@ class Game {
       });
     }
 
+    // Active Enemies (Overworld)
+    if (this.enemyManager) {
+      const activeEnemies = this.enemyManager.getActiveEnemies();
+      for (const enemy of activeEnemies) {
+        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
+            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+          const eElev = enemy.elevation || 0;
+          const eSortY = enemy.y - eElev * ELEVATION_PIXEL_OFFSET;
+          renderList.push({
+            sortY: eSortY,
+            isPlayer: false,
+            isTree: false,
+            isKodama: false,
+            isEnemy: true,
+            enemy
+          });
+        }
+      }
+    }
+
     // Sort back-to-front by visual screen Y
     renderList.sort((a, b) => a.sortY - b.sortY);
 
@@ -8353,7 +12303,14 @@ class Game {
         this.renderPaperTree(item.tree, t, night, item.treeElev);
       } else if (item.isKodama) {
         this.renderKodamaSpirit(item.kodama, t, night, item.kElev);
+      } else if (item.isEnemy) {
+        item.enemy.render(this.ctx, t, night);
       }
+    }
+
+    // Render Collectible Loot Drops
+    if (this.enemyManager) {
+      this.enemyManager.renderLoot(this.ctx, t);
     }
   }
 
@@ -8769,7 +12726,18 @@ class Game {
       }
     }
 
-    // PASS 3: Player
+    // PASS 3: Cloud Enemies & Player
+    if (this.enemyManager) {
+      const cloudEnemies = this.enemyManager.getActiveEnemies();
+      for (const enemy of cloudEnemies) {
+        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
+            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+          enemy.render(this.ctx, t, 0.4);
+        }
+      }
+      this.enemyManager.renderLoot(this.ctx, t);
+    }
+
     this.player.render(this.ctx, this.spriteManager, t, 0.4);
 
     // Combat layer: flying arrows, slashes, hit effects, floating texts
@@ -9188,7 +13156,18 @@ class Game {
       }
     }
 
-    // PASS 3: Player
+    // PASS 3: Cave Enemies & Player
+    if (this.enemyManager) {
+      const caveEnemies = this.enemyManager.getActiveEnemies();
+      for (const enemy of caveEnemies) {
+        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
+            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+          enemy.render(this.ctx, t, 1.0);
+        }
+      }
+      this.enemyManager.renderLoot(this.ctx, t);
+    }
+
     this.player.render(this.ctx, this.spriteManager, t, 1.0);
 
     // Combat layer: flying arrows, slashes, hit effects, floating texts

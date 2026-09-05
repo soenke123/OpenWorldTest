@@ -1,26 +1,27 @@
 import fs from 'fs';
 import path from 'path';
 
-const order = [
-  'constants.js',
-  'noise.js',
-  'sprites.js',
-  'caveMap.js',
-  'cloudMap.js',
-  'map.js',
-  'player.js',
-  'camera.js',
-  'minimap.js',
-  'touchControls.js',
-  'combat.js',
-  'game.js'
+const files = [
+  'js/constants.js',
+  'js/noise.js',
+  'bestiary.js',
+  'js/sprites.js',
+  'js/caveMap.js',
+  'js/cloudMap.js',
+  'js/map.js',
+  'js/enemies.js',
+  'js/player.js',
+  'js/camera.js',
+  'js/minimap.js',
+  'js/touchControls.js',
+  'js/combat.js',
+  'js/game.js'
 ];
 
 let bundleCode = '(function() {\n';
 
-for (const file of order) {
-  const filePath = path.join('js', file);
-  let content = fs.readFileSync(filePath, 'utf8');
+for (const file of files) {
+  let content = fs.readFileSync(file, 'utf8');
 
   // Strip imports and exports
   content = content.replace(/import\s+.*?from\s+['"].*?['"];?\r?\n?/g, '');
