@@ -131,6 +131,8 @@ export class MagicManager {
     this.teleportModal = getElement('teleport-map-modal');
     this.teleportCanvas = getElement('teleportMapCanvas');
     this.btnTeleportClose = getElement('btn-teleport-map-close');
+    this.btnTeleportConfirm = getElement('btn-teleport-confirm');
+    this.selectedTeleportTile = null;
 
     this.initEvents();
   }
@@ -275,55 +277,48 @@ export class MagicManager {
       });
     }
 
+    // Teleport Confirm Button
+    this.btnTeleportConfirm = getElement('btn-teleport-confirm');
+    if (this.btnTeleportConfirm) {
+      const handleConfirm = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+        this.confirmTeleport();
+      };
+      this.btnTeleportConfirm.addEventListener('click', handleConfirm);
+      this.btnTeleportConfirm.addEventListener('touchstart', handleConfirm, { passive: false });
+    }
+
     if (this.teleportCanvas) {
-      const handleMouseMove = (e) => {
+      const handleCanvasInput = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+        const touch = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+        this.selectTeleportTarget(touch.clientX, touch.clientY);
+      };
+
+      this.teleportCanvas.addEventListener('click', handleCanvasInput);
+      this.teleportCanvas.addEventListener('touchstart', handleCanvasInput, { passive: false });
+
+      const wrap = document.querySelector('.teleport-canvas-wrap');
+      if (wrap) {
+        wrap.addEventListener('click', (e) => {
+          if (e.target === wrap) handleCanvasInput(e);
+        });
+        wrap.addEventListener('touchstart', (e) => {
+          if (e.target === wrap) handleCanvasInput(e);
+        }, { passive: false });
+      }
+
+      this.teleportCanvas.addEventListener('mousemove', (e) => {
         if (!this.isTeleportModalOpen) return;
-        const rect = this.teleportCanvas.getBoundingClientRect();
-        const map = this.game?.map;
-        if (!map) return;
-
-        const mapW = map.width || MAP_WIDTH;
-        const mapH = map.height || MAP_HEIGHT;
-
-        const clickX = ((e.clientX - rect.left) / rect.width) * this.teleportCanvas.width;
-        const clickY = ((e.clientY - rect.top) / rect.height) * this.teleportCanvas.height;
-
-        const scaleX = this.teleportCanvas.width / mapW;
-        const scaleY = this.teleportCanvas.height / mapH;
-
-        const tx = Math.floor(clickX / scaleX);
-        const ty = Math.floor(clickY / scaleY);
-
-        if (tx >= 0 && tx < mapW && ty >= 0 && ty < mapH) {
-          const isWalkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
-          const isExplored = !map.explored || (map.explored[ty] && map.explored[ty][tx]);
-          this.teleportHoverTile = { tx, ty, valid: Boolean(isWalkable && isExplored) };
-
-          const coordsEl = getElement('teleport-coords-display');
-          if (coordsEl) {
-            coordsEl.textContent = `Ziel: X: ${tx}, Y: ${ty} ${isWalkable && isExplored ? '✅ Begehbar' : '❌ Gesperrt / Dunkel'}`;
-            coordsEl.style.color = isWalkable && isExplored ? '#a855f7' : '#ef4444';
+        if (!this.selectedTeleportTile) {
+          const coords = this.getCanvasCoords(e.clientX, e.clientY);
+          if (coords) {
+            this.teleportHoverTile = { tx: coords.tx, ty: coords.ty, valid: true };
           }
-          this.renderTeleportMap();
         }
-      };
-
-      this.teleportCanvas.addEventListener('mousemove', handleMouseMove);
-
-      const handleClick = (e) => {
-        e.stopPropagation();
-        if (e.cancelable) e.preventDefault();
-        this.handleTeleportClick(e.clientX, e.clientY);
-      };
-      this.teleportCanvas.addEventListener('click', handleClick);
-
-      this.teleportCanvas.addEventListener('touchstart', (e) => {
-        e.stopPropagation();
-        if (e.cancelable) e.preventDefault();
-        if (e.touches && e.touches[0]) {
-          this.handleTeleportClick(e.touches[0].clientX, e.touches[0].clientY);
-        }
-      }, { passive: false });
+      });
     }
 
     // Dev Quick-Equip buttons
@@ -1146,7 +1141,18 @@ export class MagicManager {
     const modal = getElement('teleport-map-modal');
     if (!modal) return;
     this.isTeleportModalOpen = true;
+    this.selectedTeleportTile = null;
+    this.teleportHoverTile = null;
     modal.classList.remove('hidden');
+
+    const confirmBtn = getElement('btn-teleport-confirm');
+    if (confirmBtn) confirmBtn.classList.add('hidden');
+
+    const coordsEl = getElement('teleport-coords-display');
+    if (coordsEl) {
+      coordsEl.textContent = 'Tippe Zielort an';
+      coordsEl.style.color = '#c084fc';
+    }
 
     if (this.game?.minimap) {
       this.game.minimap.renderStaticBackground();
@@ -1168,11 +1174,148 @@ export class MagicManager {
     const modal = getElement('teleport-map-modal');
     if (modal) modal.classList.add('hidden');
     this.isTeleportModalOpen = false;
+    this.selectedTeleportTile = null;
     this.teleportHoverTile = null;
     if (this.teleportAnimFrame && typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(this.teleportAnimFrame);
       this.teleportAnimFrame = null;
     }
+  }
+
+  getCanvasCoords(clientX, clientY) {
+    const canvas = this.teleportCanvas || getElement('teleportMapCanvas');
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+
+    const relX = clientX - rect.left;
+    const relY = clientY - rect.top;
+
+    const normX = Math.max(0, Math.min(1, relX / rect.width));
+    const normY = Math.max(0, Math.min(1, relY / rect.height));
+
+    const map = this.game?.map;
+    const mapW = map?.width || MAP_WIDTH;
+    const mapH = map?.height || MAP_HEIGHT;
+
+    const tx = Math.min(mapW - 1, Math.max(0, Math.floor(normX * mapW)));
+    const ty = Math.min(mapH - 1, Math.max(0, Math.floor(normY * mapH)));
+
+    return { tx, ty, normX, normY };
+  }
+
+  selectTeleportTarget(clientX, clientY) {
+    const coords = this.getCanvasCoords(clientX, clientY);
+    if (!coords) return;
+    const map = this.game?.map;
+    if (!map) return;
+    const mapW = map.width || MAP_WIDTH;
+    const mapH = map.height || MAP_HEIGHT;
+
+    const rawTx = coords.tx;
+    const rawTy = coords.ty;
+
+    const isValidTile = (tx, ty) => {
+      if (tx < 0 || tx >= mapW || ty < 0 || ty >= mapH) return false;
+      const walkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
+      const explored = !map.explored || (map.explored[ty] && map.explored[ty][tx]);
+      return Boolean(walkable && explored);
+    };
+
+    let targetTx = rawTx;
+    let targetTy = rawTy;
+
+    // Sanfte Suche nach begehbaren Nachbar-Kacheln (Radius 1-6) für Fingerberührung
+    if (!isValidTile(targetTx, targetTy)) {
+      let found = false;
+      for (let r = 1; r <= 6 && !found; r++) {
+        for (let dy = -r; dy <= r && !found; dy++) {
+          for (let dx = -r; dx <= r && !found; dx++) {
+            if (Math.abs(dx) === r || Math.abs(dy) === r) {
+              const nx = rawTx + dx;
+              const ny = rawTy + dy;
+              if (isValidTile(nx, ny)) {
+                targetTx = nx;
+                targetTy = ny;
+                found = true;
+              }
+            }
+          }
+        }
+      }
+
+      if (!found) {
+        const isExplored = !map.explored || (map.explored[rawTy] && map.explored[rawTy][rawTx]);
+        const coordsEl = getElement('teleport-coords-display');
+        if (coordsEl) {
+          coordsEl.textContent = !isExplored ? '❌ Unerforschter Ort' : '❌ Nicht begehbar';
+          coordsEl.style.color = '#ef4444';
+        }
+        const confirmBtn = getElement('btn-teleport-confirm');
+        if (confirmBtn) confirmBtn.classList.add('hidden');
+        this.selectedTeleportTile = null;
+        this.renderTeleportMap();
+        return;
+      }
+    }
+
+    // Zielort erfolgreich ausgewählt
+    const targetWorldX = targetTx * TILE_SIZE + TILE_SIZE / 2;
+    const targetWorldY = targetTy * TILE_SIZE + TILE_SIZE / 2;
+    this.selectedTeleportTile = {
+      tx: targetTx,
+      ty: targetTy,
+      worldX: targetWorldX,
+      worldY: targetWorldY
+    };
+
+    const coordsEl = getElement('teleport-coords-display');
+    if (coordsEl) {
+      coordsEl.textContent = `📍 Ziel: X: ${targetTx}, Y: ${targetTy} ✅`;
+      coordsEl.style.color = '#c084fc';
+    }
+
+    const confirmBtn = getElement('btn-teleport-confirm');
+    if (confirmBtn) {
+      confirmBtn.classList.remove('hidden');
+    }
+
+    this.renderTeleportMap();
+  }
+
+  confirmTeleport() {
+    if (!this.selectedTeleportTile) return;
+    const { worldX, worldY } = this.selectedTeleportTile;
+    const player = this.game?.player;
+    if (!player) return;
+
+    const combat = this.game?.combat;
+    if (combat) {
+      combat.spawnVoidTeleportVFX(player.x, player.y, false);
+    }
+
+    player.x = worldX;
+    player.y = worldY;
+    if (this.game?.camera) {
+      this.game.camera.centerOn(worldX, worldY);
+    }
+
+    if (combat) {
+      combat.spawnVoidTeleportVFX(player.x, player.y, true);
+      combat.addFloatingText('🌌 LEEREN-SPRUNG!', player.x, player.y - 28, '#c084fc', 1.3);
+    }
+
+    if (player.artifact) {
+      player.artifact.charges--;
+      player.artifact.cooldownTimer = player.artifact.cooldownMax || 1.0;
+    }
+
+    this.closeTeleportModal();
+    this.updateHUD();
+  }
+
+  handleTeleportClick(clientX, clientY) {
+    this.selectTeleportTarget(clientX, clientY);
   }
 
   renderTeleportMap() {
@@ -1305,126 +1448,43 @@ export class MagicManager {
       ctx.restore();
     }
 
-    // 6. Ausgewählte Ziel-Schablone / Hover Reticle
-    if (this.teleportHoverTile) {
-      const { tx, ty, valid } = this.teleportHoverTile;
+    // 6. Ausgewähltes Ziel (Pulsierendes violettes Leeren-Signal mit Fadenkreuz & Halo)
+    const target = this.selectedTeleportTile || this.teleportHoverTile;
+    if (target) {
+      const { tx, ty } = target;
       const hx = (tx + 0.5) * scaleX;
       const hy = (ty + 0.5) * scaleY;
+      const pulseR = 9 + Math.sin(time * 6) * 3;
 
       ctx.save();
-      ctx.strokeStyle = valid ? '#c084fc' : '#ef4444';
-      ctx.lineWidth = 2;
-
+      ctx.strokeStyle = '#c084fc';
+      ctx.lineWidth = 2.2;
       ctx.beginPath();
-      ctx.arc(hx, hy, 11, 0, Math.PI * 2);
+      ctx.arc(hx, hy, pulseR, 0, Math.PI * 2);
       ctx.stroke();
 
+      // Fadenkreuz
       ctx.beginPath();
-      ctx.moveTo(hx - 15, hy); ctx.lineTo(hx - 6, hy);
-      ctx.moveTo(hx + 6, hy); ctx.lineTo(hx + 15, hy);
-      ctx.moveTo(hx, hy - 15); ctx.lineTo(hx, hy - 6);
-      ctx.moveTo(hx, hy + 6); ctx.lineTo(hx, hy + 15);
+      ctx.moveTo(hx - pulseR - 4, hy); ctx.lineTo(hx - pulseR + 3, hy);
+      ctx.moveTo(hx + pulseR - 3, hy); ctx.lineTo(hx + pulseR + 4, hy);
+      ctx.moveTo(hx, hy - pulseR - 4); ctx.lineTo(hx, hy - pulseR + 3);
+      ctx.moveTo(hx, hy + pulseR - 3); ctx.lineTo(hx, hy + pulseR + 4);
       ctx.stroke();
 
-      ctx.fillStyle = valid ? 'rgba(168, 85, 247, 0.3)' : 'rgba(239, 68, 68, 0.3)';
+      // Leuchtender Kernpunkt
+      ctx.fillStyle = '#f3e8ff';
       ctx.beginPath();
-      ctx.arc(hx, hy, 11, 0, Math.PI * 2);
+      ctx.arc(hx, hy, 3.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Transparenter Halo
+      ctx.fillStyle = 'rgba(168, 85, 247, 0.35)';
+      ctx.beginPath();
+      ctx.arc(hx, hy, pulseR, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
     }
-  }
-
-  handleTeleportClick(clientX, clientY) {
-    const canvas = this.teleportCanvas || getElement('teleportMapCanvas');
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const map = this.game?.map;
-    const player = this.game?.player;
-    if (!map || !player) return;
-
-    const mapW = map.width || MAP_WIDTH;
-    const mapH = map.height || MAP_HEIGHT;
-
-    const clickX = ((clientX - rect.left) / rect.width) * canvas.width;
-    const clickY = ((clientY - rect.top) / rect.height) * canvas.height;
-
-    const scaleX = canvas.width / mapW;
-    const scaleY = canvas.height / mapH;
-
-    const rawTx = Math.floor(clickX / scaleX);
-    const rawTy = Math.floor(clickY / scaleY);
-
-    if (rawTx < 0 || rawTx >= mapW || rawTy < 0 || rawTy >= mapH) return;
-
-    const isValidTile = (tx, ty) => {
-      if (tx < 0 || tx >= mapW || ty < 0 || ty >= mapH) return false;
-      const walkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
-      const explored = !map.explored || (map.explored[ty] && map.explored[ty][tx]);
-      return Boolean(walkable && explored);
-    };
-
-    let targetTx = rawTx;
-    let targetTy = rawTy;
-
-    // Sanfte Suche nach begehbaren Nachbar-Kacheln (Radius 1-5) für einfache Touch-Bedienung mit dem Finger
-    if (!isValidTile(targetTx, targetTy)) {
-      let found = false;
-      for (let r = 1; r <= 5 && !found; r++) {
-        for (let dy = -r; dy <= r && !found; dy++) {
-          for (let dx = -r; dx <= r && !found; dx++) {
-            if (Math.abs(dx) === r || Math.abs(dy) === r) {
-              const nx = rawTx + dx;
-              const ny = rawTy + dy;
-              if (isValidTile(nx, ny)) {
-                targetTx = nx;
-                targetTy = ny;
-                found = true;
-              }
-            }
-          }
-        }
-      }
-
-      if (!found) {
-        const tooltip = getElement('teleport-target-tooltip');
-        if (tooltip) {
-          const isExplored = !map.explored || (map.explored[rawTy] && map.explored[rawTy][rawTx]);
-          tooltip.textContent = !isExplored ? '❌ Unerforschtes Gebiet!' : '❌ Nicht erreichbar!';
-          tooltip.classList.remove('hidden');
-          setTimeout(() => tooltip?.classList.add('hidden'), 1200);
-        }
-        return;
-      }
-    }
-
-    // Sofortige Ausführung des Leeren-Teleports mit Animation
-    const targetWorldX = targetTx * TILE_SIZE + TILE_SIZE / 2;
-    const targetWorldY = targetTy * TILE_SIZE + TILE_SIZE / 2;
-
-    const combat = this.game?.combat;
-    if (combat) {
-      combat.spawnVoidTeleportVFX(player.x, player.y, false);
-    }
-
-    player.x = targetWorldX;
-    player.y = targetWorldY;
-    if (this.game?.camera) {
-      this.game.camera.centerOn(targetWorldX, targetWorldY);
-    }
-
-    if (combat) {
-      combat.spawnVoidTeleportVFX(player.x, player.y, true);
-      combat.addFloatingText('🌌 LEEREN-SPRUNG!', player.x, player.y - 28, '#c084fc', 1.3);
-    }
-
-    if (player.artifact) {
-      player.artifact.charges--;
-      player.artifact.cooldownTimer = player.artifact.cooldownMax || 1.0;
-    }
-
-    this.closeTeleportModal();
-    this.updateHUD();
   }
 
   // ---------------------------------------------------------------------------

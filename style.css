@@ -2417,17 +2417,17 @@ canvas#gameCanvas {
 
 #teleportMapCanvas {
   display: block;
-  width: 100%;
-  max-width: 100%;
+  width: auto;
   height: auto;
-  max-height: calc(94vh - 105px);
-  max-height: calc(94dvh - 105px);
+  max-width: 100%;
+  max-height: calc(94vh - 120px);
+  max-height: calc(94dvh - 120px);
   aspect-ratio: 4 / 3;
-  object-fit: contain;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(168, 85, 247, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), 0 0 0 1.5px rgba(168, 85, 247, 0.35);
+  cursor: crosshair;
 }
 
 .teleport-tooltip {
@@ -2451,25 +2451,68 @@ canvas#gameCanvas {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 14px;
-  background: rgba(0, 0, 0, 0.45);
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 14px;
+  background: rgba(10, 12, 20, 0.7);
+  border-top: 1px solid rgba(168, 85, 247, 0.25);
   flex-shrink: 0;
+  gap: 12px;
+  min-height: 48px;
+  box-sizing: border-box;
+}
+
+.teleport-footer-left {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  min-width: 0;
+}
+
+.teleport-footer-right {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .teleport-coords {
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: #c084fc;
   font-family: monospace;
   white-space: nowrap;
 }
 
-.teleport-hint {
-  font-size: 0.72rem;
-  color: #94a3b8;
-  text-align: right;
+.btn-teleport-action {
+  position: relative;
+  background: linear-gradient(135deg, #9333ea, #7c3aed);
+  border: 1.5px solid rgba(216, 180, 254, 0.6);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 800;
+  padding: 7px 18px;
+  border-radius: 20px;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(147, 51, 234, 0.5), 0 0 12px rgba(168, 85, 247, 0.35);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.18s ease;
+  user-select: none;
+  animation: pulseGlow 1.8s infinite;
+}
+
+.btn-teleport-action:hover {
+  background: linear-gradient(135deg, #a855f7, #9333ea);
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 6px 18px rgba(168, 85, 247, 0.7), 0 0 16px rgba(216, 180, 254, 0.5);
+}
+
+.btn-teleport-action:active {
+  transform: translateY(1px) scale(0.97);
+}
+
+.btn-teleport-action.hidden {
+  display: none !important;
 }
 
 @media (max-width: 640px), (max-height: 540px) {
@@ -2492,17 +2535,19 @@ canvas#gameCanvas {
     font-size: 0.68rem;
   }
   .teleport-map-footer {
-    padding: 4px 10px;
+    padding: 5px 10px;
+    min-height: 44px;
   }
   .teleport-coords {
-    font-size: 0.74rem;
+    font-size: 0.76rem;
   }
-  .teleport-hint {
-    font-size: 0.66rem;
+  .btn-teleport-action {
+    font-size: 0.84rem;
+    padding: 6px 14px;
   }
   #teleportMapCanvas {
-    max-height: calc(96vh - 85px);
-    max-height: calc(96dvh - 85px);
+    max-height: calc(96vh - 95px);
+    max-height: calc(96dvh - 95px);
   }
 }
 

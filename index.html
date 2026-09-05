@@ -358,7 +358,7 @@
             <span class="teleport-map-icon">🌌</span>
             <div>
               <h3 class="teleport-map-title">Leeren-Teleportation</h3>
-              <p class="teleport-map-sub">Klicke einen Zielort auf der aufgedeckten Karte</p>
+              <p class="teleport-map-sub">Tippe einen Zielort auf der Karte an</p>
             </div>
           </div>
           <button id="btn-teleport-map-close" class="teleport-map-close-btn" title="Abbrechen (Esc)">✕</button>
@@ -368,8 +368,14 @@
           <div id="teleport-target-tooltip" class="teleport-tooltip hidden">Klick zum Teleportieren</div>
         </div>
         <div class="teleport-map-footer">
-          <span id="teleport-coords-display" class="teleport-coords">Ziel: ---</span>
-          <span class="teleport-hint">Nur aufgedeckte &amp; begehbare Kacheln erlaubt</span>
+          <div class="teleport-footer-left">
+            <span id="teleport-coords-display" class="teleport-coords">Tippe Zielort an</span>
+          </div>
+          <div class="teleport-footer-right">
+            <button id="btn-teleport-confirm" class="btn-teleport-action hidden" title="Dorthin teleportieren">
+              <span class="btn-teleport-text">🌌 Teleport</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
