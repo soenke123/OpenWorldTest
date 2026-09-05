@@ -98,6 +98,15 @@ canvas#gameCanvas {
   color: #38bdf8;
 }
 
+/* Top Left Group: Dev Tools & Compact Player Status */
+#top-left-group {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: auto;
+}
+
 /* Dev Tools Dropdown Container */
 #dev-tools-wrapper {
   position: relative;
@@ -105,6 +114,84 @@ canvas#gameCanvas {
   flex-direction: column;
   align-items: flex-start;
   pointer-events: auto;
+}
+
+/* Compact Player Health & XP HUD Pill */
+.player-compact-hud {
+  background: rgba(18, 22, 34, 0.90);
+  border: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-radius: 14px;
+  padding: 4px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  min-width: 135px;
+  user-select: none;
+  pointer-events: auto;
+  transition: all 0.2s ease;
+}
+
+.player-compact-hud:hover {
+  border-color: rgba(74, 222, 128, 0.4);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+}
+
+.compact-stat-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.compact-icon {
+  font-size: 0.76rem;
+  line-height: 1;
+}
+
+.compact-level-badge {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  padding: 1px 4px;
+  border-radius: 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.compact-bar-track {
+  flex: 1;
+  height: 5.5px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  overflow: hidden;
+  min-width: 48px;
+}
+
+.compact-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.25s ease-out, background 0.3s ease;
+}
+
+.hp-bar-fill {
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+
+.xp-bar-fill {
+  background: linear-gradient(90deg, #059669, #34d399);
+}
+
+.compact-stat-text {
+  font-size: 0.66rem;
+  color: #cbd5e1;
+  min-width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 #hud.dev-tools-dropdown {

@@ -33,6 +33,11 @@ export class Player {
     this.speedSlowTimer = 0;
     this.speedSlowFactor = 1.0;
 
+    // Level & XP Progression
+    this.level = 1;
+    this.xp = 0;
+    this.xpToNext = 50;
+
     this.particles = [];
 
     // Combat & Ability State (Dash, Melee, Shield, Ranged)
@@ -114,6 +119,37 @@ export class Player {
       this.y = this.spawnY;
       this.elevation = 0;
       this.visualElevation = 0;
+    }
+  }
+
+  addXp(amount) {
+    if (amount <= 0) return;
+    this.xp += amount;
+
+    let leveledUp = false;
+    while (this.xp >= this.xpToNext) {
+      this.xp -= this.xpToNext;
+      this.level++;
+      this.xpToNext = Math.round(50 * Math.pow(1.35, this.level - 1));
+      leveledUp = true;
+    }
+
+    if (leveledUp && this.game && this.game.combat) {
+      this.game.combat.addFloatingText(`🎉 LEVEL UP! Lv. ${this.level}`, this.x, this.y - 28, '#facc15', 1.0);
+      for (let i = 0; i < 22; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 60 + 20;
+        this.game.combat.hitSparks.push({
+          x: this.x,
+          y: this.y - 10,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 20,
+          color: Math.random() > 0.5 ? '#facc15' : '#4ade80',
+          size: Math.random() * 2.5 + 1.5,
+          life: 0.5,
+          maxLife: 0.5
+        });
+      }
     }
   }
 
@@ -1664,6 +1700,24 @@ export class Player {
       ctx.beginPath();
       ctx.ellipse(ghost.x, ghost.y - ghost.elevY - 10, 7, 11, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.restore();
+    }
+
+    // 4f. Compact Overhead Health Bar (when damaged)
+    if (this.hp < this.maxHp && this.hp > 0 && !this.isDead) {
+      const barW = 24;
+      const barH = 3.5;
+      const barX = px - barW / 2;
+      const barY = py - 26 + bob;
+      const hpPct = Math.max(0, this.hp / this.maxHp);
+
+      ctx.save();
+      // Paper border & dark drop shadow
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+      // Health Fill (dynamic green -> yellow -> red)
+      ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
+      ctx.fillRect(barX, barY, barW * hpPct, barH);
       ctx.restore();
     }
 

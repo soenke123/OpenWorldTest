@@ -12,12 +12,14 @@
 
     <!-- Top Navigation & Controls Bar -->
     <div id="top-bar">
-      <!-- Dev Tools Wrapper (Collapsible) -->
-      <div id="dev-tools-wrapper">
-        <button id="dev-tools-toggle" class="top-nav-btn dev-toggle-btn" title="Dev Tools ein-/ausklappen">
-          <span>⚙️ Dev Tools</span>
-          <span id="dev-toggle-icon" class="toggle-arrow">▼</span>
-        </button>
+      <!-- Left Controls: Dev Tools & Compact Player Status -->
+      <div id="top-left-group">
+        <!-- Dev Tools Wrapper (Collapsible) -->
+        <div id="dev-tools-wrapper">
+          <button id="dev-tools-toggle" class="top-nav-btn dev-toggle-btn" title="Dev Tools ein-/ausklappen">
+            <span>⚙️ Dev Tools</span>
+            <span id="dev-toggle-icon" class="toggle-arrow">▼</span>
+          </button>
 
         <div id="hud" class="dev-tools-dropdown">
           <div class="hud-panel dev-quick-actions">
@@ -114,6 +116,25 @@
           </a>
         </div>
       </div>
+
+      <!-- Always-Visible Compact Player Status Pill -->
+      <div id="player-compact-hud" class="player-compact-hud" title="Spielerstatus (Leben & EP)">
+        <div class="compact-stat-row hp-row">
+          <span class="compact-icon">❤️</span>
+          <div class="compact-bar-track">
+            <div id="compact-hp-fill" class="compact-bar-fill hp-bar-fill" style="width: 100%;"></div>
+          </div>
+          <span id="compact-hp-text" class="compact-stat-text">100 / 100</span>
+        </div>
+        <div class="compact-stat-row xp-row">
+          <span id="compact-level-badge" class="compact-level-badge">Lv. 1</span>
+          <div class="compact-bar-track">
+            <div id="compact-xp-fill" class="compact-bar-fill xp-bar-fill" style="width: 0%;"></div>
+          </div>
+          <span id="compact-xp-text" class="compact-stat-text">0 / 50</span>
+        </div>
+      </div>
+    </div>
 
       <!-- Center Controls: Vollbild & Showroom -->
       <div id="top-center-controls">

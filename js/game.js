@@ -58,6 +58,12 @@ class Game {
 
     // HUD Elements
     this.hpStatEl = document.getElementById('hp-stat');
+    this.compactHpFillEl = document.getElementById('compact-hp-fill');
+    this.compactHpTextEl = document.getElementById('compact-hp-text');
+    this.compactLevelBadgeEl = document.getElementById('compact-level-badge');
+    this.compactXpFillEl = document.getElementById('compact-xp-fill');
+    this.compactXpTextEl = document.getElementById('compact-xp-text');
+
     this.biomeNameEl = document.getElementById('biome-name');
     this.speedStatEl = document.getElementById('speed-stat');
     this.deathStatEl = document.getElementById('death-stat');
@@ -738,13 +744,42 @@ class Game {
       }
     }
 
-    // 3. Update Player HP display
-    if (this.hpStatEl && this.player) {
+    // 3. Update Player HP display (Dev Tools & Compact Status Pill)
+    if (this.player) {
       const curHp = Math.max(0, Math.round(this.player.hp));
       const maxHp = this.player.maxHp || 100;
-      this.hpStatEl.textContent = `${curHp} / ${maxHp}`;
-      const hpPct = curHp / maxHp;
-      this.hpStatEl.style.color = hpPct > 0.5 ? '#4ade80' : (hpPct > 0.25 ? '#facc15' : '#ef4444');
+      const hpPct = Math.max(0, Math.min(1.0, curHp / maxHp));
+
+      if (this.hpStatEl) {
+        this.hpStatEl.textContent = `${curHp} / ${maxHp}`;
+        this.hpStatEl.style.color = hpPct > 0.5 ? '#4ade80' : (hpPct > 0.25 ? '#facc15' : '#ef4444');
+      }
+
+      if (this.compactHpFillEl) {
+        this.compactHpFillEl.style.width = `${Math.round(hpPct * 100)}%`;
+        this.compactHpFillEl.style.background = hpPct > 0.5
+          ? 'linear-gradient(90deg, #22c55e, #4ade80)'
+          : (hpPct > 0.25 ? 'linear-gradient(90deg, #d97706, #facc15)' : 'linear-gradient(90deg, #dc2626, #f87171)');
+      }
+      if (this.compactHpTextEl) {
+        this.compactHpTextEl.textContent = `${curHp} / ${maxHp}`;
+      }
+
+      // XP & Level Progression
+      const curXp = Math.max(0, Math.round(this.player.xp || 0));
+      const xpToNext = this.player.xpToNext || 50;
+      const curLevel = this.player.level || 1;
+      const xpPct = Math.max(0, Math.min(1.0, curXp / xpToNext));
+
+      if (this.compactLevelBadgeEl) {
+        this.compactLevelBadgeEl.textContent = `Lv. ${curLevel}`;
+      }
+      if (this.compactXpFillEl) {
+        this.compactXpFillEl.style.width = `${Math.round(xpPct * 100)}%`;
+      }
+      if (this.compactXpTextEl) {
+        this.compactXpTextEl.textContent = `${curXp} / ${xpToNext}`;
+      }
     }
   }
 

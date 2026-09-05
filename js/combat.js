@@ -1,4 +1,4 @@
-import { TILE_SIZE, COMBAT_CONFIG, OBJECTS, TILES } from './constants.js';
+import { TILE_SIZE, COMBAT_CONFIG, OBJECTS, TILES, OBJ_PROPS, TILE_PROPS } from './constants.js';
 
 export class CombatManager {
   constructor(game) {
@@ -28,6 +28,83 @@ export class CombatManager {
       { id: 2, x: 25 * TILE_SIZE + 8, y: 45 * TILE_SIZE + 8, startX: 25 * TILE_SIZE + 8, startY: 45 * TILE_SIZE + 8, vx: 0, vy: 0, wobble: 0, wobbleTimer: 0, hitTimer: 0, hp: 100 },
       { id: 3, x: 26 * TILE_SIZE + 8, y: 47 * TILE_SIZE + 8, startX: 26 * TILE_SIZE + 8, startY: 47 * TILE_SIZE + 8, vx: 0, vy: 0, wobble: 0, wobbleTimer: 0, hitTimer: 0, hp: 100 }
     ];
+  }
+
+  isWaterOrAbyssTile(tile) {
+    return tile === TILES.WATER ||
+           tile === TILES.SWAMP_WATER ||
+           tile === TILES.CAVE_WATER ||
+           tile === TILES.VOID_LAKE ||
+           tile === TILES.SKY_ABYSS;
+  }
+
+  isArrowObstacle(map, tX, tY) {
+    if (!map || !map.isValid || !map.isValid(tX, tY)) return true;
+
+    // Check solid objects (rocks, tree trunks, cacti, stalagmites, etc.)
+    const obj = map.getObjectTile ? map.getObjectTile(tX, tY) : (map.objects ? map.objects[tY]?.[tX] : 0);
+    const objProps = OBJ_PROPS[obj];
+    if (objProps && objProps.solid) return true;
+
+    // Check ground solidity EXCEPT for water and abyss (arrows fly freely over liquids!)
+    const ground = map.getGroundTile ? map.getGroundTile(tX, tY) : (map.ground ? map.ground[tY]?.[tX] : 0);
+    if (this.isWaterOrAbyssTile(ground)) {
+      return false;
+    }
+
+    const groundProps = TILE_PROPS[ground];
+    if (groundProps && groundProps.solid) return true;
+
+    return false;
+  }
+
+  createWaterSplash(x, y, tile) {
+    let dropColor1 = '#38bdf8';
+    let dropColor2 = '#e0f2fe';
+    let rippleColor = 'rgba(56, 189, 248, 0.6)';
+
+    if (tile === TILES.SWAMP_WATER) {
+      dropColor1 = '#84cc16';
+      dropColor2 = '#4d7c0f';
+      rippleColor = 'rgba(101, 163, 13, 0.6)';
+    } else if (tile === TILES.VOID_LAKE) {
+      dropColor1 = '#c084fc';
+      dropColor2 = '#6b21a8';
+      rippleColor = 'rgba(168, 85, 247, 0.6)';
+    }
+
+    // Droplets jumping into the air
+    for (let i = 0; i < 12; i++) {
+      const spAngle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 35 + 15;
+      this.hitSparks.push({
+        x,
+        y,
+        vx: Math.cos(spAngle) * speed,
+        vy: Math.sin(spAngle) * speed * 0.5 - (Math.random() * 25 + 15),
+        color: Math.random() > 0.4 ? dropColor1 : dropColor2,
+        size: Math.random() * 2.2 + 1.2,
+        life: 0.35,
+        maxLife: 0.35
+      });
+    }
+
+    // Ripples
+    for (let r = 0; r < 3; r++) {
+      const rAngle = (r / 3) * Math.PI * 2;
+      this.hitSparks.push({
+        x: x + Math.cos(rAngle) * 3,
+        y: y + Math.sin(rAngle) * 2,
+        vx: Math.cos(rAngle) * 12,
+        vy: Math.sin(rAngle) * 6,
+        color: rippleColor,
+        size: 2.5,
+        life: 0.4,
+        maxLife: 0.4
+      });
+    }
+
+    this.addFloatingText('💧 Platsch!', x, y - 10, dropColor1, 0.55);
   }
 
   fireArrow(startX, startY, dirX, dirY, isCharged = false) {
@@ -399,34 +476,42 @@ export class CombatManager {
         }
       }
 
-      // Check solid wall / obstacle collision
+      // Check solid wall / obstacle collision (arrows fly freely over water & abyss!)
       const tX = Math.floor(arrow.x / TILE_SIZE);
       const tY = Math.floor(arrow.y / TILE_SIZE);
-      const hitWall = map.isSolid ? map.isSolid(tX, tY) : false;
+      const hitWall = this.isArrowObstacle(map, tX, tY);
 
       if (hitDummy || hitEnemy || hitWall || arrow.distTraveled >= arrow.maxRange) {
-        // Arrow sticks in the ground!
-        this.stuckArrows.push({
-          x: arrow.x,
-          y: arrow.y,
-          angle: arrow.angle,
-          quiverTimer: 0.35,
-          canCollect: true
-        });
+        const curTile = map.getGroundTile ? map.getGroundTile(tX, tY) : (map.ground ? map.ground[tY]?.[tX] : 0);
+        const inWater = this.isWaterOrAbyssTile(curTile) && !hitEnemy && !hitDummy && !hitWall;
 
-        // Dust / impact puff
-        for (let s = 0; s < 6; s++) {
-          const spAngle = Math.random() * Math.PI * 2;
-          this.hitSparks.push({
+        if (inWater) {
+          // Arrow lands in water/abyss: splashes and disappears!
+          this.createWaterSplash(arrow.x, arrow.y, curTile);
+        } else {
+          // Arrow sticks in the ground or obstacle!
+          this.stuckArrows.push({
             x: arrow.x,
             y: arrow.y,
-            vx: Math.cos(spAngle) * (Math.random() * 25 + 10),
-            vy: Math.sin(spAngle) * (Math.random() * 25 + 10),
-            color: 'rgba(212, 212, 216, 0.65)',
-            size: Math.random() * 2 + 1,
-            life: 0.22,
-            maxLife: 0.22
+            angle: arrow.angle,
+            quiverTimer: 0.35,
+            canCollect: true
           });
+
+          // Dust / impact puff
+          for (let s = 0; s < 6; s++) {
+            const spAngle = Math.random() * Math.PI * 2;
+            this.hitSparks.push({
+              x: arrow.x,
+              y: arrow.y,
+              vx: Math.cos(spAngle) * (Math.random() * 25 + 10),
+              vy: Math.sin(spAngle) * (Math.random() * 25 + 10),
+              color: 'rgba(212, 212, 216, 0.65)',
+              size: Math.random() * 2 + 1,
+              life: 0.22,
+              maxLife: 0.22
+            });
+          }
         }
 
         this.flyingArrows.splice(i, 1);
@@ -569,10 +654,10 @@ export class CombatManager {
         continue;
       }
 
-      // Check wall collision or max distance
+      // Check wall / obstacle collision or max distance (projectiles pass over water)
       const tX = Math.floor(proj.x / TILE_SIZE);
       const tY = Math.floor(proj.y / TILE_SIZE);
-      const hitWall = map.isSolid ? map.isSolid(tX, tY) : false;
+      const hitWall = this.isArrowObstacle(map, tX, tY);
 
       if (hitWall || proj.distTraveled >= proj.maxDist) {
         if (proj.spawnsPuddle) {

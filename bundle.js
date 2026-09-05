@@ -868,7 +868,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Gebirge',
     badgeClass: 'badge-mountain',
     variants: ['Granit-Moos (Standard)', 'Vulkanasche (Basaltschwarz)', 'Marmorglanz (Alabaster)'],
-    stats: { hp: 120, maxHp: 120, atk: 35, spd: 'Schwerfällig', rng: '50px (Flächen-Beben)' },
+    scale: 1.6,
+    xpValue: 65,
+    stats: { hp: 380, maxHp: 380, atk: 38, spd: 'Schwerfällig', rng: '50px (Flächen-Beben)' },
     behavior: 'Uralter Steingolem, bewachsen mit Moos und Miniatur-Bonsai. Stampft im Takt der Bergadern. Rammt beide Fäuste in die Erde für verheerende Stoßwellen.',
     counter: 'Seine wuchtigen Schläge haben lange Vorbereitung. Während er ausholt, hinter ihn rollen und den moosfreien Riss an seinem Rücken attackieren.',
     lore: 'Wacht seit Jahrhunderten über zerfallene Himmelsruinen. Kleine Glühwürmchen schlafen nachts geborgen in seinen Steinfugen.',
@@ -970,7 +972,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Schnee',
     badgeClass: 'badge-ice',
     variants: ['Gletscherweiß (Standard)', 'Polar-Nacht (Arktis-Blau)', 'Kristallquarz (Türkis)'],
-    stats: { hp: 135, maxHp: 135, atk: 38, spd: 'Langsam', rng: '65px (Eis-Keule)' },
+    scale: 1.65,
+    xpValue: 75,
+    stats: { hp: 420, maxHp: 420, atk: 42, spd: 'Langsam', rng: '65px (Eis-Keule)' },
     behavior: 'Ein gemütlicher, flauschiger Schnee-Yeti mit mächtigen Eis-Widderhörnern. Schwingt eine uralte Eiskristall-Keule und beschwört sanfte Schneewirbel.',
     counter: 'Feuer- und Spreng-Angriffe schmelzen seine Schneefell-Rüstung. Im Moment seines Keulenschwungs unter seinen Beinen durchrollen.',
     lore: 'An seinem linken Horn baumelt eine alte rote Papierlaterne, die ihm ein verlorener Wanderer einst zum Dank schenkte. Das Licht erlischt niemals.',
@@ -1175,7 +1179,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Wüste',
     badgeClass: 'badge-desert',
     variants: ['Terrakotta (Standard)', 'Obsidian (Vulkansand)', 'Geisterweiß (Kalköde)'],
-    stats: { hp: 80, maxHp: 80, atk: 30, spd: 'Stationär', rng: '45px (Boden-Verschlingen)' },
+    scale: 1.55,
+    xpValue: 60,
+    stats: { hp: 340, maxHp: 340, atk: 36, spd: 'Stationär', rng: '45px (Boden-Verschlingen)' },
     behavior: 'Bricht wie eine blühende Keramik-Wüstenlotus aus dem Treibsand hervor. Erzeugt wirbelnde Sandtrichter und schnappt mit glatten Perlzähnen zu.',
     counter: 'Auf die zarten Blütenblätter am Kragen zielen, wenn sich der Schlund öffnet. Bomben direkt in seinen Sandtrichter werfen.',
     lore: 'Aus antiken Terrakotta-Scherben und goldenen Kintsugi-Adern geformt. Sammelt Tautropfen der Wüstennächte in seinem Blütenkelch.',
@@ -1456,7 +1462,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Grasland',
     badgeClass: 'badge-grass',
     variants: ['Smaragd-Tau (Standard)', 'Honig-Gelee (Wüste)', 'Frost-Träne (Schnee)'],
-    stats: { hp: 35, maxHp: 35, atk: 12, spd: 'Mittel', rng: '25px (Körper-Platscher)' },
+    scale: 0.70,
+    xpValue: 3,
+    stats: { hp: 20, maxHp: 20, atk: 8, spd: 'Mittel', rng: '25px (Körper-Platscher)' },
     behavior: 'Ein herziges, transparentes Tropfen-Wesen mit einem kleinen Eichelkern und Kleeblatt im Bauch. Hüpft fröhlich und teilt sich bei Gefahr kurz in zwei Mini-Tröpfchen.',
     counter: 'Mit einfachen Schwerthieben schnell besiegbar. Vorsicht beim Zerschlagen: Mini-Blobs hüpfen flink davon!',
     lore: 'Entsteht aus Morgentautropfen auf uralten Eichenblättern. Kitzelt sanft an den Zehen und liebt sonnige Waldlichtungen.',
@@ -1889,7 +1897,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Höhle',
     badgeClass: 'badge-cave',
     variants: ['Tiefsteinschwarz (Standard)', 'Kristallblau (Eishöhle)', 'Glühwurm-Gelb (Biolumineszenz)'],
-    stats: { hp: 45, maxHp: 45, atk: 18, spd: 'Schnell (Kletternd)', rng: '100px (Spinnennetz-Schuss)' },
+    scale: 0.72,
+    xpValue: 4,
+    stats: { hp: 24, maxHp: 24, atk: 10, spd: 'Schnell (Kletternd)', rng: '100px (Spinnennetz-Schuss)' },
     behavior: 'Ein zuckersüßes flauschiges Ruß-Spinnchen mit bunten Ringelsöckchen an den Beinen. Schwingt an einem elastischen Silberfaden und verwebt glitzernde Tautropfen.',
     counter: 'Feuer entzündet ihre Seidennetze sofort. Wenn sie sich am Faden herablässt, mit dem Schild abfangen und mit dem Schwert kontern.',
     lore: 'Ihre Netze klingen wie feine Harfensaiten, wenn der Höhlenwind hindurchweht. Höhlenforscher lauschen oft stundenlang ihrer Musik.',
@@ -2039,7 +2049,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Leere',
     badgeClass: 'badge-void',
     variants: ['Galaxie-Iris (Standard)', 'Supernova (Gold-Orange)', 'Polarlicht (Smaragdgrün)'],
-    stats: { hp: 65, maxHp: 65, atk: 26, spd: 'Schwebend Schnell', rng: '160px (Kosmischer Strahl)' },
+    scale: 1.55,
+    xpValue: 70,
+    stats: { hp: 360, maxHp: 360, atk: 40, spd: 'Schwebend Schnell', rng: '160px (Kosmischer Strahl)' },
     behavior: 'Eine ätherische Himmels-Mondqualle mit einer gläsernen Sternenglocke. In ihrem Zentrum ruht ein wohlwollendes kosmisches Auge, das Starlight-Strahlen bündelt.',
     counter: 'Vor dem Strahl schließt sich seine Glocke für eine Sekunde. Hinter eine Felsbarriere stellen und danach seine weichen Quallententakel treffen.',
     lore: 'Fiel in einer Neumondnacht aus dem Sternenmeer herab. Summt eine Melodie, die an uralte Spieluhren erinnert.',
@@ -2388,7 +2400,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Vulkan',
     badgeClass: 'badge-vulcano',
     variants: ['Feuer-Orange (Standard)', 'Blau-Plasma (Gleißend)', 'Smaragd-Flamme (Giftvulkan)'],
-    stats: { hp: 75, maxHp: 75, atk: 32, spd: 'Schnell (Pulsierend)', rng: '120px (Funken-Feuerwerk)' },
+    scale: 0.75,
+    xpValue: 4,
+    stats: { hp: 25, maxHp: 25, atk: 12, spd: 'Schnell (Pulsierend)', rng: '120px (Funken-Feuerwerk)' },
     behavior: 'Eine direkte liebevolle Hommage an Calcifer aus Das wandelnde Schloss! Ein warmes, übermütiges Flämmchen mit Kulleraugen, umringt von schwebenden Obsidian-Kieseln.',
     counter: 'Wasser- und Eiszauber kühlen seinen Glutkern sofort ab. Im abgekühlten Zustand kann er 4 Sekunden lang keine Funken spucken.',
     lore: 'Schläft am liebsten auf alten Speckpfannen und beschwert sich lautstark über schlechtes Brennholz. Knistert vor Freude, wenn man ihn lobt.',
@@ -6223,21 +6237,27 @@ class EnemyEntity {
     this.vy = 0;
     this.elevation = options.elevation || 0;
 
-    // Hitbox-Radius
-    if (this.category === 'boss') {
-      this.radius = 16;
-    } else if (this.category === 'reptile' || this.category === 'beast') {
-      this.radius = 10;
-    } else if (this.typeId === 'green_slime' || this.typeId === 'cave_weaver') {
-      this.radius = 7;
-    } else {
-      this.radius = 9;
-    }
+    // Proportionale Skalierung (Schwache Monster kleiner, Kolosse/Bosse riesig!)
+    this.scale = options.scale ?? this.def.scale ?? (this.category === 'boss' ? 1.6 : (this.typeId === 'green_slime' || this.typeId === 'cave_weaver' || this.typeId === 'lava_core' ? 0.72 : 1.0));
 
-    // Werte aus Bestiarium
-    this.maxHp = this.def.stats.hp || 50;
+    // Hitbox-Radius proportional zur Skalierung
+    let baseRadius = 9;
+    if (this.category === 'boss') {
+      baseRadius = 18;
+    } else if (this.category === 'reptile' || this.category === 'beast') {
+      baseRadius = 11;
+    } else if (this.typeId === 'green_slime' || this.typeId === 'cave_weaver' || this.typeId === 'lava_core') {
+      baseRadius = 7;
+    }
+    this.radius = Math.round(baseRadius * this.scale);
+
+    // Werte aus Bestiarium / Optionen
+    this.maxHp = options.hp ?? this.def.stats.hp ?? 50;
     this.hp = this.maxHp;
-    this.atk = this.def.stats.atk || 20;
+    this.atk = options.atk ?? this.def.stats.atk ?? 20;
+
+    // XP-Ertrag bei Besiegung (stärkere Gegner geben deutlich mehr EP)
+    this.xpValue = options.xpValue ?? this.def.xpValue ?? (this.category === 'boss' ? 65 : (this.scale < 0.85 ? 4 : 16));
 
     // Geschwindigkeit
     const spdStr = this.def.stats.spd || 'Mittel';
@@ -6797,32 +6817,35 @@ class EnemyEntity {
     const drawX = Math.round(this.x);
     const drawY = Math.round(this.y - elevY);
 
-    // Zeichne das prozedurale Ghibli-Papercraft-Wesen
+    // Zeichne das prozedurale Ghibli-Papercraft-Wesen (skaliert nach Monster-Kategorie)
     ctx.save();
-    this.def.render(ctx, drawX, drawY, this.animTime, renderState, Math.max(0, this.hitFlash));
+    ctx.translate(drawX, drawY);
+    ctx.scale(this.scale, this.scale);
+    this.def.render(ctx, 0, 0, this.animTime, renderState, Math.max(0, this.hitFlash));
     ctx.restore();
 
     // Alarm-Emote `!` über dem Kopf
     if (this.alertEmoteTimer > 0) {
+      const emoteY = drawY - Math.round(24 * this.scale);
       ctx.save();
       ctx.fillStyle = '#ef4444';
       ctx.beginPath();
-      ctx.arc(drawX, drawY - 24, 6, 0, Math.PI * 2);
+      ctx.arc(drawX, emoteY, 6, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 9px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('!', drawX, drawY - 24);
+      ctx.fillText('!', drawX, emoteY);
       ctx.restore();
     }
 
     // Lebensbalken über dem Kopf (nur wenn verletzt)
     if (this.hp < this.maxHp && this.hp > 0) {
-      const barW = 24;
+      const barW = Math.round(24 * Math.max(0.8, Math.min(1.8, this.scale)));
       const barH = 3.5;
       const barX = drawX - barW / 2;
-      const barY = drawY - 18;
+      const barY = drawY - Math.round(18 * this.scale);
       const hpPct = Math.max(0, this.hp / this.maxHp);
 
       ctx.save();
@@ -6845,6 +6868,7 @@ class EnemyManager {
     this.game = game;
     this.enemies = [];
     this.lootItems = [];
+    this.xpOrbs = [];
     this.aiActive = true;
 
     this.initSpawns();
@@ -6853,83 +6877,123 @@ class EnemyManager {
   initSpawns() {
     this.enemies = [];
     this.lootItems = [];
+    this.xpOrbs = [];
 
     // =========================================================================
     // OVERWORLD SPAWNS NACH BIOMEN & GRUPPEN
     // =========================================================================
 
     // 1. Grasland & Lichtungen (nahe Spawn 30, 45)
-    // 3er-Gruppe Tau-Tropfen Blobs (Green Slimes)
-    this.spawnPack('green_slime', 38 * TILE_SIZE, 46 * TILE_SIZE, 3, 24, DIMENSIONS.OVERWORLD, 'pack_slimes');
+    // 6er-Schwarm Tau-Tropfen Blobs (klein, schwach, flink)
+    this.spawnPack('green_slime', 38 * TILE_SIZE, 46 * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_slimes', {
+      scale: 0.70, hp: 20, atk: 8, xpValue: 3
+    });
 
-    // 2er-Gruppe Waldhüter-Wildschweine (Tusk Boars)
-    this.spawnPack('tusk_boar', 22 * TILE_SIZE, 38 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_boars');
+    // 3er-Gruppe Waldhüter-Wildschweine (Tusk Boars)
+    this.spawnPack('tusk_boar', 22 * TILE_SIZE, 38 * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_boars', {
+      scale: 0.88, hp: 55, atk: 18, xpValue: 10
+    });
 
-    // 2er-Gruppe Waldläufer-Schützen (Moss Archers) am Waldsaum
-    this.spawnPack('moss_archer', 17 * TILE_SIZE, 28 * TILE_SIZE, 2, 26, DIMENSIONS.OVERWORLD, 'pack_archers');
+    // 3er-Gruppe Waldläufer-Schützen (Moss Archers) am Waldsaum
+    this.spawnPack('moss_archer', 17 * TILE_SIZE, 28 * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_archers', {
+      scale: 0.95, hp: 65, atk: 18, xpValue: 15
+    });
 
     // 2. Dichter Dunkelwald (Nordwesten)
-    // 3er-Rudel Okami-Schattenwölfe (Dire Wolves)
-    this.spawnPack('dire_wolf', 24 * TILE_SIZE, 15 * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_wolves');
+    // 4er-Rudel Okami-Schattenwölfe (Dire Wolves)
+    this.spawnPack('dire_wolf', 24 * TILE_SIZE, 15 * TILE_SIZE, 4, 32, DIMENSIONS.OVERWORLD, 'pack_wolves', {
+      scale: 0.85, hp: 45, atk: 16, xpValue: 8
+    });
 
     // 3. Wüste & Treibsand (Südwesten)
-    // Solo: Dünen-Schlund (Dune Maw)
-    this.spawnEnemy('dune_maw', 25 * TILE_SIZE, 68 * TILE_SIZE, DIMENSIONS.OVERWORLD, null);
+    // RIESIGER APEX-PREDATOR: Dünen-Schlund (Dune Maw)
+    this.spawnEnemy('dune_maw', 25 * TILE_SIZE, 68 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+      scale: 1.55, hp: 340, atk: 36, xpValue: 60
+    });
 
     // 2er-Gruppe Kaiser-Skorpione (Emperor Scorpions)
-    this.spawnPack('emperor_scorpion', 16 * TILE_SIZE, 74 * TILE_SIZE, 2, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions');
+    this.spawnPack('emperor_scorpion', 16 * TILE_SIZE, 74 * TILE_SIZE, 2, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions', {
+      scale: 1.05, hp: 90, atk: 24, xpValue: 20
+    });
 
     // 4. Schnee & Eisberge (Nordosten)
-    // Koloss: Yeti-Wächter (Frost Giant)
-    this.spawnEnemy('frost_giant', 88 * TILE_SIZE, 16 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, { elevation: 1 });
+    // RIESIGER KOLOSS: Yeti-Wächter (Frost Giant)
+    this.spawnEnemy('frost_giant', 88 * TILE_SIZE, 16 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+      scale: 1.65, hp: 420, atk: 42, xpValue: 75, elevation: 1
+    });
 
     // 5. Düsterer Sumpf (Südosten)
-    // 2er-Gruppe Sporen-Spucker (Spore Spitters)
-    this.spawnPack('spore_spitter', 68 * TILE_SIZE, 62 * TILE_SIZE, 2, 26, DIMENSIONS.OVERWORLD, 'pack_spores');
+    // 3er-Gruppe Sporen-Spucker (Spore Spitters)
+    this.spawnPack('spore_spitter', 68 * TILE_SIZE, 62 * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_spores', {
+      scale: 0.85, hp: 40, atk: 14, xpValue: 8
+    });
 
-    // 2er-Gruppe Smaragd-Nattern (Slithering Vipers) am Sumpfteich
-    this.spawnPack('slithering_viper', 82 * TILE_SIZE, 60 * TILE_SIZE, 2, 30, DIMENSIONS.OVERWORLD, 'pack_vipers');
+    // 3er-Gruppe Smaragd-Nattern (Slithering Vipers) am Sumpfteich
+    this.spawnPack('slithering_viper', 82 * TILE_SIZE, 60 * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_vipers', {
+      scale: 1.0, hp: 70, atk: 20, xpValue: 15
+    });
 
-    // Teer-Schlamm Königin (Tar Mire) mit Rußmännchen
-    this.spawnEnemy('tar_mire', 95 * TILE_SIZE, 75 * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_tar');
+    // 3er-Gruppe Teer-Schlamm Geister (Tar Mire)
+    this.spawnPack('tar_mire', 95 * TILE_SIZE, 75 * TILE_SIZE, 3, 26, DIMENSIONS.OVERWORLD, 'pack_tar', {
+      scale: 0.82, hp: 45, atk: 12, xpValue: 8
+    });
 
     // 6. Felsgebirge & Bergpfade (Höhenebene +1, +2)
-    // Koloss: Moos-Koloss (Boulder Troll) am Bergpass
-    this.spawnEnemy('boulder_troll', 56 * TILE_SIZE, 28 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, { elevation: 1 });
+    // RIESIGER KOLOSS: Moos-Koloss (Boulder Troll) am Bergpass
+    this.spawnEnemy('boulder_troll', 56 * TILE_SIZE, 28 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+      scale: 1.60, hp: 380, atk: 38, xpValue: 65, elevation: 1
+    });
 
     // 2er-Wache Origami-Krieger (Cursed Paper Knights)
-    this.spawnPack('cursed_knight', 70 * TILE_SIZE, 35 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_samurai', { elevation: 1 });
+    this.spawnPack('cursed_knight', 70 * TILE_SIZE, 35 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_samurai', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
+    });
 
     // 7. Die Leere / Void (Osten)
     // 2er-Patrouille Leeren-Verschlinger (Void Reapers)
-    this.spawnPack('void_reaper', 108 * TILE_SIZE, 45 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers');
+    this.spawnPack('void_reaper', 108 * TILE_SIZE, 45 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers', {
+      scale: 1.15, hp: 130, atk: 30, xpValue: 35
+    });
 
-    // Schwebende Mondqualle: Auge des Abgrunds (Gazer of the Void)
-    this.spawnEnemy('gazer_of_the_void', 115 * TILE_SIZE, 55 * TILE_SIZE, DIMENSIONS.OVERWORLD, null);
+    // RIESIGER TITAN: Schwebende Mondqualle: Auge des Abgrunds (Gazer of the Void)
+    this.spawnEnemy('gazer_of_the_void', 115 * TILE_SIZE, 55 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+      scale: 1.55, hp: 360, atk: 40, xpValue: 70
+    });
 
     // Brunnen-Falle: Schatten-Tentakel (Abyss Tentacle)
-    this.spawnEnemy('abyss_tentacle', 118 * TILE_SIZE, 38 * TILE_SIZE, DIMENSIONS.OVERWORLD, null);
+    this.spawnEnemy('abyss_tentacle', 118 * TILE_SIZE, 38 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+      scale: 1.25, hp: 160, atk: 34, xpValue: 40
+    });
 
     // 8. Brand- & Vulkanzone (Zwischen Felsen und Wüste)
-    // Laternen-Pyromant mit 2 Calcifer-Feuerdämonen
-    this.spawnEnemy('pyromancer', 85 * TILE_SIZE, 36 * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire');
-    this.spawnEnemy('lava_core', 83 * TILE_SIZE, 38 * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire');
-    this.spawnEnemy('lava_core', 87 * TILE_SIZE, 38 * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire');
+    // Laternen-Pyromant mit 5 Calcifer-Feuerdämonen (Schwarm kleiner Feuerfunken)
+    this.spawnEnemy('pyromancer', 85 * TILE_SIZE, 36 * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire', {
+      scale: 1.10, hp: 130, atk: 30, xpValue: 35
+    });
+    this.spawnPack('lava_core', 85 * TILE_SIZE, 38 * TILE_SIZE, 5, 24, DIMENSIONS.OVERWORLD, 'pack_fire', {
+      scale: 0.75, hp: 25, atk: 12, xpValue: 4
+    });
 
     // =========================================================================
     // HÖHLEN-SPAWNS (CAVES DIMENSION)
     // =========================================================================
-    // 3er-Gruppe Höhlen-Krallenspinnen (Cave Weavers)
-    this.spawnPack('cave_weaver', 32 * TILE_SIZE, 26 * TILE_SIZE, 3, 30, DIMENSIONS.CAVES, 'pack_cave_spiders');
+    // 6er-Schwarm Höhlen-Krallenspinnen (Cave Weavers) (klein, viele, fies)
+    this.spawnPack('cave_weaver', 32 * TILE_SIZE, 26 * TILE_SIZE, 6, 36, DIMENSIONS.CAVES, 'pack_cave_spiders', {
+      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    });
 
     // =========================================================================
     // WOLKENREICH-SPAWNS (CLOUDS DIMENSION)
     // =========================================================================
     // Wolken-Astrologe (Star Astromancer) auf hoher Traumwolke
-    this.spawnEnemy('star_astromancer', 45 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, null);
+    this.spawnEnemy('star_astromancer', 45 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, null, {
+      scale: 1.15, hp: 150, atk: 32, xpValue: 40
+    });
 
-    // 2er-Patrouille Wolken-Harpyien (Sky Harpies)
-    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 32 * TILE_SIZE, 2, 34, DIMENSIONS.CLOUDS, 'pack_harpies');
+    // 3er-Patrouille Wolken-Harpyien (Sky Harpies)
+    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 32 * TILE_SIZE, 3, 34, DIMENSIONS.CLOUDS, 'pack_harpies', {
+      scale: 1.05, hp: 85, atk: 24, xpValue: 22
+    });
   }
 
   spawnEnemy(typeId, x, y, dimension = DIMENSIONS.OVERWORLD, packId = null, options = {}) {
@@ -7001,6 +7065,36 @@ class EnemyManager {
     });
   }
 
+  spawnXp(x, y, totalXp) {
+    if (totalXp <= 0) return;
+    let orbCount = 1;
+    if (totalXp >= 40) orbCount = Math.min(9, Math.max(5, Math.round(totalXp / 8)));
+    else if (totalXp >= 12) orbCount = Math.min(4, Math.max(2, Math.round(totalXp / 5)));
+    else if (totalXp >= 4) orbCount = 2;
+
+    const baseVal = Math.max(1, Math.floor(totalXp / orbCount));
+    let remainder = totalXp - (baseVal * orbCount);
+
+    for (let i = 0; i < orbCount; i++) {
+      const val = baseVal + (remainder > 0 ? 1 : 0);
+      if (remainder > 0) remainder--;
+
+      const burstAng = (i / orbCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const burstSpeed = Math.random() * 45 + 20;
+
+      this.xpOrbs.push({
+        x: x + (Math.random() - 0.5) * 6,
+        y: y + (Math.random() - 0.5) * 6,
+        vx: Math.cos(burstAng) * burstSpeed,
+        vy: Math.sin(burstAng) * burstSpeed - 10,
+        value: val,
+        life: 45.0,
+        magnetSpeed: 0,
+        bobOffset: Math.random() * Math.PI * 2
+      });
+    }
+  }
+
   update(dt, player, map, combatManager) {
     const curDim = this.game.currentDimension;
 
@@ -7011,9 +7105,10 @@ class EnemyManager {
 
       enemy.update(dt, player, map, this, combatManager);
 
-      // Bei Tod Loot droppen und aus Liste entfernen
+      // Bei Tod Loot & EP droppen und aus Liste entfernen
       if (enemy.state === 'dead') {
         this.dropLoot(enemy.x, enemy.y);
+        this.spawnXp(enemy.x, enemy.y, enemy.xpValue);
         this.enemies.splice(i, 1);
       }
     }
@@ -7051,6 +7146,65 @@ class EnemyManager {
         }
       }
     }
+
+    // 3. Update XP Orbs (Magnetischer Flug zum Spieler)
+    const MAGNET_RADIUS = 90;
+    const PICKUP_RADIUS = 14;
+
+    for (let i = this.xpOrbs.length - 1; i >= 0; i--) {
+      const orb = this.xpOrbs[i];
+      orb.life -= dt;
+      if (orb.life <= 0) {
+        this.xpOrbs.splice(i, 1);
+        continue;
+      }
+
+      // Physics drag
+      if (Math.abs(orb.vx) > 0.1 || Math.abs(orb.vy) > 0.1) {
+        orb.x += orb.vx * dt;
+        orb.y += orb.vy * dt;
+        orb.vx *= Math.pow(0.08, dt);
+        orb.vy *= Math.pow(0.08, dt);
+      }
+
+      if (!player || player.isDead) continue;
+
+      const pTargetY = player.y - 8;
+      const dx = player.x - orb.x;
+      const dy = pTargetY - orb.y;
+      const dist = Math.hypot(dx, dy);
+
+      // Magnetischer Zug wenn Spieler in der Nähe ist
+      if (dist <= MAGNET_RADIUS) {
+        orb.magnetSpeed = Math.min(320, orb.magnetSpeed + 650 * dt);
+        orb.x += (dx / (dist || 1)) * orb.magnetSpeed * dt;
+        orb.y += (dy / (dist || 1)) * orb.magnetSpeed * dt;
+      }
+
+      // Einsammeln durch Spieler
+      if (dist <= PICKUP_RADIUS) {
+        player.addXp(orb.value);
+
+        if (combatManager) {
+          combatManager.addFloatingText(`+${orb.value} EP`, player.x + (Math.random() - 0.5) * 14, player.y - 18, '#4ade80', 0.55);
+          for (let s = 0; s < 5; s++) {
+            const spAng = Math.random() * Math.PI * 2;
+            combatManager.hitSparks.push({
+              x: orb.x,
+              y: orb.y,
+              vx: Math.cos(spAng) * (Math.random() * 30 + 10),
+              vy: Math.sin(spAng) * (Math.random() * 30 + 10),
+              color: '#4ade80',
+              size: Math.random() * 2 + 1,
+              life: 0.25,
+              maxLife: 0.25
+            });
+          }
+        }
+
+        this.xpOrbs.splice(i, 1);
+      }
+    }
   }
 
   getActiveEnemies() {
@@ -7060,6 +7214,8 @@ class EnemyManager {
 
   renderLoot(ctx, t) {
     const curDim = this.game.currentDimension;
+
+    // 1. Render Normal Loot
     this.lootItems.forEach(item => {
       const bob = Math.sin(t * 4 + item.bobOffset) * 2.5;
 
@@ -7108,6 +7264,35 @@ class EnemyManager {
 
       ctx.restore();
     });
+
+    // 2. Render Glowing Green XP Orbs (Kleine grüne leuchtende Punkte)
+    this.xpOrbs.forEach(orb => {
+      const bob = Math.sin(t * 6 + orb.bobOffset) * 2;
+      const ox = orb.x;
+      const oy = orb.y + bob;
+
+      ctx.save();
+      // Weiche grüne Aura
+      const pulse = Math.sin(t * 8 + orb.bobOffset) * 0.8 + 3.8;
+      ctx.fillStyle = 'rgba(74, 222, 128, 0.35)';
+      ctx.beginPath();
+      ctx.arc(ox, oy, pulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Smaragdgrüner Körper
+      ctx.fillStyle = '#22c55e';
+      ctx.beginPath();
+      ctx.arc(ox, oy, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Heller Glanzpunkt
+      ctx.fillStyle = '#f0fdf4';
+      ctx.beginPath();
+      ctx.arc(ox - 0.6, oy - 0.6, 1.0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    });
   }
 }
 
@@ -7146,6 +7331,11 @@ class Player {
     this.invulnTimer = 0;
     this.speedSlowTimer = 0;
     this.speedSlowFactor = 1.0;
+
+    // Level & XP Progression
+    this.level = 1;
+    this.xp = 0;
+    this.xpToNext = 50;
 
     this.particles = [];
 
@@ -7228,6 +7418,37 @@ class Player {
       this.y = this.spawnY;
       this.elevation = 0;
       this.visualElevation = 0;
+    }
+  }
+
+  addXp(amount) {
+    if (amount <= 0) return;
+    this.xp += amount;
+
+    let leveledUp = false;
+    while (this.xp >= this.xpToNext) {
+      this.xp -= this.xpToNext;
+      this.level++;
+      this.xpToNext = Math.round(50 * Math.pow(1.35, this.level - 1));
+      leveledUp = true;
+    }
+
+    if (leveledUp && this.game && this.game.combat) {
+      this.game.combat.addFloatingText(`🎉 LEVEL UP! Lv. ${this.level}`, this.x, this.y - 28, '#facc15', 1.0);
+      for (let i = 0; i < 22; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 60 + 20;
+        this.game.combat.hitSparks.push({
+          x: this.x,
+          y: this.y - 10,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 20,
+          color: Math.random() > 0.5 ? '#facc15' : '#4ade80',
+          size: Math.random() * 2.5 + 1.5,
+          life: 0.5,
+          maxLife: 0.5
+        });
+      }
     }
   }
 
@@ -8781,6 +9002,24 @@ class Player {
       ctx.restore();
     }
 
+    // 4f. Compact Overhead Health Bar (when damaged)
+    if (this.hp < this.maxHp && this.hp > 0 && !this.isDead) {
+      const barW = 24;
+      const barH = 3.5;
+      const barX = px - barW / 2;
+      const barY = py - 26 + bob;
+      const hpPct = Math.max(0, this.hp / this.maxHp);
+
+      ctx.save();
+      // Paper border & dark drop shadow
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+      // Health Fill (dynamic green -> yellow -> red)
+      ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
+      ctx.fillRect(barX, barY, barW * hpPct, barH);
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 }
@@ -9422,6 +9661,83 @@ class CombatManager {
     ];
   }
 
+  isWaterOrAbyssTile(tile) {
+    return tile === TILES.WATER ||
+           tile === TILES.SWAMP_WATER ||
+           tile === TILES.CAVE_WATER ||
+           tile === TILES.VOID_LAKE ||
+           tile === TILES.SKY_ABYSS;
+  }
+
+  isArrowObstacle(map, tX, tY) {
+    if (!map || !map.isValid || !map.isValid(tX, tY)) return true;
+
+    // Check solid objects (rocks, tree trunks, cacti, stalagmites, etc.)
+    const obj = map.getObjectTile ? map.getObjectTile(tX, tY) : (map.objects ? map.objects[tY]?.[tX] : 0);
+    const objProps = OBJ_PROPS[obj];
+    if (objProps && objProps.solid) return true;
+
+    // Check ground solidity EXCEPT for water and abyss (arrows fly freely over liquids!)
+    const ground = map.getGroundTile ? map.getGroundTile(tX, tY) : (map.ground ? map.ground[tY]?.[tX] : 0);
+    if (this.isWaterOrAbyssTile(ground)) {
+      return false;
+    }
+
+    const groundProps = TILE_PROPS[ground];
+    if (groundProps && groundProps.solid) return true;
+
+    return false;
+  }
+
+  createWaterSplash(x, y, tile) {
+    let dropColor1 = '#38bdf8';
+    let dropColor2 = '#e0f2fe';
+    let rippleColor = 'rgba(56, 189, 248, 0.6)';
+
+    if (tile === TILES.SWAMP_WATER) {
+      dropColor1 = '#84cc16';
+      dropColor2 = '#4d7c0f';
+      rippleColor = 'rgba(101, 163, 13, 0.6)';
+    } else if (tile === TILES.VOID_LAKE) {
+      dropColor1 = '#c084fc';
+      dropColor2 = '#6b21a8';
+      rippleColor = 'rgba(168, 85, 247, 0.6)';
+    }
+
+    // Droplets jumping into the air
+    for (let i = 0; i < 12; i++) {
+      const spAngle = Math.random() * Math.PI * 2;
+      const speed = Math.random() * 35 + 15;
+      this.hitSparks.push({
+        x,
+        y,
+        vx: Math.cos(spAngle) * speed,
+        vy: Math.sin(spAngle) * speed * 0.5 - (Math.random() * 25 + 15),
+        color: Math.random() > 0.4 ? dropColor1 : dropColor2,
+        size: Math.random() * 2.2 + 1.2,
+        life: 0.35,
+        maxLife: 0.35
+      });
+    }
+
+    // Ripples
+    for (let r = 0; r < 3; r++) {
+      const rAngle = (r / 3) * Math.PI * 2;
+      this.hitSparks.push({
+        x: x + Math.cos(rAngle) * 3,
+        y: y + Math.sin(rAngle) * 2,
+        vx: Math.cos(rAngle) * 12,
+        vy: Math.sin(rAngle) * 6,
+        color: rippleColor,
+        size: 2.5,
+        life: 0.4,
+        maxLife: 0.4
+      });
+    }
+
+    this.addFloatingText('💧 Platsch!', x, y - 10, dropColor1, 0.55);
+  }
+
   fireArrow(startX, startY, dirX, dirY, isCharged = false) {
     const angle = Math.atan2(dirY, dirX);
     const speed = isCharged ? COMBAT_CONFIG.ARROW_CHARGED_SPEED : COMBAT_CONFIG.ARROW_SPEED;
@@ -9791,34 +10107,42 @@ class CombatManager {
         }
       }
 
-      // Check solid wall / obstacle collision
+      // Check solid wall / obstacle collision (arrows fly freely over water & abyss!)
       const tX = Math.floor(arrow.x / TILE_SIZE);
       const tY = Math.floor(arrow.y / TILE_SIZE);
-      const hitWall = map.isSolid ? map.isSolid(tX, tY) : false;
+      const hitWall = this.isArrowObstacle(map, tX, tY);
 
       if (hitDummy || hitEnemy || hitWall || arrow.distTraveled >= arrow.maxRange) {
-        // Arrow sticks in the ground!
-        this.stuckArrows.push({
-          x: arrow.x,
-          y: arrow.y,
-          angle: arrow.angle,
-          quiverTimer: 0.35,
-          canCollect: true
-        });
+        const curTile = map.getGroundTile ? map.getGroundTile(tX, tY) : (map.ground ? map.ground[tY]?.[tX] : 0);
+        const inWater = this.isWaterOrAbyssTile(curTile) && !hitEnemy && !hitDummy && !hitWall;
 
-        // Dust / impact puff
-        for (let s = 0; s < 6; s++) {
-          const spAngle = Math.random() * Math.PI * 2;
-          this.hitSparks.push({
+        if (inWater) {
+          // Arrow lands in water/abyss: splashes and disappears!
+          this.createWaterSplash(arrow.x, arrow.y, curTile);
+        } else {
+          // Arrow sticks in the ground or obstacle!
+          this.stuckArrows.push({
             x: arrow.x,
             y: arrow.y,
-            vx: Math.cos(spAngle) * (Math.random() * 25 + 10),
-            vy: Math.sin(spAngle) * (Math.random() * 25 + 10),
-            color: 'rgba(212, 212, 216, 0.65)',
-            size: Math.random() * 2 + 1,
-            life: 0.22,
-            maxLife: 0.22
+            angle: arrow.angle,
+            quiverTimer: 0.35,
+            canCollect: true
           });
+
+          // Dust / impact puff
+          for (let s = 0; s < 6; s++) {
+            const spAngle = Math.random() * Math.PI * 2;
+            this.hitSparks.push({
+              x: arrow.x,
+              y: arrow.y,
+              vx: Math.cos(spAngle) * (Math.random() * 25 + 10),
+              vy: Math.sin(spAngle) * (Math.random() * 25 + 10),
+              color: 'rgba(212, 212, 216, 0.65)',
+              size: Math.random() * 2 + 1,
+              life: 0.22,
+              maxLife: 0.22
+            });
+          }
         }
 
         this.flyingArrows.splice(i, 1);
@@ -9961,10 +10285,10 @@ class CombatManager {
         continue;
       }
 
-      // Check wall collision or max distance
+      // Check wall / obstacle collision or max distance (projectiles pass over water)
       const tX = Math.floor(proj.x / TILE_SIZE);
       const tY = Math.floor(proj.y / TILE_SIZE);
-      const hitWall = map.isSolid ? map.isSolid(tX, tY) : false;
+      const hitWall = this.isArrowObstacle(map, tX, tY);
 
       if (hitWall || proj.distTraveled >= proj.maxDist) {
         if (proj.spawnsPuddle) {
@@ -10619,6 +10943,12 @@ class Game {
 
     // HUD Elements
     this.hpStatEl = document.getElementById('hp-stat');
+    this.compactHpFillEl = document.getElementById('compact-hp-fill');
+    this.compactHpTextEl = document.getElementById('compact-hp-text');
+    this.compactLevelBadgeEl = document.getElementById('compact-level-badge');
+    this.compactXpFillEl = document.getElementById('compact-xp-fill');
+    this.compactXpTextEl = document.getElementById('compact-xp-text');
+
     this.biomeNameEl = document.getElementById('biome-name');
     this.speedStatEl = document.getElementById('speed-stat');
     this.deathStatEl = document.getElementById('death-stat');
@@ -11299,13 +11629,42 @@ class Game {
       }
     }
 
-    // 3. Update Player HP display
-    if (this.hpStatEl && this.player) {
+    // 3. Update Player HP display (Dev Tools & Compact Status Pill)
+    if (this.player) {
       const curHp = Math.max(0, Math.round(this.player.hp));
       const maxHp = this.player.maxHp || 100;
-      this.hpStatEl.textContent = `${curHp} / ${maxHp}`;
-      const hpPct = curHp / maxHp;
-      this.hpStatEl.style.color = hpPct > 0.5 ? '#4ade80' : (hpPct > 0.25 ? '#facc15' : '#ef4444');
+      const hpPct = Math.max(0, Math.min(1.0, curHp / maxHp));
+
+      if (this.hpStatEl) {
+        this.hpStatEl.textContent = `${curHp} / ${maxHp}`;
+        this.hpStatEl.style.color = hpPct > 0.5 ? '#4ade80' : (hpPct > 0.25 ? '#facc15' : '#ef4444');
+      }
+
+      if (this.compactHpFillEl) {
+        this.compactHpFillEl.style.width = `${Math.round(hpPct * 100)}%`;
+        this.compactHpFillEl.style.background = hpPct > 0.5
+          ? 'linear-gradient(90deg, #22c55e, #4ade80)'
+          : (hpPct > 0.25 ? 'linear-gradient(90deg, #d97706, #facc15)' : 'linear-gradient(90deg, #dc2626, #f87171)');
+      }
+      if (this.compactHpTextEl) {
+        this.compactHpTextEl.textContent = `${curHp} / ${maxHp}`;
+      }
+
+      // XP & Level Progression
+      const curXp = Math.max(0, Math.round(this.player.xp || 0));
+      const xpToNext = this.player.xpToNext || 50;
+      const curLevel = this.player.level || 1;
+      const xpPct = Math.max(0, Math.min(1.0, curXp / xpToNext));
+
+      if (this.compactLevelBadgeEl) {
+        this.compactLevelBadgeEl.textContent = `Lv. ${curLevel}`;
+      }
+      if (this.compactXpFillEl) {
+        this.compactXpFillEl.style.width = `${Math.round(xpPct * 100)}%`;
+      }
+      if (this.compactXpTextEl) {
+        this.compactXpTextEl.textContent = `${curXp} / ${xpToNext}`;
+      }
     }
   }
 
