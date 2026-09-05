@@ -1847,11 +1847,11 @@ canvas#gameCanvas {
    MAGIC & ARTIFACT SYSTEM (Zauber-HUD, Info-Modal & Swap-Dialog)
    ========================================================================== */
 
-/* Right Side Magic Spell Slot */
+/* Right Side Magic Spell Slot (Hohe Positionierung über dem Touch-Gamepad/Dash) */
 .magic-hud-slot {
   position: fixed;
   right: 20px;
-  bottom: 120px;
+  bottom: 215px;
   z-index: 1000;
   display: flex;
   align-items: center;
@@ -1885,6 +1885,7 @@ canvas#gameCanvas {
   overflow: hidden;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   outline: none;
+  touch-action: none;
 }
 
 .btn-cast-magic:hover {
@@ -1892,8 +1893,11 @@ canvas#gameCanvas {
   box-shadow: 0 6px 24px rgba(220, 38, 38, 0.8), 0 0 35px rgba(250, 204, 21, 0.55);
 }
 
-.btn-cast-magic:active {
-  transform: scale(0.94);
+.btn-cast-magic:active,
+.btn-cast-magic.aiming-active {
+  transform: scale(1.14);
+  box-shadow: 0 0 30px #facc15, 0 0 50px rgba(239, 68, 68, 0.85);
+  border-color: #ffffff;
 }
 
 .magic-btn-icon {
@@ -2286,11 +2290,11 @@ canvas#gameCanvas {
   color: #fff;
 }
 
-/* Mobile Adjustments for Magic HUD */
+/* Mobile Adjustments for Magic HUD (Über dem Diamond-Gamepad platziert) */
 @media (max-width: 768px) {
   .magic-hud-slot {
-    right: 14px;
-    bottom: 95px;
+    right: 18px;
+    bottom: 195px;
   }
   .btn-cast-magic {
     width: 50px;

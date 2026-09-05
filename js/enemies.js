@@ -152,10 +152,20 @@ export class EnemyEntity {
     this.teleportDest = null;
     this.hookCooldown = Math.random() * 2 + 4.5;
     this.isHooking = false;
+
+    // Freeze Status (Eisnebel Artefakt)
+    this.freezeTimer = 0;
   }
 
   update(dt, player, map, enemyManager, combatManager) {
     if (this.state === 'dead') return;
+
+    // Einfrier-Zustand durch Eisnebel-Artefakt: Vollständige Lähmung (keine Bewegung, keine Angriffe)
+    if (this.freezeTimer > 0) {
+      this.freezeTimer -= dt;
+      if (this.hitFlash > 0) this.hitFlash -= dt;
+      return;
+    }
 
     this.animTime += dt;
     if (this.hitFlash > 0) this.hitFlash -= dt;
@@ -840,7 +850,65 @@ export class EnemyEntity {
       ctx.fillRect(barX, barY, barW * hpPct, barH);
       ctx.restore();
     }
+
+    // 4. Frost Freeze Visuals (Eisnebel Artefakt)
+    if (this.freezeTimer > 0) {
+      ctx.save();
+      const r = Math.max(9, Math.round(this.radius * 1.35));
+      // Frost-Kokondecke
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.38)';
+      ctx.strokeStyle = 'rgba(224, 242, 254, 0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(drawX, drawY - r - 6);
+      ctx.lineTo(drawX + r + 4, drawY - 2);
+      ctx.lineTo(drawX + r * 0.7, drawY + r);
+      ctx.lineTo(drawX - r * 0.7, drawY + r);
+      ctx.lineTo(drawX - r - 4, drawY - 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Sharp crystal shine
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.beginPath();
+      ctx.moveTo(drawX - r * 0.4, drawY - r);
+      ctx.lineTo(drawX - r * 0.1, drawY - r * 0.4);
+      ctx.lineTo(drawX - r * 0.5, drawY - 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Floating Snowflake Icon
+      if (typeof ctx.fillText === 'function') {
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('❄️', drawX, drawY - r - 12);
+      }
+      ctx.restore();
+    }
   }
+}
+
+/**
+ * Berechnet die Einfrier-Dauer für das Eisnebel-Artefakt (0.5s - 3.0s nach Monsterstärke)
+ */
+export function calculateFreezeDuration(enemy) {
+  if (!enemy) return 2.0;
+  // Bosses / extrem starke Gegner (>= 500 HP oder Boss-Kategorie)
+  if (enemy.category === 'boss' || enemy.maxHp >= 500) {
+    return 0.5;
+  }
+  // Schwere / Elite-Monster (>= 300 HP oder mächtige Skalierung)
+  if (enemy.maxHp >= 300 || enemy.scale >= 1.3) {
+    return 1.0;
+  }
+  // Mittlere Monster (100 - 300 HP)
+  if (enemy.maxHp >= 100) {
+    return 1.8;
+  }
+  // Schwache Monster (<= 60 HP, kleine Spinnen, Schleime)
+  return 3.0;
 }
 
 /**

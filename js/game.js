@@ -261,7 +261,9 @@ class Game {
         this.player.startRanged();
       }
       if (e.code === 'KeyE') {
-        if (this.magicManager) this.magicManager.castActiveSpell(this.player, this.map, this.combat);
+        if (!e.repeat && this.magicManager) {
+          this.magicManager.startAiming(this.player);
+        }
       }
       if (e.code === 'KeyC') {
         this.toggleSkillModal();
@@ -272,6 +274,7 @@ class Game {
           this.toggleSkillModal(false);
         }
         if (this.magicManager) {
+          this.magicManager.cancelAiming();
           this.magicManager.toggleInfoModal(false);
           this.magicManager.closeSwapModal();
           this.magicManager.closeTeleportModal();
@@ -300,6 +303,11 @@ class Game {
       }
       if (e.code === 'KeyL' || e.code === 'KeyF') {
         this.player.releaseRanged();
+      }
+      if (e.code === 'KeyE') {
+        if (this.magicManager) {
+          this.magicManager.releaseAiming(this.player, this.map, this.combat);
+        }
       }
     });
 

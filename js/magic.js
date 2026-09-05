@@ -63,6 +63,21 @@ export const ARTIFACT_TYPES = {
     speed: 0,
     colorTheme: '#a855f7',
     glowColor: 'rgba(168, 85, 247, 0.6)'
+  },
+  FROST_CONE: {
+    id: 'frost_cone',
+    name: 'Eisnebel',
+    title: 'Frost-Kollaps',
+    icon: '❄️',
+    description: 'Entfesselt einen eisigen Frostnebel in einem weiten Kegel vor dir. Alle getroffenen Monster werden sofort eingefroren (keine Bewegung, kein Angriff). Die Froststarre hält je nach Monsterstärke zwischen 0,5 und 3,0 Sekunden an.',
+    maxCharges: 5,
+    rechargeBonus: 3,
+    cooldown: 2.5,
+    damage: 45,
+    widthTiles: 4,
+    speed: 0,
+    colorTheme: '#38bdf8',
+    glowColor: 'rgba(56, 189, 248, 0.6)'
   }
 };
 
@@ -90,6 +105,13 @@ export class MagicManager {
     this.isSwapModalOpen = false;
     this.pendingGroundArtifact = null;
 
+    // Aiming Stencil State (Schablone bei Halten)
+    this.isAiming = false;
+    this.aimTimer = 0;
+
+    // Shrine Respawn Queue (2-3 Min / 120-180s)
+    this.respawnQueue = [];
+
     // Teleportation Map State
     this.isTeleportModalOpen = false;
     this.teleportHoverTile = null;
@@ -114,13 +136,60 @@ export class MagicManager {
 
   initEvents() {
     if (this.btnCastMagic) {
-      const handleCast = (e) => {
+      const handlePress = (e) => {
         e.stopPropagation();
         if (e.cancelable) e.preventDefault();
-        this.castActiveSpell(this.game?.player, this.game?.map, this.game?.combat);
+        this.startAiming(this.game?.player);
       };
-      this.btnCastMagic.addEventListener('click', handleCast);
-      this.btnCastMagic.addEventListener('touchstart', handleCast, { passive: false });
+
+      const handleRelease = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+        if (this.isAiming) {
+          this.releaseAiming(this.game?.player, this.game?.map, this.game?.combat);
+        }
+      };
+
+      const handleCancel = () => {
+        this.cancelAiming();
+      };
+
+      this.btnCastMagic.addEventListener('pointerdown', handlePress);
+      this.btnCastMagic.addEventListener('pointerup', handleRelease);
+      this.btnCastMagic.addEventListener('pointercancel', handleCancel);
+
+      this.btnCastMagic.addEventListener('touchstart', handlePress, { passive: false });
+      this.btnCastMagic.addEventListener('touchend', handleRelease, { passive: false });
+      this.btnCastMagic.addEventListener('touchcancel', handleCancel, { passive: true });
+
+      this.btnCastMagic.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+        if (this.isAiming) {
+          this.releaseAiming(this.game?.player, this.game?.map, this.game?.combat);
+        } else {
+          this.castActiveSpell(this.game?.player, this.game?.map, this.game?.combat);
+        }
+      });
+    }
+
+    // Window release safety fallback
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pointerup', () => {
+        if (this.isAiming) {
+          this.releaseAiming(this.game?.player, this.game?.map, this.game?.combat);
+        }
+      });
+      window.addEventListener('mouseup', () => {
+        if (this.isAiming) {
+          this.releaseAiming(this.game?.player, this.game?.map, this.game?.combat);
+        }
+      });
+      window.addEventListener('touchend', () => {
+        if (this.isAiming) {
+          this.releaseAiming(this.game?.player, this.game?.map, this.game?.combat);
+        }
+      });
     }
 
     if (this.btnMagicInfo) {
@@ -273,6 +342,7 @@ export class MagicManager {
     bindDevEquip('dev-equip-bear', ARTIFACT_TYPES.DRUID_BEAR);
     bindDevEquip('dev-equip-plasma', ARTIFACT_TYPES.PLASMA_ORBS);
     bindDevEquip('dev-equip-teleport', ARTIFACT_TYPES.VOID_TELEPORT);
+    bindDevEquip('dev-equip-frost', ARTIFACT_TYPES.FROST_CONE);
   }
 
   toggleInfoModal(forceState = null) {
@@ -342,53 +412,66 @@ export class MagicManager {
 
   initShrineArtifacts(caves, cloudMap, overworldMap) {
     this.groundArtifacts = [];
+    const ALL_ARTIFACTS = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
+    const getRandomType = () => ALL_ARTIFACTS[Math.floor(Math.random() * ALL_ARTIFACTS.length)];
 
-    // 1. Shrines in Cloud World (Himmel): Rosa Plasmakugeln & Smaragd-Druide
-    if (cloudMap && cloudMap.shrines) {
-      const cloudTypes = ['plasma_orbs', 'druid_bear', 'phoenix'];
-      cloudMap.shrines.forEach((shrine, idx) => {
-        const type = cloudTypes[idx % cloudTypes.length];
+    // 1. Shrines in Cloud World (Himmel): Zufälliges Artefakt aus allen 5 Typen
+    if (cloudMap && Array.isArray(cloudMap.shrines)) {
+      cloudMap.shrines.forEach(shrine => {
+        const type = getRandomType();
         this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, type, true);
       });
     }
 
-    // 2. Shrines in Cave World (Höhlen): Leeren-Teleport & Rosa Plasmakugeln
-    const caveTypes = ['void_teleport', 'plasma_orbs', 'druid_bear'];
+    // 2. Shrines in Cave World (Höhlen): Zufälliges Artefakt aus allen 5 Typen
     if (caves) {
       if (Array.isArray(caves.shrines)) {
-        caves.shrines.forEach((shrine, idx) => {
-          const type = caveTypes[idx % caveTypes.length];
+        caves.shrines.forEach(shrine => {
+          const type = getRandomType();
           this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true);
         });
       } else if (typeof caves === 'object') {
-        let count = 0;
         Object.values(caves).forEach(cMap => {
           if (cMap && Array.isArray(cMap.shrines)) {
             cMap.shrines.forEach(shrine => {
-              const type = caveTypes[count % caveTypes.length];
+              const type = getRandomType();
               this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true);
-              count++;
             });
           }
         });
       }
     }
 
-    // 3. Shrines in Overworld: Phönix, Smaragd-Druide & Leeren-Teleport
-    const overworldTypes = ['phoenix', 'druid_bear', 'void_teleport'];
+    // 3. Shrines in Overworld: Nur der uralte Leeren-Schrein im Abgrund (Void)
     if (overworldMap && Array.isArray(overworldMap.shrines)) {
-      overworldMap.shrines.forEach((shrine, idx) => {
-        const type = overworldTypes[idx % overworldTypes.length];
+      overworldMap.shrines.forEach(shrine => {
+        const type = getRandomType();
         this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true);
       });
     } else {
-      this.spawnGroundArtifact(108 * TILE_SIZE + 8, 63 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, 'phoenix', true);
-      this.spawnGroundArtifact(20 * TILE_SIZE + 8, 36 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, 'druid_bear', true);
+      const type = getRandomType();
+      this.spawnGroundArtifact(108 * TILE_SIZE + 8, 63 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true);
     }
   }
 
+  handleArtifactRemoved(artifact) {
+    if (!artifact || !artifact.fromShrine) return;
+    const ALL_ARTIFACTS = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
+    const nextType = ALL_ARTIFACTS[Math.floor(Math.random() * ALL_ARTIFACTS.length)];
+    // Respawn nach 2 bis 3 Minuten (120 bis 180 Sekunden)
+    const respawnDelay = 120 + Math.random() * 60;
+    this.respawnQueue.push({
+      x: artifact.x,
+      y: artifact.y,
+      dimension: artifact.dimension,
+      typeId: nextType,
+      timer: respawnDelay,
+      maxTimer: respawnDelay
+    });
+  }
+
   dropMonsterArtifact(x, y, dimension = DIMENSIONS.OVERWORLD) {
-    const allTypes = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport'];
+    const allTypes = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
     const chosenType = allTypes[Math.floor(Math.random() * allTypes.length)];
     const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false);
 
@@ -430,6 +513,7 @@ export class MagicManager {
         if (!player.artifact || player.artifact.charges <= 0) {
           // Direct equip when player has no artifact or 0 charges
           this.equipArtifact(player, art.def);
+          this.handleArtifactRemoved(art);
           this.groundArtifacts.splice(i, 1);
           this.triggerPickupBanner(art.def);
         } else {
@@ -508,6 +592,7 @@ export class MagicManager {
     const player = this.game.player;
 
     this.equipArtifact(player, artifact.def);
+    this.handleArtifactRemoved(artifact);
     if (index >= 0 && index < this.groundArtifacts.length) {
       this.groundArtifacts.splice(index, 1);
     }
@@ -529,6 +614,7 @@ export class MagicManager {
       this.triggerPickupBanner(artifact.def, `ARTEFAKT AUFGELADEN (+${bonus} AUFLADUNGEN)!`);
     }
 
+    this.handleArtifactRemoved(artifact);
     if (index >= 0 && index < this.groundArtifacts.length) {
       this.groundArtifacts.splice(index, 1);
     }
@@ -561,8 +647,40 @@ export class MagicManager {
   }
 
   // ---------------------------------------------------------------------------
-  // SPELL CASTING (Phönix, Druiden-Bär, Plasmakugeln, Leeren-Teleport)
+  // SPELL CASTING & AIMING STENCIL
   // ---------------------------------------------------------------------------
+  startAiming(player) {
+    if (!player || player.isDead) return false;
+    if (!player.artifact || player.artifact.charges <= 0) return false;
+    if (player.artifact.cooldownTimer > 0) return false;
+    if (this.isTeleportModalOpen || this.isSwapModalOpen) return false;
+
+    this.isAiming = true;
+    this.aimTimer = 0;
+    if (this.btnCastMagic) {
+      this.btnCastMagic.classList.add('aiming-active');
+    }
+    return true;
+  }
+
+  cancelAiming() {
+    this.isAiming = false;
+    this.aimTimer = 0;
+    if (this.btnCastMagic) {
+      this.btnCastMagic.classList.remove('aiming-active');
+    }
+  }
+
+  releaseAiming(player, map, combatManager) {
+    if (!this.isAiming) return false;
+    this.isAiming = false;
+    this.aimTimer = 0;
+    if (this.btnCastMagic) {
+      this.btnCastMagic.classList.remove('aiming-active');
+    }
+    return this.castActiveSpell(player, map, combatManager);
+  }
+
   castActiveSpell(player, map, combatManager) {
     if (!player || player.isDead) return false;
     if (!player.artifact || player.artifact.charges <= 0) {
@@ -598,6 +716,11 @@ export class MagicManager {
     if (artId === 'void_teleport') {
       this.openTeleportModal();
       return true;
+    }
+
+    // 4. EISNEBEL (Hellblauer Frostkegel mit Einfrieren)
+    if (artId === 'frost_cone') {
+      return this.castFrostCone(player, map, combatManager);
     }
 
     // 4. RUBIN-PHÖNIX (Flammen-Sturm)
@@ -655,6 +778,114 @@ export class MagicManager {
     }
 
     this.updateHUD();
+    return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // EISNEBEL (Hellblauer Frostkegel mit Einfrieren)
+  // ---------------------------------------------------------------------------
+  castFrostCone(player, map, combatManager) {
+    if (!player || player.isDead) return false;
+    player.artifact.charges--;
+    player.artifact.cooldownTimer = player.artifact.cooldownMax || 2.5;
+    this.updateHUD();
+
+    const facingAngle = (typeof player.getFacingAngle === 'function') ? player.getFacingAngle() : 0;
+    const px = player.x;
+    const py = player.y - 8;
+    const range = 115;
+    const halfArc = 0.65; // ~75° cone
+    const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
+
+    let hitCount = 0;
+    if (this.game && this.game.enemyManager) {
+      const activeEnemies = this.game.enemyManager.getActiveEnemies ? this.game.enemyManager.getActiveEnemies() : [];
+      for (const enemy of activeEnemies) {
+        if (enemy.dimension !== curDim || enemy.state === 'dead') continue;
+        const dx = enemy.x - px;
+        const dy = enemy.y - py;
+        const dist = Math.hypot(dx, dy);
+        if (dist > range + (enemy.radius || 0)) continue;
+
+        const angToEnemy = Math.atan2(dy, dx);
+        let diff = angToEnemy - facingAngle;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+
+        if (Math.abs(diff) <= halfArc) {
+          // Dauer abhängig von Monsterstärke: 0.5s (Bosse) bis 3.0s (schwache Monster)
+          let duration = 2.0;
+          if (typeof calculateFreezeDuration === 'function') {
+            duration = calculateFreezeDuration(enemy);
+          } else if (enemy.category === 'boss' || enemy.maxHp >= 500) {
+            duration = 0.5;
+          } else if (enemy.maxHp >= 300 || enemy.scale >= 1.3) {
+            duration = 1.0;
+          } else if (enemy.maxHp >= 100) {
+            duration = 1.8;
+          } else {
+            duration = 3.0;
+          }
+
+          enemy.freezeTimer = duration;
+          enemy.takeDamage(45, facingAngle, 35, combatManager);
+          hitCount++;
+
+          if (combatManager) {
+            combatManager.addFloatingText(`❄️ EINGEFROREN (${duration.toFixed(1)}s)`, enemy.x, enemy.y - 20, '#38bdf8', 1.1);
+            for (let s = 0; s < 14; s++) {
+              const pAng = Math.random() * Math.PI * 2;
+              const sp = Math.random() * 50 + 20;
+              combatManager.hitSparks.push({
+                x: enemy.x,
+                y: enemy.y - 6,
+                vx: Math.cos(pAng) * sp,
+                vy: Math.sin(pAng) * sp - 10,
+                color: Math.random() > 0.4 ? '#38bdf8' : '#e0f2fe',
+                size: Math.random() * 2.8 + 1.2,
+                life: 0.5,
+                maxLife: 0.5
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Audio-visuelles Feedback
+    if (combatManager) {
+      combatManager.addFloatingText(`❄️ EISNEBEL! (${player.artifact.charges} übrig)`, px, py - 26, '#38bdf8', 1.2);
+      for (let s = 0; s < 32; s++) {
+        const spreadAng = facingAngle + (Math.random() - 0.5) * (halfArc * 1.8);
+        const sp = Math.random() * 120 + 30;
+        combatManager.hitSparks.push({
+          x: px,
+          y: py,
+          vx: Math.cos(spreadAng) * sp,
+          vy: Math.sin(spreadAng) * sp,
+          color: Math.random() > 0.4 ? '#38bdf8' : (Math.random() > 0.5 ? '#bae6fd' : '#ffffff'),
+          size: Math.random() * 3 + 1.5,
+          life: 0.45,
+          maxLife: 0.45
+        });
+      }
+    }
+
+    // Aktiver Zauber für visuelle Frostwellen-Animation
+    this.activeSpells.push({
+      id: `frost_${Date.now()}`,
+      type: 'frost_cone',
+      dimension: curDim,
+      x: px,
+      y: py,
+      angle: facingAngle,
+      range,
+      arc: halfArc * 2,
+      animTime: 0,
+      life: 0.4,
+      maxLife: 0.4
+    });
+
     return true;
   }
 
@@ -1029,6 +1260,42 @@ export class MagicManager {
   update(dt, player, map, combatManager, enemyManager) {
     const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
 
+    // 0. Update Shrine Respawn Queue (2-3 Min / 120-180s)
+    for (let r = this.respawnQueue.length - 1; r >= 0; r--) {
+      const respawn = this.respawnQueue[r];
+      respawn.timer -= dt;
+      if (respawn.timer <= 0) {
+        this.spawnGroundArtifact(respawn.x, respawn.y, respawn.dimension, respawn.typeId, true);
+        const def = getArtifactDef(respawn.typeId);
+        if (combatManager && (!this.game || this.game.currentDimension === respawn.dimension)) {
+          combatManager.addFloatingText(`✨ ARTEFAKT RESPAWNT: ${def.name.toUpperCase()}!`, respawn.x, respawn.y - 20, def.colorTheme || '#38bdf8', 1.6);
+          for (let s = 0; s < 25; s++) {
+            const ang = Math.random() * Math.PI * 2;
+            const sp = Math.random() * 60 + 20;
+            combatManager.hitSparks.push({
+              x: respawn.x,
+              y: respawn.y - 8,
+              vx: Math.cos(ang) * sp,
+              vy: Math.sin(ang) * sp - 20,
+              color: def.colorTheme || '#38bdf8',
+              size: Math.random() * 3 + 2,
+              life: 0.8,
+              maxLife: 0.8
+            });
+          }
+        }
+        this.respawnQueue.splice(r, 1);
+      }
+    }
+
+    // Aiming state tracking
+    if (this.isAiming) {
+      this.aimTimer += dt;
+      if (!player || player.isDead || !player.artifact || player.artifact.charges <= 0) {
+        this.cancelAiming();
+      }
+    }
+
     // 1. Update Player Artifact Cooldown & Glitter
     if (player && player.artifact) {
       if (player.artifact.cooldownTimer > 0) {
@@ -1079,13 +1346,22 @@ export class MagicManager {
     // Check player pickup
     this.checkPlayerPickup(player);
 
-    // 4. Update Active Spells (Phoenix)
+    // 4. Update Active Spells (Phoenix & Frost Cone)
     const mapPixelW = (map ? map.width : MAP_WIDTH) * TILE_SIZE;
     const mapPixelH = (map ? map.height : MAP_HEIGHT) * TILE_SIZE;
 
     for (let i = this.activeSpells.length - 1; i >= 0; i--) {
       const spell = this.activeSpells[i];
       if (spell.dimension !== curDim) continue;
+
+      if (spell.type === 'frost_cone') {
+        spell.animTime += dt;
+        spell.life -= dt;
+        if (spell.life <= 0) {
+          this.activeSpells.splice(i, 1);
+        }
+        continue;
+      }
 
       spell.animTime += dt;
       spell.life -= dt;
@@ -1231,6 +1507,11 @@ export class MagicManager {
     if (player && player.artifact && player.artifact.charges > 0) {
       this.renderPlayerGlitter(ctx, camera);
     }
+
+    // 5. Attack Preview Aiming Stencil (Schablone bei Halten)
+    if (this.isAiming) {
+      this.renderAimingStencil(ctx, camera);
+    }
   }
 
   renderGroundArtifacts(ctx, camera, curDim) {
@@ -1348,6 +1629,29 @@ export class MagicManager {
       ctx.save();
       ctx.translate(sx, sy);
       ctx.rotate(spell.angle);
+
+      // Frost-Kegel Wellen-Animation
+      if (spell.type === 'frost_cone') {
+        const progress = Math.min(1.0, 1.0 - (spell.life / (spell.maxLife || 0.4)));
+        const curR = (spell.range * (0.35 + progress * 0.65)) * zoom;
+        const alpha = Math.sin(progress * Math.PI);
+
+        ctx.fillStyle = `rgba(56, 189, 248, ${alpha * 0.35})`;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, curR, -spell.arc / 2, spell.arc / 2);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = `rgba(224, 242, 254, ${alpha * 0.85})`;
+        ctx.lineWidth = 2.5 * zoom;
+        ctx.beginPath();
+        ctx.arc(0, 0, curR, -spell.arc / 2, spell.arc / 2);
+        ctx.stroke();
+
+        ctx.restore();
+        continue;
+      }
 
       // Flapping wing cycle
       const flap = Math.sin(spell.animTime * 18);
@@ -1486,5 +1790,214 @@ export class MagicManager {
 
       ctx.restore();
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // ATTACK PREVIEW AIMING STENCIL (Schablone bei Halten)
+  // ---------------------------------------------------------------------------
+  renderAimingStencil(ctx, camera) {
+    const player = this.game?.player;
+    if (!player || !player.artifact || player.artifact.charges <= 0 || player.isDead) return;
+
+    const zoom = camera ? camera.zoom : 1;
+    const camX = camera ? camera.x : 0;
+    const camY = camera ? camera.y : 0;
+
+    const px = player.x;
+    const py = player.y - 8;
+    const sx = (px - camX) * zoom;
+    const sy = (py - camY) * zoom;
+
+    const facingAngle = (typeof player.getFacingAngle === 'function') ? player.getFacingAngle() : 0;
+    const artId = player.artifact.id;
+    const t = Date.now() / 1000;
+
+    ctx.save();
+
+    // 1. RUBIN-PHÖNIX: 5 Kacheln (80px) breite Schneise in Blickrichtung
+    if (artId === 'phoenix') {
+      ctx.translate(sx, sy);
+      ctx.rotate(facingAngle);
+
+      const corridorLength = 260 * zoom;
+      const corridorHalfWidth = 40 * zoom; // 80px Gesamtbreite (5 Kacheln)
+
+      // Halbtransparenter Flammen-Schleier
+      const grad = ctx.createLinearGradient(0, 0, corridorLength, 0);
+      grad.addColorStop(0, 'rgba(239, 68, 68, 0.42)');
+      grad.addColorStop(0.7, 'rgba(245, 158, 11, 0.22)');
+      grad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, -corridorHalfWidth, corridorLength, corridorHalfWidth * 2);
+
+      // Gestrichelte feuerrote Seitenlinien
+      ctx.strokeStyle = 'rgba(251, 146, 60, 0.85)';
+      ctx.lineWidth = 2 * zoom;
+      ctx.setLineDash([8 * zoom, 5 * zoom]);
+      ctx.lineDashOffset = -t * 32 * zoom;
+      ctx.beginPath();
+      ctx.moveTo(0, -corridorHalfWidth);
+      ctx.lineTo(corridorLength, -corridorHalfWidth);
+      ctx.moveTo(0, corridorHalfWidth);
+      ctx.lineTo(corridorLength, corridorHalfWidth);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Flugbahn-Mittelachse
+      ctx.strokeStyle = 'rgba(254, 240, 138, 0.55)';
+      ctx.lineWidth = 1 * zoom;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(corridorLength * 0.9, 0);
+      ctx.stroke();
+
+      // Animierte wandernde Chevrons (>> Vorwärtsflug-Indikatoren)
+      const chevCount = 4;
+      for (let c = 0; c < chevCount; c++) {
+        const progress = ((t * 1.6 + c / chevCount) % 1.0);
+        const cx = progress * corridorLength;
+        const alpha = Math.sin(progress * Math.PI);
+        ctx.strokeStyle = `rgba(254, 240, 138, ${alpha * 0.9})`;
+        ctx.lineWidth = 2.5 * zoom;
+        ctx.beginPath();
+        ctx.moveTo(cx - 12 * zoom, -20 * zoom);
+        ctx.lineTo(cx + 4 * zoom, 0);
+        ctx.lineTo(cx - 12 * zoom, 20 * zoom);
+        ctx.stroke();
+      }
+    }
+
+    // 2. ROSA PLASMAKUGELN: Orbit-Ring & 4 Detonations-Zonen um den Spieler
+    else if (artId === 'plasma_orbs') {
+      ctx.translate(sx, sy);
+      const orbitR = 42 * zoom;
+      const blastR = 24 * zoom;
+
+      // Zonen-Hintergrund
+      ctx.fillStyle = 'rgba(236, 72, 153, 0.14)';
+      ctx.beginPath();
+      ctx.arc(0, 0, orbitR + blastR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pulsierender gestrichelter Orbit-Pfad
+      ctx.strokeStyle = 'rgba(244, 114, 182, 0.85)';
+      ctx.lineWidth = 2 * zoom;
+      ctx.setLineDash([6 * zoom, 4 * zoom]);
+      ctx.lineDashOffset = -t * 24 * zoom;
+      ctx.beginPath();
+      ctx.arc(0, 0, orbitR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // 4 Detonations-Retikel an den 4 Orbit-Positionen
+      for (let i = 0; i < 4; i++) {
+        const orbAngle = t * 2.5 + (i * Math.PI / 2);
+        const ox = Math.cos(orbAngle) * orbitR;
+        const oy = Math.sin(orbAngle) * orbitR;
+
+        // Explosions-Wirkungsbereich
+        ctx.fillStyle = 'rgba(236, 72, 153, 0.22)';
+        ctx.beginPath();
+        ctx.arc(ox, oy, blastR * (0.85 + Math.sin(t * 6 + i) * 0.15), 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#f472b6';
+        ctx.lineWidth = 1.5 * zoom;
+        ctx.beginPath();
+        ctx.arc(ox, oy, 6 * zoom, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Ziel-Fadenkreuz
+        ctx.beginPath();
+        ctx.moveTo(ox - 10 * zoom, oy);
+        ctx.lineTo(ox + 10 * zoom, oy);
+        ctx.moveTo(ox, oy - 10 * zoom);
+        ctx.lineTo(ox, oy + 10 * zoom);
+        ctx.stroke();
+      }
+    }
+
+    // 3. EISNEBEL: 70° Frostkegel vor dem Spieler
+    else if (artId === 'frost_cone') {
+      ctx.translate(sx, sy);
+      const coneR = 115 * zoom;
+      const halfArc = 0.65; // ~75° Kegel (±37.5°)
+
+      // Kegel-Pfad
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, coneR, facingAngle - halfArc, facingAngle + halfArc);
+      ctx.closePath();
+
+      // Frost-Fächer Farbverlauf
+      const grad = ctx.createRadialGradient(0, 0, 10 * zoom, 0, 0, coneR);
+      grad.addColorStop(0, 'rgba(56, 189, 248, 0.42)');
+      grad.addColorStop(0.7, 'rgba(125, 211, 252, 0.25)');
+      grad.addColorStop(1, 'rgba(56, 189, 248, 0.05)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Gestrichelter cyanblauer Bogenrand
+      ctx.strokeStyle = 'rgba(186, 230, 253, 0.9)';
+      ctx.lineWidth = 2 * zoom;
+      ctx.setLineDash([7 * zoom, 4 * zoom]);
+      ctx.lineDashOffset = -t * 20 * zoom;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Radiale Begrenzungslinien
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.75)';
+      ctx.lineWidth = 1.8 * zoom;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(facingAngle - halfArc) * coneR, Math.sin(facingAngle - halfArc) * coneR);
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(facingAngle + halfArc) * coneR, Math.sin(facingAngle + halfArc) * coneR);
+      ctx.stroke();
+
+      // Mittlere Ziel-Leitlinie
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+      ctx.lineWidth = 1 * zoom;
+      ctx.setLineDash([4 * zoom, 4 * zoom]);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(facingAngle) * coneR * 0.9, Math.sin(facingAngle) * coneR * 0.9);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Eiskristall-Glanzpunkte im Kegel
+      for (let s = 1; s <= 3; s++) {
+        const sDist = (coneR * 0.3 * s) * (0.8 + Math.sin(t * 3 + s) * 0.1);
+        const sAng = facingAngle + Math.sin(t * 2 + s * 1.5) * (halfArc * 0.6);
+        const gx = Math.cos(sAng) * sDist;
+        const gy = Math.sin(sAng) * sDist;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(gx, gy, 2 * zoom, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 4. SMARAGD-DRUIDE / LEEREN-TELEPORT
+    else if (artId === 'druid_bear') {
+      ctx.translate(sx, sy);
+      ctx.strokeStyle = 'rgba(34, 197, 94, 0.75)';
+      ctx.lineWidth = 2 * zoom;
+      ctx.setLineDash([5 * zoom, 5 * zoom]);
+      ctx.lineDashOffset = -t * 15 * zoom;
+      ctx.beginPath();
+      ctx.arc(0, 0, 32 * zoom, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else if (artId === 'void_teleport') {
+      ctx.translate(sx, sy);
+      ctx.strokeStyle = 'rgba(168, 85, 247, 0.75)';
+      ctx.lineWidth = 2 * zoom;
+      ctx.beginPath();
+      ctx.arc(0, 0, 24 * zoom, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 }
