@@ -544,7 +544,7 @@ export class MagicManager {
             spell.hitEnemies.add(enemy);
 
             // Deal heavy phoenix fire damage
-            enemy.takeDamage(spell.damage, player, combatManager);
+            enemy.takeDamage(spell.damage, spell.angle, 120, combatManager, true);
             combatManager?.addFloatingText(`🔥 -${spell.damage}`, enemy.x, enemy.y - 20, '#ef4444', 0.9);
 
             // Explosion sparks at impact

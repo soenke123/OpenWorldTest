@@ -102,7 +102,7 @@ class Game {
     this.confirmCtx = this.confirmCanvas ? this.confirmCanvas.getContext('2d') : null;
 
     this.charWizardStep = 1;
-    this.isCharacterSelectOpen = !!this.charSelectModal;
+    this.isCharacterSelectOpen = Boolean(this.charSelectModal && !this.charSelectModal.classList.contains('hidden'));
     this.selectedHeroSkin = (this.player && this.player.skinId) || getSelectedSkin();
     this.charPreviewCanvases = {};
 
@@ -210,16 +210,25 @@ class Game {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
         if (e.code === 'Enter' && e.target === this.heroNameInput) {
           this.goToCharWizardStep(2);
+        } else if (e.code === 'Escape' && this.isCharacterSelectOpen) {
+          if (typeof e.target.blur === 'function') e.target.blur();
+          this.startGameWithSelectedHero();
         }
         return;
       }
       if (this.isCharacterSelectOpen) {
-        if (e.code === 'Enter') {
-          if (this.charWizardStep === 1) this.goToCharWizardStep(2);
-          else if (this.charWizardStep === 2) this.goToCharWizardStep(3);
-          else if (this.charWizardStep === 3) this.startGameWithSelectedHero();
+        if (!this.charSelectModal || this.charSelectModal.classList.contains('hidden')) {
+          this.isCharacterSelectOpen = false;
+        } else {
+          if (e.code === 'Enter') {
+            if (this.charWizardStep === 1) this.goToCharWizardStep(2);
+            else if (this.charWizardStep === 2) this.goToCharWizardStep(3);
+            else if (this.charWizardStep === 3) this.startGameWithSelectedHero();
+          } else if (e.code === 'Escape') {
+            this.startGameWithSelectedHero();
+          }
+          return;
         }
-        return;
       }
 
       if (this.magicManager && this.magicManager.isSwapModalOpen) {
@@ -273,7 +282,13 @@ class Game {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
         return;
       }
-      if (this.isCharacterSelectOpen) return;
+      if (this.isCharacterSelectOpen) {
+        if (!this.charSelectModal || this.charSelectModal.classList.contains('hidden')) {
+          this.isCharacterSelectOpen = false;
+        } else {
+          return;
+        }
+      }
 
       this.input.keys[e.code] = false;
       if (e.code === 'KeyJ') {
@@ -289,7 +304,13 @@ class Game {
 
     if (this.canvas) {
       this.canvas.addEventListener('mousedown', (e) => {
-        if (this.isCharacterSelectOpen) return;
+        if (this.isCharacterSelectOpen) {
+          if (!this.charSelectModal || this.charSelectModal.classList.contains('hidden')) {
+            this.isCharacterSelectOpen = false;
+          } else {
+            return;
+          }
+        }
         const rect = this.canvas.getBoundingClientRect();
         const scaleX = this.canvas.width / rect.width;
         const scaleY = this.canvas.height / rect.height;
@@ -365,6 +386,9 @@ class Game {
     if (btnReset) {
       btnReset.addEventListener('click', (e) => {
         e.stopPropagation();
+        if (this.isCharacterSelectOpen) {
+          this.startGameWithSelectedHero();
+        }
         this.player.respawn();
         this.updateHUD();
         this.showToast('🔄 Spieler zurückgesetzt & respawnt!');
@@ -573,6 +597,13 @@ class Game {
   }
 
   handleTouchButton(action, isDown) {
+    if (this.isCharacterSelectOpen) {
+      if (!this.charSelectModal || this.charSelectModal.classList.contains('hidden')) {
+        this.isCharacterSelectOpen = false;
+      } else {
+        return;
+      }
+    }
     if (this.input.joystick && this.input.joystick.active) {
       this.player.setDirectionFromVector(this.input.joystick.x, this.input.joystick.y);
     }
@@ -643,8 +674,15 @@ class Game {
   }
 
   loop(currentTime) {
-    const dt = Math.min((currentTime - this.lastTime) / 1000, 0.1);
-    this.lastTime = currentTime;
+    const now = (typeof currentTime === 'number' && !isNaN(currentTime)) ? currentTime : performance.now();
+    let dt = 0.016;
+    if (this.lastTime && !isNaN(this.lastTime)) {
+      const rawDt = (now - this.lastTime) / 1000;
+      if (rawDt > 0 && rawDt < 1.0) {
+        dt = Math.min(rawDt, 0.1);
+      }
+    }
+    this.lastTime = now;
     this.animTime += dt;
 
     this.update(dt);
@@ -655,12 +693,19 @@ class Game {
 
   update(dt) {
     if (this.isCharacterSelectOpen) {
-      this.updateCharacterSelectPreviews(dt);
-      return;
+      if (!this.charSelectModal || this.charSelectModal.classList.contains('hidden')) {
+        this.isCharacterSelectOpen = false;
+      } else {
+        this.updateCharacterSelectPreviews(dt);
+        return;
+      }
     }
 
     // 1. Advance Day-Night Clock
     this.gameTime = (this.gameTime + dt * this.timeSpeed) % 24;
+    if (isNaN(this.gameTime) || this.gameTime < 0) {
+      this.gameTime = 18.5;
+    }
 
     this.spriteManager.update(dt);
     this.player.update(dt, this.input);
@@ -3466,6 +3511,23 @@ class Game {
       });
     }
 
+    // Direct Close / Skip Button (✕)
+    const btnCloseWizard = document.getElementById('btn-close-char-wizard');
+    if (btnCloseWizard) {
+      btnCloseWizard.addEventListener('click', () => {
+        this.startGameWithSelectedHero();
+      });
+    }
+
+    // Click backdrop outside modal dialog to start/resume
+    if (this.charSelectModal) {
+      this.charSelectModal.addEventListener('click', (e) => {
+        if (e.target === this.charSelectModal) {
+          this.startGameWithSelectedHero();
+        }
+      });
+    }
+
     // Populate initial cards and start at step 1
     this.goToCharWizardStep(1);
     this.renderCharacterSelectCards();
@@ -3624,6 +3686,13 @@ class Game {
       this.charSelectModal.classList.add('hidden');
     }
     this.isCharacterSelectOpen = false;
+
+    if (this.heroNameInput && typeof this.heroNameInput.blur === 'function') {
+      this.heroNameInput.blur();
+    }
+    if (this.canvas && typeof this.canvas.focus === 'function') {
+      this.canvas.focus();
+    }
   }
 
   openCharacterSelectModal() {

@@ -244,6 +244,8 @@
         </div>
         <span class="respawn-timer">Respawn wird ausgeführt...</span>
       </div>
+    </div>
+
     <!-- =======================================================
          MAGIC & ARTIFACT HUD (Rechter Bildschirmrand)
          ======================================================= -->
@@ -440,8 +442,9 @@
     <!-- =======================================================
          CHARACTER & NAME SELECTION WIZARD (Clean 3 Steps)
          ======================================================= -->
-    <div id="character-select-modal" class="char-modal-backdrop">
+    <div id="character-select-modal" class="char-modal-backdrop hidden">
       <div class="char-modal-dialog">
+        <button id="btn-close-char-wizard" class="char-modal-close-btn" title="Direkt spielen / Schließen (Esc)">✕</button>
         <!-- Step Indicator Dots -->
         <div class="char-wizard-dots">
           <span class="wizard-dot active" data-step="1"></span>
