@@ -2041,31 +2041,16 @@ export class Player {
       ctx.restore();
     }
 
-    // 4f. Compact Overhead Health Bar (when damaged)
-    if (this.hp < this.maxHp && this.hp > 0 && !this.isDead) {
-      const barW = 24;
-      const barH = 3.5;
-      const barX = px - barW / 2;
-      const barY = py - 26 + bob;
-      const hpPct = Math.max(0, this.hp / this.maxHp);
+    // 6. Name und HP unter dem Charakter (erst Name, dann HP nur wenn nicht voll)
+    const baseUnderY = py + 9;
 
-      ctx.save();
-      // Paper border & dark drop shadow
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
-      // Health Fill (dynamic green -> yellow -> red)
-      ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
-      ctx.fillRect(barX, barY, barW * hpPct, barH);
-      ctx.restore();
-    }
-
-    // 4g. Overhead Player Nameplate (Dark Ghibli Papercraft)
+    // Nameplate unter dem Charakter (Dark Ghibli Papercraft)
     if (this.name && !this.isDead) {
       ctx.save();
       ctx.font = 'bold 8.5px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const nameY = (this.hp < this.maxHp) ? py - 33 + bob : py - 27 + bob;
+      const nameY = baseUnderY;
       const textMetrics = (typeof ctx.measureText === 'function') ? ctx.measureText(this.name) : { width: this.name.length * 5.5 };
       const textW = Math.max(16, textMetrics.width);
       const padX = 4;
@@ -2085,6 +2070,24 @@ export class Player {
       if (typeof ctx.fillText === 'function') {
         ctx.fillText(this.name, px, nameY);
       }
+      ctx.restore();
+    }
+
+    // Lebensbalken direkt unter dem Namen (nur wenn verletzt)
+    if (this.hp < this.maxHp && this.hp > 0 && !this.isDead) {
+      const barW = 24;
+      const barH = 3.5;
+      const barX = px - barW / 2;
+      const barY = baseUnderY + 8;
+      const hpPct = Math.max(0, this.hp / this.maxHp);
+
+      ctx.save();
+      // Paper border & dark drop shadow
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+      // Health Fill (dynamic green -> yellow -> red)
+      ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
+      ctx.fillRect(barX, barY, barW * hpPct, barH);
       ctx.restore();
     }
 

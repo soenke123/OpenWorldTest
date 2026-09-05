@@ -1882,7 +1882,7 @@ canvas#gameCanvas {
   align-items: center;
   justify-content: center;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   outline: none;
   touch-action: none;
@@ -1916,20 +1916,22 @@ canvas#gameCanvas {
 
 .magic-charges-badge {
   position: absolute;
-  top: -2px;
-  right: -2px;
+  top: -6px;
+  right: -6px;
   background: #facc15;
   color: #0f172a;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   font-weight: 900;
   border-radius: 50%;
-  width: 22px;
-  height: 22px;
+  width: 23px;
+  height: 23px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1.5px solid #ffffff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.65);
+  z-index: 10;
+  pointer-events: none;
 }
 
 .magic-cooldown-overlay {
@@ -1940,6 +1942,7 @@ canvas#gameCanvas {
   height: 0%;
   background: rgba(15, 23, 42, 0.75);
   pointer-events: none;
+  border-radius: 50%;
   transition: height 0.05s linear;
 }
 

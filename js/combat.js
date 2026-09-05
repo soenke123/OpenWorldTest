@@ -452,19 +452,19 @@ export class CombatManager {
     this.createShockwave(x, y - 8, isArrival ? 32 : 24, 0, '#a855f7', false, dim);
   }
 
-  spawnPlasmaExplosion(x, y, radius = 48, damage = 110, knockback = 175) {
+  spawnPlasmaExplosion(x, y, radius = 36, damage = 45, knockback = 90) {
     const dim = this.game?.currentDimension || 'overworld';
     this.createShockwave(x, y, radius, 0, '#ec4899', false, dim);
 
     if (this.game?.camera) {
-      this.game.camera.shake(3.8, 0.16);
+      this.game.camera.shake(1.6, 0.12);
     }
 
     this.addFloatingText('💥 PLASMA!', x, y - 18, '#f472b6', 0.85);
 
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 16; i++) {
       const ang = Math.random() * Math.PI * 2;
-      const sp = Math.random() * 140 + 40;
+      const sp = Math.random() * 80 + 25;
       this.hitSparks.push({
         dimension: dim,
         x,
@@ -472,9 +472,9 @@ export class CombatManager {
         vx: Math.cos(ang) * sp,
         vy: Math.sin(ang) * sp - 10,
         color: Math.random() > 0.4 ? '#ec4899' : (Math.random() > 0.5 ? '#f472b6' : '#ffffff'),
-        size: Math.random() * 3.5 + 1.5,
-        life: 0.45,
-        maxLife: 0.45
+        size: Math.random() * 2.8 + 1.2,
+        life: 0.4,
+        maxLife: 0.4
       });
     }
 

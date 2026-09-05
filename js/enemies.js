@@ -833,12 +833,39 @@ export class EnemyEntity {
       ctx.restore();
     }
 
-    // Lebensbalken über dem Kopf (nur wenn verletzt)
+    // 6. Name und HP unter dem Charakter (erst Name, dann HP nur wenn nicht voll)
+    const baseBelowY = drawY + Math.round(15 * this.scale) + 4;
+    const enemyName = this.name || this.def?.name || '';
+    if (enemyName) {
+      ctx.save();
+      ctx.font = 'bold 8px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const nameY = baseBelowY;
+      const metrics = (typeof ctx.measureText === 'function') ? ctx.measureText(enemyName) : { width: enemyName.length * 5 };
+      const textW = Math.max(14, metrics.width);
+      const padX = 3;
+      const badgeH = 10;
+
+      // Dunkles Papercraft-Badge
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.fillRect(drawX - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(drawX - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
+
+      // Name Text
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillText(enemyName, drawX, nameY);
+      ctx.restore();
+    }
+
+    // Lebensbalken direkt unter dem Namen (nur wenn verletzt)
     if (this.hp < this.maxHp && this.hp > 0) {
       const barW = Math.round(24 * Math.max(0.8, Math.min(1.8, this.scale)));
       const barH = 3.5;
       const barX = drawX - barW / 2;
-      const barY = drawY - Math.round(18 * this.scale);
+      const barY = baseBelowY + 8;
       const hpPct = Math.max(0, this.hp / this.maxHp);
 
       ctx.save();

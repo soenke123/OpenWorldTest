@@ -43,7 +43,7 @@ export const ARTIFACT_TYPES = {
     maxCharges: 5,
     rechargeBonus: 3,
     cooldown: 3.0,
-    damage: 240,
+    damage: 45,
     widthTiles: 3,
     speed: 0,
     colorTheme: '#ec4899',
@@ -73,7 +73,7 @@ export const ARTIFACT_TYPES = {
     maxCharges: 5,
     rechargeBonus: 3,
     cooldown: 2.5,
-    damage: 45,
+    damage: 0,
     widthTiles: 4,
     speed: 0,
     colorTheme: '#38bdf8',
@@ -111,6 +111,7 @@ export class MagicManager {
 
     // Shrine Respawn Queue (2-3 Min / 120-180s)
     this.respawnQueue = [];
+    this.pickupCooldown = 0;
 
     // Teleportation Map State
     this.isTeleportModalOpen = false;
@@ -391,9 +392,20 @@ export class MagicManager {
   }
 
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // GROUND ARTIFACT MANAGEMENT
   // ---------------------------------------------------------------------------
-  spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false) {
+  spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false, subCaveId = null) {
+    // 5. An jedem Schrein liegt maximal 1 Artefakt!
+    const existing = this.groundArtifacts.find(a =>
+      a.dimension === dimension &&
+      (dimension !== DIMENSIONS.CAVES || a.subCaveId === subCaveId) &&
+      Math.hypot(a.x - x, a.y - y) < 24
+    );
+    if (existing) {
+      return existing; // Kein Duplikat am selben Schrein ablegen
+    }
+
     const artifactDef = getArtifactDef(typeId);
     const artifact = {
       id: `art_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
@@ -402,6 +414,7 @@ export class MagicManager {
       x,
       y,
       dimension,
+      subCaveId,
       fromShrine,
       bobTime: Math.random() * Math.PI * 2,
       lightPulse: 0
@@ -419,23 +432,23 @@ export class MagicManager {
     if (cloudMap && Array.isArray(cloudMap.shrines)) {
       cloudMap.shrines.forEach(shrine => {
         const type = getRandomType();
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, type, true);
+        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, type, true, null);
       });
     }
 
-    // 2. Shrines in Cave World (Höhlen): Zufälliges Artefakt aus allen 5 Typen
-    if (caves) {
+    // 2. Shrines in Cave World (Höhlen): Jede Unterhöhle separat taggen
+    if (caves && typeof caves === 'object') {
       if (Array.isArray(caves.shrines)) {
         caves.shrines.forEach(shrine => {
           const type = getRandomType();
-          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true);
+          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true, null);
         });
-      } else if (typeof caves === 'object') {
-        Object.values(caves).forEach(cMap => {
+      } else {
+        Object.entries(caves).forEach(([caveKey, cMap]) => {
           if (cMap && Array.isArray(cMap.shrines)) {
             cMap.shrines.forEach(shrine => {
               const type = getRandomType();
-              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true);
+              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true, caveKey);
             });
           }
         });
@@ -446,16 +459,24 @@ export class MagicManager {
     if (overworldMap && Array.isArray(overworldMap.shrines)) {
       overworldMap.shrines.forEach(shrine => {
         const type = getRandomType();
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true);
+        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true, null);
       });
     } else {
       const type = getRandomType();
-      this.spawnGroundArtifact(108 * TILE_SIZE + 8, 63 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true);
+      this.spawnGroundArtifact(108 * TILE_SIZE + 8, 63 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true, null);
     }
   }
 
   handleArtifactRemoved(artifact) {
     if (!artifact || !artifact.fromShrine) return;
+    // Prüfe, ob dieser Schrein bereits in der Respawn-Queue wartet
+    const isQueued = this.respawnQueue.some(r =>
+      r.dimension === artifact.dimension &&
+      (artifact.dimension !== DIMENSIONS.CAVES || r.subCaveId === artifact.subCaveId) &&
+      Math.hypot(r.x - artifact.x, r.y - artifact.y) < 24
+    );
+    if (isQueued) return;
+
     const ALL_ARTIFACTS = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
     const nextType = ALL_ARTIFACTS[Math.floor(Math.random() * ALL_ARTIFACTS.length)];
     // Respawn nach 2 bis 3 Minuten (120 bis 180 Sekunden)
@@ -464,6 +485,7 @@ export class MagicManager {
       x: artifact.x,
       y: artifact.y,
       dimension: artifact.dimension,
+      subCaveId: artifact.subCaveId || null,
       typeId: nextType,
       timer: respawnDelay,
       maxTimer: respawnDelay
@@ -473,7 +495,7 @@ export class MagicManager {
   dropMonsterArtifact(x, y, dimension = DIMENSIONS.OVERWORLD) {
     const allTypes = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
     const chosenType = allTypes[Math.floor(Math.random() * allTypes.length)];
-    const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false);
+    const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false, this.game?.activeSubCave || null);
 
     if (this.game?.combat) {
       this.game.combat.addFloatingText(`✨ ${art.def.icon} ${art.def.name.toUpperCase()}!`, x, y - 24, art.def.colorTheme || '#f59e0b', 1.3);
@@ -499,25 +521,31 @@ export class MagicManager {
   // PICKUP & SWAP LOGIC
   // ---------------------------------------------------------------------------
   checkPlayerPickup(player) {
-    if (!player || player.isDead || this.isSwapModalOpen) return;
+    if (!player || player.isDead || this.isSwapModalOpen || this.pickupCooldown > 0) return;
     const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
+    const curSubCave = this.game?.activeSubCave || null;
 
     const PICKUP_DIST = 20;
 
     for (let i = this.groundArtifacts.length - 1; i >= 0; i--) {
       const art = this.groundArtifacts[i];
       if (art.dimension !== curDim) continue;
+      if (curDim === DIMENSIONS.CAVES && art.subCaveId && curSubCave && art.subCaveId !== curSubCave) continue;
 
       const dist = Math.hypot(player.x - art.x, (player.y - 8) - art.y);
       if (dist <= PICKUP_DIST) {
-        if (!player.artifact || player.artifact.charges <= 0) {
-          // Direct equip when player has no artifact or 0 charges
+        // 7. Nur fragen, wenn man BEREITS ein aktives Artefakt mit Aufladungen hat!
+        const hasActiveArtifact = Boolean(player.artifact && player.artifact.id && player.artifact.charges > 0);
+
+        if (!hasActiveArtifact) {
+          // Direkt ausrüsten ohne jegliche Rückfrage!
           this.equipArtifact(player, art.def);
           this.handleArtifactRemoved(art);
           this.groundArtifacts.splice(i, 1);
           this.triggerPickupBanner(art.def);
+          this.pickupCooldown = 0.5;
         } else {
-          // Player already has an active artifact -> open swap modal
+          // Spieler hat bereits ein aktives Artefakt -> Swap Modal anzeigen
           this.openSwapModal(art, i);
         }
         break;
@@ -527,6 +555,12 @@ export class MagicManager {
 
   equipArtifact(player, artifactDef) {
     if (!player) return;
+
+    // 4. Wenn der Spieler in Bärengestalt ist und das Artefakt wechselt: zurückverwandeln!
+    if (player.isBearForm && typeof player.revertBearForm === 'function') {
+      player.revertBearForm();
+    }
+
     const def = getArtifactDef(artifactDef.id || artifactDef);
     player.artifact = {
       id: def.id,
@@ -547,14 +581,29 @@ export class MagicManager {
   }
 
   openSwapModal(groundArtifact, index) {
+    const player = this.game?.player;
+    if (!player) return;
+
+    // 7. Sicherheitsprüfung: Wenn kein aktives Artefakt vorhanden ist, direkt ausrüsten
+    const hasActiveArtifact = Boolean(player.artifact && player.artifact.id && player.artifact.charges > 0);
+    if (!hasActiveArtifact) {
+      this.equipArtifact(player, groundArtifact.def);
+      this.handleArtifactRemoved(groundArtifact);
+      if (index >= 0 && index < this.groundArtifacts.length) {
+        this.groundArtifacts.splice(index, 1);
+      }
+      this.triggerPickupBanner(groundArtifact.def);
+      this.pickupCooldown = 0.5;
+      return;
+    }
+
     this.isSwapModalOpen = true;
     this.pendingGroundArtifact = { artifact: groundArtifact, index };
 
     const modal = getElement('artifact-swap-modal');
     if (!modal) return;
 
-    const player = this.game?.player;
-    const current = player?.artifact;
+    const current = player.artifact;
     const incoming = groundArtifact.def;
 
     const curIcon = getElement('swap-current-icon');
@@ -565,9 +614,9 @@ export class MagicManager {
     const newName = getElement('swap-new-name');
     const newCharges = getElement('swap-new-charges');
 
-    if (curIcon) curIcon.textContent = current ? current.icon : '✨';
-    if (curName) curName.textContent = current ? current.name : 'Kein Artefakt';
-    if (curCharges) curCharges.textContent = current ? `${current.charges} / ${current.maxCharges} Aufladungen` : '0 Aufladungen';
+    if (curIcon) curIcon.textContent = current.icon;
+    if (curName) curName.textContent = current.name;
+    if (curCharges) curCharges.textContent = `${current.charges} / ${current.maxCharges} Aufladungen`;
 
     if (newIcon) newIcon.textContent = incoming.icon;
     if (newName) newName.textContent = incoming.name;
@@ -591,12 +640,18 @@ export class MagicManager {
     const { artifact, index } = this.pendingGroundArtifact;
     const player = this.game.player;
 
+    // 4. Bärengestalt bei Artefaktwechsel auflösen
+    if (player.isBearForm && typeof player.revertBearForm === 'function') {
+      player.revertBearForm();
+    }
+
     this.equipArtifact(player, artifact.def);
     this.handleArtifactRemoved(artifact);
     if (index >= 0 && index < this.groundArtifacts.length) {
       this.groundArtifacts.splice(index, 1);
     }
     this.triggerPickupBanner(artifact.def, 'NEUES ARTEFAKT AUSGERÜSTET!');
+    this.pickupCooldown = 0.5;
     this.closeSwapModal();
   }
 
@@ -619,6 +674,7 @@ export class MagicManager {
       this.groundArtifacts.splice(index, 1);
     }
     this.updateHUD();
+    this.pickupCooldown = 0.5;
     this.closeSwapModal();
   }
 
@@ -828,7 +884,6 @@ export class MagicManager {
           }
 
           enemy.freezeTimer = duration;
-          enemy.takeDamage(45, facingAngle, 35, combatManager);
           hitCount++;
 
           if (combatManager) {
@@ -905,8 +960,8 @@ export class MagicManager {
         maxLife: 1.35,
         orbitAngle: (i * Math.PI) / 2,
         exploded: false,
-        damage: 240,
-        knockback: 220
+        damage: 45,
+        knockback: 90
       }))
     };
     this.activePlasmaSequences.push(sequence);
@@ -992,7 +1047,7 @@ export class MagicManager {
             if (player && combatManager) {
               const ox = player.x + Math.cos(orb.orbitAngle) * 34;
               const oy = (player.y - 10) + Math.sin(orb.orbitAngle) * 34;
-              combatManager.spawnPlasmaExplosion(ox, oy, 48, orb.damage, orb.knockback, enemyManager);
+              combatManager.spawnPlasmaExplosion(ox, oy, 36, orb.damage, orb.knockback, enemyManager);
             }
           }
         }
@@ -1260,12 +1315,17 @@ export class MagicManager {
   update(dt, player, map, combatManager, enemyManager) {
     const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
 
+    // Tick pickup cooldown
+    if (this.pickupCooldown > 0) {
+      this.pickupCooldown = Math.max(0, this.pickupCooldown - dt);
+    }
+
     // 0. Update Shrine Respawn Queue (2-3 Min / 120-180s)
     for (let r = this.respawnQueue.length - 1; r >= 0; r--) {
       const respawn = this.respawnQueue[r];
       respawn.timer -= dt;
       if (respawn.timer <= 0) {
-        this.spawnGroundArtifact(respawn.x, respawn.y, respawn.dimension, respawn.typeId, true);
+        this.spawnGroundArtifact(respawn.x, respawn.y, respawn.dimension, respawn.typeId, true, respawn.subCaveId || null);
         const def = getArtifactDef(respawn.typeId);
         if (combatManager && (!this.game || this.game.currentDimension === respawn.dimension)) {
           combatManager.addFloatingText(`✨ ARTEFAKT RESPAWNT: ${def.name.toUpperCase()}!`, respawn.x, respawn.y - 20, def.colorTheme || '#38bdf8', 1.6);
@@ -1518,9 +1578,11 @@ export class MagicManager {
     const zoom = camera ? camera.zoom : 1;
     const camX = camera ? camera.x : 0;
     const camY = camera ? camera.y : 0;
+    const curSubCave = this.game?.activeSubCave || null;
 
     for (const art of this.groundArtifacts) {
       if (art.dimension !== curDim) continue;
+      if (curDim === DIMENSIONS.CAVES && art.subCaveId && curSubCave && art.subCaveId !== curSubCave) continue;
 
       const sx = (art.x - camX) * zoom;
       const sy = (art.y - camY) * zoom;

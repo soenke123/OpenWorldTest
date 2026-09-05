@@ -7790,7 +7790,7 @@ const ARTIFACT_TYPES = {
     maxCharges: 5,
     rechargeBonus: 3,
     cooldown: 3.0,
-    damage: 240,
+    damage: 45,
     widthTiles: 3,
     speed: 0,
     colorTheme: '#ec4899',
@@ -7820,7 +7820,7 @@ const ARTIFACT_TYPES = {
     maxCharges: 5,
     rechargeBonus: 3,
     cooldown: 2.5,
-    damage: 45,
+    damage: 0,
     widthTiles: 4,
     speed: 0,
     colorTheme: '#38bdf8',
@@ -7858,6 +7858,7 @@ class MagicManager {
 
     // Shrine Respawn Queue (2-3 Min / 120-180s)
     this.respawnQueue = [];
+    this.pickupCooldown = 0;
 
     // Teleportation Map State
     this.isTeleportModalOpen = false;
@@ -8138,9 +8139,20 @@ class MagicManager {
   }
 
   // ---------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
   // GROUND ARTIFACT MANAGEMENT
   // ---------------------------------------------------------------------------
-  spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false) {
+  spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false, subCaveId = null) {
+    // 5. An jedem Schrein liegt maximal 1 Artefakt!
+    const existing = this.groundArtifacts.find(a =>
+      a.dimension === dimension &&
+      (dimension !== DIMENSIONS.CAVES || a.subCaveId === subCaveId) &&
+      Math.hypot(a.x - x, a.y - y) < 24
+    );
+    if (existing) {
+      return existing; // Kein Duplikat am selben Schrein ablegen
+    }
+
     const artifactDef = getArtifactDef(typeId);
     const artifact = {
       id: `art_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
@@ -8149,6 +8161,7 @@ class MagicManager {
       x,
       y,
       dimension,
+      subCaveId,
       fromShrine,
       bobTime: Math.random() * Math.PI * 2,
       lightPulse: 0
@@ -8166,23 +8179,23 @@ class MagicManager {
     if (cloudMap && Array.isArray(cloudMap.shrines)) {
       cloudMap.shrines.forEach(shrine => {
         const type = getRandomType();
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, type, true);
+        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, type, true, null);
       });
     }
 
-    // 2. Shrines in Cave World (Höhlen): Zufälliges Artefakt aus allen 5 Typen
-    if (caves) {
+    // 2. Shrines in Cave World (Höhlen): Jede Unterhöhle separat taggen
+    if (caves && typeof caves === 'object') {
       if (Array.isArray(caves.shrines)) {
         caves.shrines.forEach(shrine => {
           const type = getRandomType();
-          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true);
+          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true, null);
         });
-      } else if (typeof caves === 'object') {
-        Object.values(caves).forEach(cMap => {
+      } else {
+        Object.entries(caves).forEach(([caveKey, cMap]) => {
           if (cMap && Array.isArray(cMap.shrines)) {
             cMap.shrines.forEach(shrine => {
               const type = getRandomType();
-              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true);
+              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true, caveKey);
             });
           }
         });
@@ -8193,16 +8206,24 @@ class MagicManager {
     if (overworldMap && Array.isArray(overworldMap.shrines)) {
       overworldMap.shrines.forEach(shrine => {
         const type = getRandomType();
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true);
+        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true, null);
       });
     } else {
       const type = getRandomType();
-      this.spawnGroundArtifact(108 * TILE_SIZE + 8, 63 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true);
+      this.spawnGroundArtifact(108 * TILE_SIZE + 8, 63 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true, null);
     }
   }
 
   handleArtifactRemoved(artifact) {
     if (!artifact || !artifact.fromShrine) return;
+    // Prüfe, ob dieser Schrein bereits in der Respawn-Queue wartet
+    const isQueued = this.respawnQueue.some(r =>
+      r.dimension === artifact.dimension &&
+      (artifact.dimension !== DIMENSIONS.CAVES || r.subCaveId === artifact.subCaveId) &&
+      Math.hypot(r.x - artifact.x, r.y - artifact.y) < 24
+    );
+    if (isQueued) return;
+
     const ALL_ARTIFACTS = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
     const nextType = ALL_ARTIFACTS[Math.floor(Math.random() * ALL_ARTIFACTS.length)];
     // Respawn nach 2 bis 3 Minuten (120 bis 180 Sekunden)
@@ -8211,6 +8232,7 @@ class MagicManager {
       x: artifact.x,
       y: artifact.y,
       dimension: artifact.dimension,
+      subCaveId: artifact.subCaveId || null,
       typeId: nextType,
       timer: respawnDelay,
       maxTimer: respawnDelay
@@ -8220,7 +8242,7 @@ class MagicManager {
   dropMonsterArtifact(x, y, dimension = DIMENSIONS.OVERWORLD) {
     const allTypes = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
     const chosenType = allTypes[Math.floor(Math.random() * allTypes.length)];
-    const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false);
+    const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false, this.game?.activeSubCave || null);
 
     if (this.game?.combat) {
       this.game.combat.addFloatingText(`✨ ${art.def.icon} ${art.def.name.toUpperCase()}!`, x, y - 24, art.def.colorTheme || '#f59e0b', 1.3);
@@ -8246,25 +8268,31 @@ class MagicManager {
   // PICKUP & SWAP LOGIC
   // ---------------------------------------------------------------------------
   checkPlayerPickup(player) {
-    if (!player || player.isDead || this.isSwapModalOpen) return;
+    if (!player || player.isDead || this.isSwapModalOpen || this.pickupCooldown > 0) return;
     const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
+    const curSubCave = this.game?.activeSubCave || null;
 
     const PICKUP_DIST = 20;
 
     for (let i = this.groundArtifacts.length - 1; i >= 0; i--) {
       const art = this.groundArtifacts[i];
       if (art.dimension !== curDim) continue;
+      if (curDim === DIMENSIONS.CAVES && art.subCaveId && curSubCave && art.subCaveId !== curSubCave) continue;
 
       const dist = Math.hypot(player.x - art.x, (player.y - 8) - art.y);
       if (dist <= PICKUP_DIST) {
-        if (!player.artifact || player.artifact.charges <= 0) {
-          // Direct equip when player has no artifact or 0 charges
+        // 7. Nur fragen, wenn man BEREITS ein aktives Artefakt mit Aufladungen hat!
+        const hasActiveArtifact = Boolean(player.artifact && player.artifact.id && player.artifact.charges > 0);
+
+        if (!hasActiveArtifact) {
+          // Direkt ausrüsten ohne jegliche Rückfrage!
           this.equipArtifact(player, art.def);
           this.handleArtifactRemoved(art);
           this.groundArtifacts.splice(i, 1);
           this.triggerPickupBanner(art.def);
+          this.pickupCooldown = 0.5;
         } else {
-          // Player already has an active artifact -> open swap modal
+          // Spieler hat bereits ein aktives Artefakt -> Swap Modal anzeigen
           this.openSwapModal(art, i);
         }
         break;
@@ -8274,6 +8302,12 @@ class MagicManager {
 
   equipArtifact(player, artifactDef) {
     if (!player) return;
+
+    // 4. Wenn der Spieler in Bärengestalt ist und das Artefakt wechselt: zurückverwandeln!
+    if (player.isBearForm && typeof player.revertBearForm === 'function') {
+      player.revertBearForm();
+    }
+
     const def = getArtifactDef(artifactDef.id || artifactDef);
     player.artifact = {
       id: def.id,
@@ -8294,14 +8328,29 @@ class MagicManager {
   }
 
   openSwapModal(groundArtifact, index) {
+    const player = this.game?.player;
+    if (!player) return;
+
+    // 7. Sicherheitsprüfung: Wenn kein aktives Artefakt vorhanden ist, direkt ausrüsten
+    const hasActiveArtifact = Boolean(player.artifact && player.artifact.id && player.artifact.charges > 0);
+    if (!hasActiveArtifact) {
+      this.equipArtifact(player, groundArtifact.def);
+      this.handleArtifactRemoved(groundArtifact);
+      if (index >= 0 && index < this.groundArtifacts.length) {
+        this.groundArtifacts.splice(index, 1);
+      }
+      this.triggerPickupBanner(groundArtifact.def);
+      this.pickupCooldown = 0.5;
+      return;
+    }
+
     this.isSwapModalOpen = true;
     this.pendingGroundArtifact = { artifact: groundArtifact, index };
 
     const modal = getElement('artifact-swap-modal');
     if (!modal) return;
 
-    const player = this.game?.player;
-    const current = player?.artifact;
+    const current = player.artifact;
     const incoming = groundArtifact.def;
 
     const curIcon = getElement('swap-current-icon');
@@ -8312,9 +8361,9 @@ class MagicManager {
     const newName = getElement('swap-new-name');
     const newCharges = getElement('swap-new-charges');
 
-    if (curIcon) curIcon.textContent = current ? current.icon : '✨';
-    if (curName) curName.textContent = current ? current.name : 'Kein Artefakt';
-    if (curCharges) curCharges.textContent = current ? `${current.charges} / ${current.maxCharges} Aufladungen` : '0 Aufladungen';
+    if (curIcon) curIcon.textContent = current.icon;
+    if (curName) curName.textContent = current.name;
+    if (curCharges) curCharges.textContent = `${current.charges} / ${current.maxCharges} Aufladungen`;
 
     if (newIcon) newIcon.textContent = incoming.icon;
     if (newName) newName.textContent = incoming.name;
@@ -8338,12 +8387,18 @@ class MagicManager {
     const { artifact, index } = this.pendingGroundArtifact;
     const player = this.game.player;
 
+    // 4. Bärengestalt bei Artefaktwechsel auflösen
+    if (player.isBearForm && typeof player.revertBearForm === 'function') {
+      player.revertBearForm();
+    }
+
     this.equipArtifact(player, artifact.def);
     this.handleArtifactRemoved(artifact);
     if (index >= 0 && index < this.groundArtifacts.length) {
       this.groundArtifacts.splice(index, 1);
     }
     this.triggerPickupBanner(artifact.def, 'NEUES ARTEFAKT AUSGERÜSTET!');
+    this.pickupCooldown = 0.5;
     this.closeSwapModal();
   }
 
@@ -8366,6 +8421,7 @@ class MagicManager {
       this.groundArtifacts.splice(index, 1);
     }
     this.updateHUD();
+    this.pickupCooldown = 0.5;
     this.closeSwapModal();
   }
 
@@ -8575,7 +8631,6 @@ class MagicManager {
           }
 
           enemy.freezeTimer = duration;
-          enemy.takeDamage(45, facingAngle, 35, combatManager);
           hitCount++;
 
           if (combatManager) {
@@ -8652,8 +8707,8 @@ class MagicManager {
         maxLife: 1.35,
         orbitAngle: (i * Math.PI) / 2,
         exploded: false,
-        damage: 240,
-        knockback: 220
+        damage: 45,
+        knockback: 90
       }))
     };
     this.activePlasmaSequences.push(sequence);
@@ -8739,7 +8794,7 @@ class MagicManager {
             if (player && combatManager) {
               const ox = player.x + Math.cos(orb.orbitAngle) * 34;
               const oy = (player.y - 10) + Math.sin(orb.orbitAngle) * 34;
-              combatManager.spawnPlasmaExplosion(ox, oy, 48, orb.damage, orb.knockback, enemyManager);
+              combatManager.spawnPlasmaExplosion(ox, oy, 36, orb.damage, orb.knockback, enemyManager);
             }
           }
         }
@@ -9007,12 +9062,17 @@ class MagicManager {
   update(dt, player, map, combatManager, enemyManager) {
     const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
 
+    // Tick pickup cooldown
+    if (this.pickupCooldown > 0) {
+      this.pickupCooldown = Math.max(0, this.pickupCooldown - dt);
+    }
+
     // 0. Update Shrine Respawn Queue (2-3 Min / 120-180s)
     for (let r = this.respawnQueue.length - 1; r >= 0; r--) {
       const respawn = this.respawnQueue[r];
       respawn.timer -= dt;
       if (respawn.timer <= 0) {
-        this.spawnGroundArtifact(respawn.x, respawn.y, respawn.dimension, respawn.typeId, true);
+        this.spawnGroundArtifact(respawn.x, respawn.y, respawn.dimension, respawn.typeId, true, respawn.subCaveId || null);
         const def = getArtifactDef(respawn.typeId);
         if (combatManager && (!this.game || this.game.currentDimension === respawn.dimension)) {
           combatManager.addFloatingText(`✨ ARTEFAKT RESPAWNT: ${def.name.toUpperCase()}!`, respawn.x, respawn.y - 20, def.colorTheme || '#38bdf8', 1.6);
@@ -9265,9 +9325,11 @@ class MagicManager {
     const zoom = camera ? camera.zoom : 1;
     const camX = camera ? camera.x : 0;
     const camY = camera ? camera.y : 0;
+    const curSubCave = this.game?.activeSubCave || null;
 
     for (const art of this.groundArtifacts) {
       if (art.dimension !== curDim) continue;
+      if (curDim === DIMENSIONS.CAVES && art.subCaveId && curSubCave && art.subCaveId !== curSubCave) continue;
 
       const sx = (art.x - camX) * zoom;
       const sy = (art.y - camY) * zoom;
@@ -10584,12 +10646,39 @@ class EnemyEntity {
       ctx.restore();
     }
 
-    // Lebensbalken über dem Kopf (nur wenn verletzt)
+    // 6. Name und HP unter dem Charakter (erst Name, dann HP nur wenn nicht voll)
+    const baseBelowY = drawY + Math.round(15 * this.scale) + 4;
+    const enemyName = this.name || this.def?.name || '';
+    if (enemyName) {
+      ctx.save();
+      ctx.font = 'bold 8px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const nameY = baseBelowY;
+      const metrics = (typeof ctx.measureText === 'function') ? ctx.measureText(enemyName) : { width: enemyName.length * 5 };
+      const textW = Math.max(14, metrics.width);
+      const padX = 3;
+      const badgeH = 10;
+
+      // Dunkles Papercraft-Badge
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.fillRect(drawX - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(drawX - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
+
+      // Name Text
+      ctx.fillStyle = '#f8fafc';
+      ctx.fillText(enemyName, drawX, nameY);
+      ctx.restore();
+    }
+
+    // Lebensbalken direkt unter dem Namen (nur wenn verletzt)
     if (this.hp < this.maxHp && this.hp > 0) {
       const barW = Math.round(24 * Math.max(0.8, Math.min(1.8, this.scale)));
       const barH = 3.5;
       const barX = drawX - barW / 2;
-      const barY = drawY - Math.round(18 * this.scale);
+      const barY = baseBelowY + 8;
       const hpPct = Math.max(0, this.hp / this.maxHp);
 
       ctx.save();
@@ -13321,31 +13410,16 @@ class Player {
       ctx.restore();
     }
 
-    // 4f. Compact Overhead Health Bar (when damaged)
-    if (this.hp < this.maxHp && this.hp > 0 && !this.isDead) {
-      const barW = 24;
-      const barH = 3.5;
-      const barX = px - barW / 2;
-      const barY = py - 26 + bob;
-      const hpPct = Math.max(0, this.hp / this.maxHp);
+    // 6. Name und HP unter dem Charakter (erst Name, dann HP nur wenn nicht voll)
+    const baseUnderY = py + 9;
 
-      ctx.save();
-      // Paper border & dark drop shadow
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-      ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
-      // Health Fill (dynamic green -> yellow -> red)
-      ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
-      ctx.fillRect(barX, barY, barW * hpPct, barH);
-      ctx.restore();
-    }
-
-    // 4g. Overhead Player Nameplate (Dark Ghibli Papercraft)
+    // Nameplate unter dem Charakter (Dark Ghibli Papercraft)
     if (this.name && !this.isDead) {
       ctx.save();
       ctx.font = 'bold 8.5px system-ui, -apple-system, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const nameY = (this.hp < this.maxHp) ? py - 33 + bob : py - 27 + bob;
+      const nameY = baseUnderY;
       const textMetrics = (typeof ctx.measureText === 'function') ? ctx.measureText(this.name) : { width: this.name.length * 5.5 };
       const textW = Math.max(16, textMetrics.width);
       const padX = 4;
@@ -13365,6 +13439,24 @@ class Player {
       if (typeof ctx.fillText === 'function') {
         ctx.fillText(this.name, px, nameY);
       }
+      ctx.restore();
+    }
+
+    // Lebensbalken direkt unter dem Namen (nur wenn verletzt)
+    if (this.hp < this.maxHp && this.hp > 0 && !this.isDead) {
+      const barW = 24;
+      const barH = 3.5;
+      const barX = px - barW / 2;
+      const barY = baseUnderY + 8;
+      const hpPct = Math.max(0, this.hp / this.maxHp);
+
+      ctx.save();
+      // Paper border & dark drop shadow
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
+      // Health Fill (dynamic green -> yellow -> red)
+      ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
+      ctx.fillRect(barX, barY, barW * hpPct, barH);
       ctx.restore();
     }
 
@@ -14726,19 +14818,19 @@ class CombatManager {
     this.createShockwave(x, y - 8, isArrival ? 32 : 24, 0, '#a855f7', false, dim);
   }
 
-  spawnPlasmaExplosion(x, y, radius = 48, damage = 110, knockback = 175) {
+  spawnPlasmaExplosion(x, y, radius = 36, damage = 45, knockback = 90) {
     const dim = this.game?.currentDimension || 'overworld';
     this.createShockwave(x, y, radius, 0, '#ec4899', false, dim);
 
     if (this.game?.camera) {
-      this.game.camera.shake(3.8, 0.16);
+      this.game.camera.shake(1.6, 0.12);
     }
 
     this.addFloatingText('💥 PLASMA!', x, y - 18, '#f472b6', 0.85);
 
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 16; i++) {
       const ang = Math.random() * Math.PI * 2;
-      const sp = Math.random() * 140 + 40;
+      const sp = Math.random() * 80 + 25;
       this.hitSparks.push({
         dimension: dim,
         x,
@@ -14746,9 +14838,9 @@ class CombatManager {
         vx: Math.cos(ang) * sp,
         vy: Math.sin(ang) * sp - 10,
         color: Math.random() > 0.4 ? '#ec4899' : (Math.random() > 0.5 ? '#f472b6' : '#ffffff'),
-        size: Math.random() * 3.5 + 1.5,
-        life: 0.45,
-        maxLife: 0.45
+        size: Math.random() * 2.8 + 1.2,
+        life: 0.4,
+        maxLife: 0.4
       });
     }
 
