@@ -338,7 +338,12 @@ class Noise2D {
 
 // =============================================================================
 // GHIBLI PAPERCRAFT DRAWING HELPERS
-// =============================================================================
+// Polyfill for CanvasRenderingContext2D.prototype.roundRect on older browsers/mobile devices
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, radii) {
+    this.rect(x, y, w, h);
+  };
+}
 
 /** Zeichnet weichen Papierschatten unter dem Wesen */
 function drawPaperShadow(ctx, cx, cy, rx, ry, alpha = 0.28) {
@@ -6788,21 +6793,27 @@ class EnemyEntity {
       ? 'walk'
       : (this.state === 'attack' ? 'attack' : 'idle');
 
+    const elevY = (this.elevation || 0) * ELEVATION_PIXEL_OFFSET;
+    const drawX = Math.round(this.x);
+    const drawY = Math.round(this.y - elevY);
+
     // Zeichne das prozedurale Ghibli-Papercraft-Wesen
-    this.def.render(ctx, this.x, this.y, this.animTime, renderState, Math.max(0, this.hitFlash));
+    ctx.save();
+    this.def.render(ctx, drawX, drawY, this.animTime, renderState, Math.max(0, this.hitFlash));
+    ctx.restore();
 
     // Alarm-Emote `!` über dem Kopf
     if (this.alertEmoteTimer > 0) {
       ctx.save();
       ctx.fillStyle = '#ef4444';
       ctx.beginPath();
-      ctx.arc(this.x, this.y - 24, 6, 0, Math.PI * 2);
+      ctx.arc(drawX, drawY - 24, 6, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 9px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('!', this.x, this.y - 24);
+      ctx.fillText('!', drawX, drawY - 24);
       ctx.restore();
     }
 
@@ -6810,8 +6821,8 @@ class EnemyEntity {
     if (this.hp < this.maxHp && this.hp > 0) {
       const barW = 24;
       const barH = 3.5;
-      const barX = this.x - barW / 2;
-      const barY = this.y - 18;
+      const barX = drawX - barW / 2;
+      const barY = drawY - 18;
       const hpPct = Math.max(0, this.hp / this.maxHp);
 
       ctx.save();
@@ -12275,10 +12286,15 @@ class Game {
 
     // Active Enemies (Overworld)
     if (this.enemyManager) {
+      const minX = bounds.startX * TILE_SIZE - 64;
+      const maxX = bounds.endX * TILE_SIZE + 64;
+      const minY = bounds.startY * TILE_SIZE - 64;
+      const maxY = bounds.endY * TILE_SIZE + 64;
+
       const activeEnemies = this.enemyManager.getActiveEnemies();
       for (const enemy of activeEnemies) {
-        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
-            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+        if (enemy.x >= minX && enemy.x <= maxX &&
+            enemy.y >= minY && enemy.y <= maxY) {
           const eElev = enemy.elevation || 0;
           const eSortY = enemy.y - eElev * ELEVATION_PIXEL_OFFSET;
           renderList.push({
@@ -12728,10 +12744,15 @@ class Game {
 
     // PASS 3: Cloud Enemies & Player
     if (this.enemyManager) {
+      const minX = bounds.startX * TILE_SIZE - 64;
+      const maxX = bounds.endX * TILE_SIZE + 64;
+      const minY = bounds.startY * TILE_SIZE - 64;
+      const maxY = bounds.endY * TILE_SIZE + 64;
+
       const cloudEnemies = this.enemyManager.getActiveEnemies();
       for (const enemy of cloudEnemies) {
-        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
-            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+        if (enemy.x >= minX && enemy.x <= maxX &&
+            enemy.y >= minY && enemy.y <= maxY) {
           enemy.render(this.ctx, t, 0.4);
         }
       }
@@ -13158,10 +13179,15 @@ class Game {
 
     // PASS 3: Cave Enemies & Player
     if (this.enemyManager) {
+      const minX = bounds.startX * TILE_SIZE - 64;
+      const maxX = bounds.endX * TILE_SIZE + 64;
+      const minY = bounds.startY * TILE_SIZE - 64;
+      const maxY = bounds.endY * TILE_SIZE + 64;
+
       const caveEnemies = this.enemyManager.getActiveEnemies();
       for (const enemy of caveEnemies) {
-        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
-            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+        if (enemy.x >= minX && enemy.x <= maxX &&
+            enemy.y >= minY && enemy.y <= maxY) {
           enemy.render(this.ctx, t, 1.0);
         }
       }

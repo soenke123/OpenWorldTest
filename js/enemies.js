@@ -604,21 +604,27 @@ export class EnemyEntity {
       ? 'walk'
       : (this.state === 'attack' ? 'attack' : 'idle');
 
+    const elevY = (this.elevation || 0) * ELEVATION_PIXEL_OFFSET;
+    const drawX = Math.round(this.x);
+    const drawY = Math.round(this.y - elevY);
+
     // Zeichne das prozedurale Ghibli-Papercraft-Wesen
-    this.def.render(ctx, this.x, this.y, this.animTime, renderState, Math.max(0, this.hitFlash));
+    ctx.save();
+    this.def.render(ctx, drawX, drawY, this.animTime, renderState, Math.max(0, this.hitFlash));
+    ctx.restore();
 
     // Alarm-Emote `!` über dem Kopf
     if (this.alertEmoteTimer > 0) {
       ctx.save();
       ctx.fillStyle = '#ef4444';
       ctx.beginPath();
-      ctx.arc(this.x, this.y - 24, 6, 0, Math.PI * 2);
+      ctx.arc(drawX, drawY - 24, 6, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 9px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('!', this.x, this.y - 24);
+      ctx.fillText('!', drawX, drawY - 24);
       ctx.restore();
     }
 
@@ -626,8 +632,8 @@ export class EnemyEntity {
     if (this.hp < this.maxHp && this.hp > 0) {
       const barW = 24;
       const barH = 3.5;
-      const barX = this.x - barW / 2;
-      const barY = this.y - 18;
+      const barX = drawX - barW / 2;
+      const barY = drawY - 18;
       const hpPct = Math.max(0, this.hp / this.maxHp);
 
       ctx.save();

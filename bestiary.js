@@ -6,7 +6,12 @@
 
 // =============================================================================
 // GHIBLI PAPERCRAFT DRAWING HELPERS
-// =============================================================================
+// Polyfill for CanvasRenderingContext2D.prototype.roundRect on older browsers/mobile devices
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, radii) {
+    this.rect(x, y, w, h);
+  };
+}
 
 /** Zeichnet weichen Papierschatten unter dem Wesen */
 export function drawPaperShadow(ctx, cx, cy, rx, ry, alpha = 0.28) {

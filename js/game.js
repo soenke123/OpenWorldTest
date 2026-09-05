@@ -1725,10 +1725,15 @@ class Game {
 
     // Active Enemies (Overworld)
     if (this.enemyManager) {
+      const minX = bounds.startX * TILE_SIZE - 64;
+      const maxX = bounds.endX * TILE_SIZE + 64;
+      const minY = bounds.startY * TILE_SIZE - 64;
+      const maxY = bounds.endY * TILE_SIZE + 64;
+
       const activeEnemies = this.enemyManager.getActiveEnemies();
       for (const enemy of activeEnemies) {
-        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
-            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+        if (enemy.x >= minX && enemy.x <= maxX &&
+            enemy.y >= minY && enemy.y <= maxY) {
           const eElev = enemy.elevation || 0;
           const eSortY = enemy.y - eElev * ELEVATION_PIXEL_OFFSET;
           renderList.push({
@@ -2178,10 +2183,15 @@ class Game {
 
     // PASS 3: Cloud Enemies & Player
     if (this.enemyManager) {
+      const minX = bounds.startX * TILE_SIZE - 64;
+      const maxX = bounds.endX * TILE_SIZE + 64;
+      const minY = bounds.startY * TILE_SIZE - 64;
+      const maxY = bounds.endY * TILE_SIZE + 64;
+
       const cloudEnemies = this.enemyManager.getActiveEnemies();
       for (const enemy of cloudEnemies) {
-        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
-            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+        if (enemy.x >= minX && enemy.x <= maxX &&
+            enemy.y >= minY && enemy.y <= maxY) {
           enemy.render(this.ctx, t, 0.4);
         }
       }
@@ -2608,10 +2618,15 @@ class Game {
 
     // PASS 3: Cave Enemies & Player
     if (this.enemyManager) {
+      const minX = bounds.startX * TILE_SIZE - 64;
+      const maxX = bounds.endX * TILE_SIZE + 64;
+      const minY = bounds.startY * TILE_SIZE - 64;
+      const maxY = bounds.endY * TILE_SIZE + 64;
+
       const caveEnemies = this.enemyManager.getActiveEnemies();
       for (const enemy of caveEnemies) {
-        if (enemy.x >= bounds.left - 60 && enemy.x <= bounds.right + 60 &&
-            enemy.y >= bounds.top - 60 && enemy.y <= bounds.bottom + 60) {
+        if (enemy.x >= minX && enemy.x <= maxX &&
+            enemy.y >= minY && enemy.y <= maxY) {
           enemy.render(this.ctx, t, 1.0);
         }
       }
