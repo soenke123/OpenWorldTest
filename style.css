@@ -5,6 +5,11 @@
   user-select: none;
 }
 
+/* Universal Hidden Utility */
+.hidden {
+  display: none !important;
+}
+
 body {
   background-color: #0d0d11;
   color: #e0e0e0;
@@ -1855,6 +1860,10 @@ canvas#gameCanvas {
   animation: magicSlotPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.magic-hud-slot.hidden {
+  display: none !important;
+}
+
 @keyframes magicSlotPop {
   0% { transform: scale(0.6) translateY(20px); opacity: 0; }
   100% { transform: scale(1) translateY(0); opacity: 1; }
@@ -1930,6 +1939,10 @@ canvas#gameCanvas {
   transition: height 0.05s linear;
 }
 
+.magic-cooldown-overlay.hidden {
+  display: none !important;
+}
+
 .btn-magic-info {
   width: 26px;
   height: 26px;
@@ -1973,6 +1986,10 @@ canvas#gameCanvas {
   animation: bannerGlowPulse 0.6s ease-in-out infinite alternate;
 }
 
+.magic-pickup-banner.hidden {
+  display: none !important;
+}
+
 @keyframes bannerGlowPulse {
   0% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5), 0 0 10px rgba(250, 204, 21, 0.3); }
   100% { box-shadow: 0 0 45px rgba(239, 68, 68, 0.85), 0 0 25px rgba(250, 204, 21, 0.6); }
@@ -2006,6 +2023,11 @@ canvas#gameCanvas {
   justify-content: center;
   padding: 16px;
   user-select: none;
+}
+
+.magic-info-modal-backdrop.hidden,
+.artifact-swap-backdrop.hidden {
+  display: none !important;
 }
 
 .magic-info-dialog {

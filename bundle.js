@@ -7829,22 +7829,43 @@ class MagicManager {
     // Modal Swap buttons
     const btnSwapAccept = getElement('btn-artifact-swap-accept');
     if (btnSwapAccept) {
-      btnSwapAccept.addEventListener('click', () => {
+      const handleSwap = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
         this.chooseSwap();
-      });
+      };
+      btnSwapAccept.addEventListener('click', handleSwap);
+      btnSwapAccept.addEventListener('touchstart', handleSwap, { passive: false });
     }
 
     const btnSwapRecharge = getElement('btn-artifact-swap-recharge');
     if (btnSwapRecharge) {
-      btnSwapRecharge.addEventListener('click', () => {
+      const handleRecharge = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
         this.chooseKeepAndRecharge();
-      });
+      };
+      btnSwapRecharge.addEventListener('click', handleRecharge);
+      btnSwapRecharge.addEventListener('touchstart', handleRecharge, { passive: false });
     }
 
     const btnSwapLeave = getElement('btn-artifact-swap-leave');
     if (btnSwapLeave) {
-      btnSwapLeave.addEventListener('click', () => {
+      const handleLeave = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
         this.closeSwapModal();
+      };
+      btnSwapLeave.addEventListener('click', handleLeave);
+      btnSwapLeave.addEventListener('touchstart', handleLeave, { passive: false });
+    }
+
+    // Click backdrop outside modal dialog to dismiss
+    if (this.artifactSwapModal) {
+      this.artifactSwapModal.addEventListener('click', (e) => {
+        if (e.target === this.artifactSwapModal) {
+          this.closeSwapModal();
+        }
       });
     }
   }
