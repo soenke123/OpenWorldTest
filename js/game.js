@@ -125,6 +125,7 @@ class Game {
     this.updatePlayerNameUI();
     this.initNetworkEvents();
     this.initMultiplayerUI();
+    this.openCharacterSelectModal();
     this.resize();
     this.start();
   }
@@ -4042,6 +4043,13 @@ class Game {
     this.btnStartAsHost = document.getElementById('btn-start-as-host');
     if (this.btnStartAsHost) {
       this.btnStartAsHost.addEventListener('click', () => {
+        this.startAsHost();
+      });
+    }
+
+    const btnDevHost = document.getElementById('btn-dev-host-mode');
+    if (btnDevHost) {
+      btnDevHost.addEventListener('click', () => {
         this.startAsHost();
       });
     }

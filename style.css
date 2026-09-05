@@ -2621,30 +2621,77 @@ canvas#gameCanvas {
    ============================================================================= */
 
 /* Host Option in Character Wizard Step 1 */
-.wizard-host-row {
-  margin-top: 14px;
+.wizard-host-banner {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(15, 23, 42, 0.95));
+  border: 1.5px solid #f59e0b;
+  border-radius: 14px;
+  padding: 14px;
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.2);
+}
+
+.host-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.host-banner-title {
+  font-size: 1.02rem;
+  font-weight: 800;
+  color: #fbbf24;
+}
+
+.host-banner-sub {
+  font-size: 0.78rem;
+  color: #cbd5e1;
 }
 
 .btn-wizard-host {
-  background: rgba(30, 41, 59, 0.85);
-  border: 1.5px solid #f59e0b;
-  color: #fef08a;
-  padding: 9px 18px;
-  border-radius: 24px;
-  font-size: 0.9rem;
-  font-weight: 700;
+  background: #f59e0b;
+  border: none;
+  color: #0f172a;
+  padding: 10px 18px;
+  border-radius: 20px;
+  font-size: 0.88rem;
+  font-weight: 800;
   cursor: pointer;
+  white-space: nowrap;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
+  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
 }
 
 .btn-wizard-host:hover {
-  background: #f59e0b;
-  color: #0f172a;
+  background: #fbbf24;
   transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 6px 20px rgba(245, 158, 11, 0.6);
+}
+
+.wizard-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin: 14px 0 16px 0;
+}
+
+.wizard-divider::before,
+.wizard-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.wizard-divider span {
+  padding: 0 12px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  letter-spacing: 1px;
 }
 
 /* Spectator HUD Panel (Floating top-right) */
