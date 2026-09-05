@@ -14,6 +14,7 @@ export class CombatManager {
     this.shockwaves = [];
     this.celestialStrikes = [];
     this.hazardPuddles = [];
+    this.grapplingHooks = [];
     this.defeatPoofs = [];
 
     // Training Dummies for target practice & feedback
@@ -301,6 +302,28 @@ export class CombatManager {
     });
   }
 
+  fireGrapplingHook(enemy, targetX, targetY) {
+    const angle = Math.atan2(targetY - enemy.y, targetX - enemy.x);
+    const speed = 400;
+    this.grapplingHooks.push({
+      dimension: enemy.dimension || this.game?.currentDimension || 'overworld',
+      enemy,
+      startX: enemy.x,
+      startY: enemy.y,
+      tipX: enemy.x,
+      tipY: enemy.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      angle,
+      length: 0,
+      maxLength: 230,
+      state: 'extend', // 'extend' | 'pull' | 'retract'
+      color: enemy.typeId === 'frost_giant' ? '#7dd3fc' : '#94a3b8',
+      hookColor: enemy.typeId === 'frost_giant' ? '#38bdf8' : '#78350f',
+      damage: 18
+    });
+  }
+
   checkMeleeHits(hitbox) {
     let hitAny = false;
 
@@ -468,9 +491,18 @@ export class CombatManager {
         const enemies = this.game.enemyManager.getActiveEnemies();
         for (const enemy of enemies) {
           if (Math.hypot(enemy.x - arrow.x, enemy.y - arrow.y) <= (enemy.radius + 6)) {
+            // Anti-Range: Ritter und Skorpione blocken alles, was aus der Range kommt!
+            if (enemy.typeId === 'cursed_knight' || enemy.typeId === 'emperor_scorpion') {
+              const sparkColor = enemy.typeId === 'cursed_knight' ? '#f1f5f9' : '#f59e0b';
+              this.addHitSparks(arrow.x, arrow.y, sparkColor, 14, 80);
+              this.addFloatingText('🛡️ GEBLOCKT!', enemy.x, enemy.y - 18, '#38bdf8');
+              hitEnemy = true;
+              break;
+            }
+
             const dmg = arrow.isCharged ? 45 : 22;
             const kb = arrow.isCharged ? 160 : 85;
-            enemy.takeDamage(dmg, arrow.angle, kb, this);
+            enemy.takeDamage(dmg, arrow.angle, kb, this, true);
             hitEnemy = true;
             break;
           }
@@ -788,6 +820,101 @@ export class CombatManager {
         this.defeatPoofs.splice(i, 1);
       }
     }
+
+    // 12. Update Grappling Hooks (Yeti & Trolle Enterhaken)
+    for (let i = this.grapplingHooks.length - 1; i >= 0; i--) {
+      const hook = this.grapplingHooks[i];
+      if (hook.dimension && curDim && hook.dimension !== curDim) continue;
+      if (!hook.enemy || hook.enemy.state === 'dead') {
+        this.grapplingHooks.splice(i, 1);
+        continue;
+      }
+
+      hook.startX = hook.enemy.x;
+      hook.startY = hook.enemy.y;
+
+      if (hook.state === 'extend') {
+        hook.tipX += hook.vx * dt;
+        hook.tipY += hook.vy * dt;
+        hook.length = Math.hypot(hook.tipX - hook.startX, hook.tipY - hook.startY);
+
+        const tX = Math.floor(hook.tipX / TILE_SIZE);
+        const tY = Math.floor(hook.tipY / TILE_SIZE);
+        const hitObstacle = this.isArrowObstacle(map, tX, tY);
+
+        if (hitObstacle || hook.length >= hook.maxLength) {
+          hook.state = 'retract';
+          this.addHitSparks(hook.tipX, hook.tipY, hook.color, 6);
+          continue;
+        }
+
+        const distToPlayer = Math.hypot(player.x - hook.tipX, player.y - hook.tipY);
+        if (distToPlayer <= (player.radius + 8) && !player.isDead) {
+          if (player.dash && player.dash.active) {
+            this.addFloatingText('💨 AUSGEWICHEN!', player.x, player.y - 16, '#67e8f9');
+            hook.state = 'retract';
+            continue;
+          }
+
+          if (player.shield && player.shield.active && player.shield.energy > 0) {
+            player.shield.energy = Math.max(0, player.shield.energy - hook.damage * 0.8);
+            this.addHitSparks(player.x, player.y, '#38bdf8', 12);
+            this.addFloatingText('🛡️ GEBLOCKT!', player.x, player.y - 18, '#38bdf8');
+            hook.state = 'retract';
+            continue;
+          }
+
+          hook.state = 'pull';
+          player.takeDamage(hook.damage, { x: hook.vx, y: hook.vy });
+          this.addHitSparks(player.x, player.y, '#ef4444', 14);
+          this.addFloatingText('⛓️ HERANGEZOGEN!', player.x, player.y - 24, '#f59e0b');
+          if (this.game.camera) this.game.camera.shake(4.5, 0.22);
+        }
+      } else if (hook.state === 'pull') {
+        const dx = hook.enemy.x - player.x;
+        const dy = hook.enemy.y - player.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist <= 36 || player.isDead) {
+          hook.enemy.cooldownTimer = 0.15;
+          this.grapplingHooks.splice(i, 1);
+          continue;
+        }
+
+        const pullSpeed = 440;
+        const stepX = (dx / dist) * pullSpeed * dt;
+        const stepY = (dy / dist) * pullSpeed * dt;
+        player.x += stepX;
+        player.y += stepY;
+        hook.tipX = player.x;
+        hook.tipY = player.y;
+
+        if (Math.random() < 0.35) {
+          this.hitSparks.push({
+            dimension: curDim,
+            x: player.x,
+            y: player.y + 4,
+            vx: -stepX * 0.1,
+            vy: -stepY * 0.1 - 5,
+            color: '#d4d4d8',
+            size: 2.2,
+            life: 0.2,
+            maxLife: 0.2
+          });
+        }
+      } else if (hook.state === 'retract') {
+        const dx = hook.startX - hook.tipX;
+        const dy = hook.startY - hook.tipY;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= 25) {
+          this.grapplingHooks.splice(i, 1);
+          continue;
+        }
+        const retractSpeed = 520;
+        hook.tipX += (dx / dist) * retractSpeed * dt;
+        hook.tipY += (dy / dist) * retractSpeed * dt;
+      }
+    }
   }
 
   // ==========================================================================
@@ -798,6 +925,7 @@ export class CombatManager {
     this.renderHazardPuddles(ctx, t);
     this.renderShockwaves(ctx, t);
     this.renderCelestialStrikes(ctx, t);
+    this.renderGrapplingHooks(ctx, t);
     this.renderStuckArrows(ctx);
     this.renderTrainingDummies(ctx, t);
     this.renderFlyingArrows(ctx);
@@ -806,6 +934,62 @@ export class CombatManager {
     this.renderSlashEffects(ctx);
     this.renderSparks(ctx);
     this.renderFloatingTexts(ctx);
+  }
+
+  renderGrapplingHooks(ctx, t) {
+    const curDim = this.game?.currentDimension || 'overworld';
+    for (const hook of this.grapplingHooks) {
+      if (hook.dimension && curDim && hook.dimension !== curDim) continue;
+
+      const sx = Math.round(hook.startX);
+      const sy = Math.round(hook.startY);
+      const tx = Math.round(hook.tipX);
+      const ty = Math.round(hook.tipY);
+
+      const dx = tx - sx;
+      const dy = ty - sy;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 4) continue;
+
+      ctx.save();
+      // Eisenkettenglieder zeichnen
+      const numLinks = Math.max(2, Math.floor(dist / 9));
+      for (let j = 0; j <= numLinks; j++) {
+        const lx = sx + (dx * j) / numLinks;
+        const ly = sy + (dy * j) / numLinks;
+
+        ctx.fillStyle = j % 2 === 0 ? hook.color : '#475569';
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(lx, ly, 3.2, 2.0, Math.atan2(dy, dx), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Scharfer Enterhaken-Kopf an der Spitze
+      ctx.translate(tx, ty);
+      ctx.rotate(Math.atan2(dy, dx));
+
+      ctx.fillStyle = hook.hookColor || '#475569';
+      ctx.fillRect(-3, -2, 6, 4);
+
+      ctx.strokeStyle = hook.color;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      // Oberer Haken
+      ctx.moveTo(3, -2);
+      ctx.quadraticCurveTo(8, -8, 2, -10);
+      // Unterer Haken
+      ctx.moveTo(3, 2);
+      ctx.quadraticCurveTo(8, 8, 2, 10);
+      // Mitteldorn
+      ctx.moveTo(2, 0);
+      ctx.lineTo(8, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    }
   }
 
   renderHazardPuddles(ctx, t) {

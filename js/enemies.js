@@ -144,6 +144,14 @@ export class EnemyEntity {
     this.chargeDir = { x: 0, y: 0 };
     this.isCharging = false;
     this.chargeTimer = 0;
+
+    // Anti-Kiting & Spezialfähigkeiten
+    this.teleportCooldown = Math.random() * 2 + 4.0;
+    this.isTeleporting = false;
+    this.teleportTimer = 0;
+    this.teleportDest = null;
+    this.hookCooldown = Math.random() * 2 + 4.5;
+    this.isHooking = false;
   }
 
   update(dt, player, map, enemyManager, combatManager) {
@@ -153,6 +161,8 @@ export class EnemyEntity {
     if (this.hitFlash > 0) this.hitFlash -= dt;
     if (this.cooldownTimer > 0) this.cooldownTimer -= dt;
     if (this.alertEmoteTimer > 0) this.alertEmoteTimer -= dt;
+    if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
+    if (this.hookCooldown > 0) this.hookCooldown -= dt;
 
     // Nur in der aktiven Dimension berechnen
     if (this.dimension !== enemyManager.game.currentDimension) return;
@@ -161,6 +171,15 @@ export class EnemyEntity {
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     const distToPlayer = Math.hypot(dx, dy);
+
+    // Spezial: Teleportation im Gange
+    if (this.isTeleporting) {
+      this.teleportTimer -= dt;
+      if (this.teleportTimer <= 0) {
+        this.completeTeleport(player, map, combatManager);
+      }
+      return;
+    }
 
     // Ausrichtung
     if (Math.abs(dx) > Math.abs(dy)) {
@@ -224,6 +243,16 @@ export class EnemyEntity {
       }
 
       if (this.telegraphTimer <= 0) {
+        if (this.isHooking) {
+          this.isHooking = false;
+          if (combatManager) {
+            combatManager.fireGrapplingHook(this, player.x, player.y);
+          }
+          this.state = 'idle';
+          this.cooldownTimer = 0.9;
+          return;
+        }
+
         this.executeAttack(player, combatManager, enemyManager);
         this.state = 'idle';
         this.cooldownTimer = ENEMY_CONFIG.ATTACK_RECOVERY_TIME + Math.random() * 0.4;
@@ -239,6 +268,20 @@ export class EnemyEntity {
       if (this.state === 'idle' || this.state === 'wander') {
         this.alertEmoteTimer = 1.0;
         enemyManager.alertPack(this.packId, this.x, this.y);
+      }
+
+      // 1. Anti-Kiting: Leeren-Monster teleportieren sich zum Spieler!
+      if (this.category === 'void' && distToPlayer > 75 && this.teleportCooldown <= 0 && this.state !== 'attack') {
+        this.startTeleport(player, map, combatManager);
+        return;
+      }
+
+      // 2. Anti-Kiting: Yeti und Trolle haben einen Enterhaken, mit dem sie den Spieler heranziehen!
+      if ((this.typeId === 'boulder_troll' || this.typeId === 'frost_giant') &&
+          distToPlayer >= 65 && distToPlayer <= 230 &&
+          this.hookCooldown <= 0 && this.state !== 'attack' && this.cooldownTimer <= 0) {
+        this.startHookAttack(player, combatManager);
+        return;
       }
 
       // Bereite Angriff vor, wenn in Angriffsreichweite
@@ -304,6 +347,62 @@ export class EnemyEntity {
     const ty2 = Math.floor((nextY + (dirY > 0 ? this.radius : -this.radius)) / TILE_SIZE);
     if (!map.isSolid || !map.isSolid(tx2, ty2)) {
       this.y = nextY;
+    }
+  }
+
+  startTeleport(player, map, combatManager) {
+    this.isTeleporting = true;
+    this.teleportTimer = 0.32;
+    this.teleportCooldown = 4.5 + Math.random() * 1.5;
+    this.state = 'idle';
+
+    if (combatManager) {
+      combatManager.addHitSparks(this.x, this.y - 4, '#a855f7', 16, 90);
+      combatManager.addFloatingText('🔮 SCHATTEN-SPRUNG!', this.x, this.y - 18, '#c084fc');
+    }
+
+    // Bestimme Zielposition nahe dem Spieler (flankierend / im Rücken)
+    const angle = Math.random() * Math.PI * 2;
+    const targetDist = 26 + Math.random() * 12;
+    const destX = player.x + Math.cos(angle) * targetDist;
+    const destY = player.y + Math.sin(angle) * targetDist;
+
+    if (isFlyingEnemy(this.typeId)) {
+      this.teleportDest = { x: destX, y: destY };
+    } else {
+      const tx = Math.floor(destX / TILE_SIZE);
+      const ty = Math.floor(destY / TILE_SIZE);
+      const safeTile = findNearestWalkableTile(map, tx, ty, 8);
+      this.teleportDest = {
+        x: safeTile.tx * TILE_SIZE + 8,
+        y: safeTile.ty * TILE_SIZE + 8
+      };
+    }
+  }
+
+  completeTeleport(player, map, combatManager) {
+    if (this.teleportDest) {
+      this.x = this.teleportDest.x;
+      this.y = this.teleportDest.y;
+    }
+    this.isTeleporting = false;
+    this.teleportDest = null;
+    this.cooldownTimer = 0.25;
+
+    if (combatManager) {
+      combatManager.addHitSparks(this.x, this.y - 4, '#7c3aed', 18, 120);
+    }
+  }
+
+  startHookAttack(player, combatManager) {
+    this.state = 'attack';
+    this.telegraphTimer = 0.38;
+    this.isHooking = true;
+    this.hookCooldown = 5.5 + Math.random() * 1.5;
+
+    if (combatManager) {
+      combatManager.addFloatingText('⛓️ ENTERHAKEN!', this.x, this.y - 20, '#f59e0b');
+      combatManager.addHitSparks(this.x, this.y - 6, '#f59e0b', 8);
     }
   }
 
@@ -626,11 +725,21 @@ export class EnemyEntity {
     player.takeDamage(damage, dir);
   }
 
-  takeDamage(amount, knockbackAngle, knockbackForce, combatManager) {
+  takeDamage(amount, knockbackAngle, knockbackForce, combatManager, isRange = false) {
     if (this.state === 'dead') return;
 
     this.hp -= amount;
     this.hitFlash = 0.25;
+
+    // Wenn Leeren-Monster aus der Ferne getroffen wird -> Sofortiger Konter-Teleport zum Schützen!
+    if (isRange && this.category === 'void' && combatManager?.game?.player && !this.isTeleporting) {
+      const player = combatManager.game.player;
+      const map = combatManager.game.currentMap || combatManager.game.map;
+      const dist = Math.hypot(player.x - this.x, player.y - this.y);
+      if (dist > 75) {
+        this.startTeleport(player, map, combatManager);
+      }
+    }
 
     // Knockback (Kleine Blob-Gegner fliegen mit starkem Impuls wie Kegel weg!)
     if (this.baseSpeed > 0) {
@@ -793,7 +902,7 @@ export class EnemyManager {
     // 4. Schnee & Eisberge (Nordosten)
     // RIESIGER KOLOSS: Yeti-Wächter (Frost Giant)
     this.spawnEnemy('frost_giant', 88 * TILE_SIZE, 16 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
-      scale: 1.65, hp: 420, atk: 42, xpValue: 75, elevation: 1
+      scale: 1.65, hp: 1500, atk: 65, xpValue: 220, elevation: 1
     });
 
     // 5. Düsterer Sumpf (Südosten)
@@ -815,7 +924,7 @@ export class EnemyManager {
     // 6. Felsgebirge & Bergpfade (Höhenebene +1, +2)
     // RIESIGER KOLOSS: Moos-Koloss (Boulder Troll) am Bergpass
     this.spawnEnemy('boulder_troll', 56 * TILE_SIZE, 28 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
-      scale: 1.60, hp: 380, atk: 38, xpValue: 65, elevation: 1
+      scale: 1.60, hp: 1400, atk: 60, xpValue: 200, elevation: 1
     });
 
     // 2er-Wache Origami-Krieger (Cursed Paper Knights)
@@ -826,17 +935,25 @@ export class EnemyManager {
     // 7. Die Leere / Void (Osten)
     // 2er-Patrouille Leeren-Verschlinger (Void Reapers)
     this.spawnPack('void_reaper', 108 * TILE_SIZE, 45 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers', {
-      scale: 1.15, hp: 130, atk: 30, xpValue: 35
+      scale: 1.15, hp: 540, atk: 55, xpValue: 90
+    });
+
+    // Zweite Patrouille Leeren-Verschlinger im Süden der Leere
+    this.spawnPack('void_reaper', 116 * TILE_SIZE, 68 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers_south', {
+      scale: 1.15, hp: 540, atk: 55, xpValue: 90
     });
 
     // RIESIGER TITAN: Schwebende Mondqualle: Auge des Abgrunds (Gazer of the Void)
     this.spawnEnemy('gazer_of_the_void', 115 * TILE_SIZE, 55 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
-      scale: 1.55, hp: 360, atk: 40, xpValue: 70
+      scale: 1.55, hp: 1350, atk: 75, xpValue: 220
     });
 
-    // Brunnen-Falle: Schatten-Tentakel (Abyss Tentacle)
+    // Brunnen-Fallen: Schatten-Tentakel (Abyss Tentacles)
     this.spawnEnemy('abyss_tentacle', 118 * TILE_SIZE, 38 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
-      scale: 1.25, hp: 160, atk: 34, xpValue: 40
+      scale: 1.25, hp: 480, atk: 50, xpValue: 80
+    });
+    this.spawnEnemy('abyss_tentacle', 121 * TILE_SIZE, 62 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+      scale: 1.25, hp: 480, atk: 50, xpValue: 80
     });
 
     // 8. Brand- & Vulkanzone (Zwischen Felsen und Wüste)
@@ -857,16 +974,108 @@ export class EnemyManager {
     });
 
     // =========================================================================
-    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION)
+    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION - MASSIVES HIMMELSREICH)
     // =========================================================================
-    // Wolken-Astrologe (Star Astromancer) auf hoher Traumwolke
-    this.spawnEnemy('star_astromancer', 45 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, null, {
-      scale: 1.15, hp: 150, atk: 32, xpValue: 40
+    // Nördliche Reihe (Inseln A1 - A5)
+    // A1 (20, 20): Harpyien-Schwarm
+    this.spawnPack('sky_harpy', 20 * TILE_SIZE, 20 * TILE_SIZE, 3, 30, DIMENSIONS.CLOUDS, 'pack_harpies_a1', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
     });
 
-    // 3er-Patrouille Wolken-Harpyien (Sky Harpies)
-    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 32 * TILE_SIZE, 3, 34, DIMENSIONS.CLOUDS, 'pack_harpies', {
-      scale: 1.05, hp: 85, atk: 24, xpValue: 22
+    // A2 (44, 20): Wolken-Astrologe mit Harpyien-Garde
+    this.spawnEnemy('star_astromancer', 44 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_a2', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 45 * TILE_SIZE, 21 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_a2', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // A3 (65, 14 - Nordgipfel Schrein): Heiligtums-Wächter Astrologe + Harpyien
+    this.spawnEnemy('star_astromancer', 65 * TILE_SIZE, 14 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_a3', {
+      scale: 1.20, hp: 520, atk: 62, xpValue: 95
+    });
+    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 16 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_sky_a3', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // A4 (86, 20): Harpyien-Garde
+    this.spawnPack('sky_harpy', 86 * TILE_SIZE, 20 * TILE_SIZE, 3, 28, DIMENSIONS.CLOUDS, 'pack_harpies_a4', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // A5 (110, 20): Fernost-Astrologe & Harpyien
+    this.spawnEnemy('star_astromancer', 110 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_a5', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 110 * TILE_SIZE, 22 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_a5', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // Mittlere Reihe (Inseln B1 - B5)
+    // B1 (18, 44): West-Horizont Harpyien
+    this.spawnPack('sky_harpy', 18 * TILE_SIZE, 44 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_b1', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // B2 (38, 44): Westzentrum Harpyien
+    this.spawnPack('sky_harpy', 38 * TILE_SIZE, 44 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_harpies_b2', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // B3 (65, 44 - Zentrales Wolkenheiligtum Schrein): Gross-Astrologe & Elite-Schwarm
+    this.spawnEnemy('star_astromancer', 65 * TILE_SIZE, 43 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_central', {
+      scale: 1.35, hp: 650, atk: 68, xpValue: 130
+    });
+    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 46 * TILE_SIZE, 4, 32, DIMENSIONS.CLOUDS, 'pack_sky_central', {
+      scale: 1.10, hp: 410, atk: 52, xpValue: 70
+    });
+
+    // B4 (90, 44): Ostzentrum Harpyien
+    this.spawnPack('sky_harpy', 90 * TILE_SIZE, 44 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_b4', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // B5 (112, 44 - Morgenwolke Schrein): Astrologe & Harpyien
+    this.spawnEnemy('star_astromancer', 112 * TILE_SIZE, 44 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_b5', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 112 * TILE_SIZE, 46 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_b5', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // Südliche Reihe (Inseln C1 - C5)
+    // C1 (24, 70): Südwest Harpyien
+    this.spawnPack('sky_harpy', 24 * TILE_SIZE, 70 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_c1', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // C2 (44, 70): Astrologe & Harpyien
+    this.spawnEnemy('star_astromancer', 44 * TILE_SIZE, 70 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_c2', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 44 * TILE_SIZE, 72 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_c2', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // C3 (65, 74): Südgipfel Astrologe & Harpyien
+    this.spawnEnemy('star_astromancer', 65 * TILE_SIZE, 74 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_c3', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 76 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_sky_c3', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // C4 (90, 70): Harpyien
+    this.spawnPack('sky_harpy', 90 * TILE_SIZE, 70 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_c4', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // C5 (112, 70): Fern-Südost Astrologe & Harpyien
+    this.spawnEnemy('star_astromancer', 112 * TILE_SIZE, 70 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_c5', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 112 * TILE_SIZE, 72 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_c5', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
     });
   }
 

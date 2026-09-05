@@ -869,8 +869,8 @@ const BESTIARY_DATA = [
     badgeClass: 'badge-mountain',
     variants: ['Granit-Moos (Standard)', 'Vulkanasche (Basaltschwarz)', 'Marmorglanz (Alabaster)'],
     scale: 1.6,
-    xpValue: 65,
-    stats: { hp: 380, maxHp: 380, atk: 38, spd: 'Schwerfällig', rng: '50px (Flächen-Beben)' },
+    xpValue: 200,
+    stats: { hp: 1400, maxHp: 1400, atk: 60, spd: 'Schwerfällig', rng: '50px (Flächen-Beben)' },
     behavior: 'Uralter Steingolem, bewachsen mit Moos und Miniatur-Bonsai. Stampft im Takt der Bergadern. Rammt beide Fäuste in die Erde für verheerende Stoßwellen.',
     counter: 'Seine wuchtigen Schläge haben lange Vorbereitung. Während er ausholt, hinter ihn rollen und den moosfreien Riss an seinem Rücken attackieren.',
     lore: 'Wacht seit Jahrhunderten über zerfallene Himmelsruinen. Kleine Glühwürmchen schlafen nachts geborgen in seinen Steinfugen.',
@@ -973,8 +973,8 @@ const BESTIARY_DATA = [
     badgeClass: 'badge-ice',
     variants: ['Gletscherweiß (Standard)', 'Polar-Nacht (Arktis-Blau)', 'Kristallquarz (Türkis)'],
     scale: 1.65,
-    xpValue: 75,
-    stats: { hp: 420, maxHp: 420, atk: 42, spd: 'Langsam', rng: '65px (Eis-Keule)' },
+    xpValue: 220,
+    stats: { hp: 1500, maxHp: 1500, atk: 65, spd: 'Langsam', rng: '65px (Eis-Keule)' },
     behavior: 'Ein gemütlicher, flauschiger Schnee-Yeti mit mächtigen Eis-Widderhörnern. Schwingt eine uralte Eiskristall-Keule und beschwört sanfte Schneewirbel.',
     counter: 'Feuer- und Spreng-Angriffe schmelzen seine Schneefell-Rüstung. Im Moment seines Keulenschwungs unter seinen Beinen durchrollen.',
     lore: 'An seinem linken Horn baumelt eine alte rote Papierlaterne, die ihm ein verlorener Wanderer einst zum Dank schenkte. Das Licht erlischt niemals.',
@@ -1359,7 +1359,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Himmel',
     badgeClass: 'badge-sky',
     variants: ['Mitternachtsblau (Standard)', 'Mondsilber (Vollmond)', 'Aurora (Nordlicht)'],
-    stats: { hp: 50, maxHp: 50, atk: 28, spd: 'Mittel', rng: '150px (Sternschnuppen)' },
+    scale: 1.15,
+    xpValue: 85,
+    stats: { hp: 480, maxHp: 480, atk: 60, spd: 'Mittel', rng: '150px (Sternschnuppen)' },
     behavior: 'Ein weiser Eulen-Mönch im Sternen-Kimono. Schwebt auf einer zarten rosa Traumwolke und beschwört leuchtende Sternschnuppen-Kaskaden.',
     counter: 'Seine Sternschnuppen schlagen mit kurzer Verzögerung ein. Nach den Einschlägen ist er kurz geblendet – perfekte Zeit für Kombo-Angriffe.',
     lore: 'Trägt einen Kegelhut aus Reisstroh mit kleinen Papier-Glücksstreifen (O-Mikuji). Kennt jeden Stern der Geisterwelt beim Vornamen.',
@@ -1975,7 +1977,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Leere',
     badgeClass: 'badge-void',
     variants: ['Obsidian-Violett (Standard)', 'Blut-Astral (Karmesin-Nebel)', 'Sternenstaub (Kosmisch)'],
-    stats: { hp: 95, maxHp: 95, atk: 34, spd: 'Mittel', rng: '60px (Doppelklingen-Wirbel)' },
+    scale: 1.15,
+    xpValue: 90,
+    stats: { hp: 540, maxHp: 540, atk: 55, spd: 'Mittel', rng: '60px (Doppelklingen-Wirbel)' },
     behavior: 'Direkt inspiriert von Ohngesicht (Kaonashi). Eine geheimnisvolle Schattengestalt mit weißer Porzellanmaske und violetten Tränen. Führt zwei ätherische Sternenkatanas.',
     counter: 'Seine Klingenwirbel haben eine rhythmische Pause. Genau nach dem zweiten Schwung öffnet sich seine Schattengestalt für Gegentreffer.',
     lore: 'Sucht in der Leere nach vergessenen Kindheitserinnerungen. Bietet Reisenden schweigend glitzernde Sternsteine auf seiner Handfläche an.',
@@ -2050,8 +2054,8 @@ const BESTIARY_DATA = [
     badgeClass: 'badge-void',
     variants: ['Galaxie-Iris (Standard)', 'Supernova (Gold-Orange)', 'Polarlicht (Smaragdgrün)'],
     scale: 1.55,
-    xpValue: 70,
-    stats: { hp: 360, maxHp: 360, atk: 40, spd: 'Schwebend Schnell', rng: '160px (Kosmischer Strahl)' },
+    xpValue: 220,
+    stats: { hp: 1350, maxHp: 1350, atk: 75, spd: 'Schwebend Schnell', rng: '160px (Kosmischer Strahl)' },
     behavior: 'Eine ätherische Himmels-Mondqualle mit einer gläsernen Sternenglocke. In ihrem Zentrum ruht ein wohlwollendes kosmisches Auge, das Starlight-Strahlen bündelt.',
     counter: 'Vor dem Strahl schließt sich seine Glocke für eine Sekunde. Hinter eine Felsbarriere stellen und danach seine weichen Quallententakel treffen.',
     lore: 'Fiel in einer Neumondnacht aus dem Sternenmeer herab. Summt eine Melodie, die an uralte Spieluhren erinnert.',
@@ -2127,7 +2131,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Leere',
     badgeClass: 'badge-void',
     variants: ['Tiefsee-Schwarz (Standard)', 'Giftmorast (Smaragdgrün)', 'Glutasche (Rubinrot)'],
-    stats: { hp: 55, maxHp: 50, atk: 22, spd: 'Stationär', rng: '50px (Peitschenhieb)' },
+    scale: 1.25,
+    xpValue: 80,
+    stats: { hp: 480, maxHp: 480, atk: 50, spd: 'Stationär', rng: '50px (Peitschenhieb)' },
     behavior: 'Bricht aus einem moosbewachsenen Steinbrunnen hervor. An seiner gewundenen Spitze baumelt eine antike bronzene Shinto-Tempelglocke (Suzu), die bei Hieben silbern läutet.',
     counter: 'Wenn sich die Ranke spiralig zusammenzieht, bereitet sie den Peitschenhieb vor. Sofort zurückweichen und nach dem Aufprall die Glocke attackieren.',
     lore: 'Entspringt den Wurzeln eines versunkenen Glockenturms. Ihr Läuten klingt wie Regentropfen auf Tempeldächern.',
@@ -2305,7 +2311,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Himmel',
     badgeClass: 'badge-sky',
     variants: ['Himmelsblau (Standard)', 'Sonnenuntergang (Rosa-Gold)', 'Gewittersturm (Stahlgrau)'],
-    stats: { hp: 80, maxHp: 80, atk: 30, spd: 'Sehr Schnell (Fliegend)', rng: '110px (Windklingen-Fächer)' },
+    scale: 1.05,
+    xpValue: 65,
+    stats: { hp: 390, maxHp: 390, atk: 50, spd: 'Sehr Schnell (Fliegend)', rng: '110px (Windklingen-Fächer)' },
     behavior: 'Eine anmutige Wind-Tengu-Maid mit gefalteten Papierkranich-Flügeln. Schwingt einen heiligen Federfächer (Hauchiwa) und entfesselt wirbelnde Kirschblüten-Stürme.',
     counter: 'Ihre Windwirbel stoßen Helden zurück. Mit dem Schild blocken und sie im Landemoment mit Wirbelattacken zu Boden zwingen.',
     lore: 'Webt den Morgennebel über den Tälern. Wenn sie mit ihrem Federfächer winkt, fallen die ersten Kirschblüten des Frühlings.',
@@ -6347,6 +6355,14 @@ class EnemyEntity {
     this.chargeDir = { x: 0, y: 0 };
     this.isCharging = false;
     this.chargeTimer = 0;
+
+    // Anti-Kiting & Spezialfähigkeiten
+    this.teleportCooldown = Math.random() * 2 + 4.0;
+    this.isTeleporting = false;
+    this.teleportTimer = 0;
+    this.teleportDest = null;
+    this.hookCooldown = Math.random() * 2 + 4.5;
+    this.isHooking = false;
   }
 
   update(dt, player, map, enemyManager, combatManager) {
@@ -6356,6 +6372,8 @@ class EnemyEntity {
     if (this.hitFlash > 0) this.hitFlash -= dt;
     if (this.cooldownTimer > 0) this.cooldownTimer -= dt;
     if (this.alertEmoteTimer > 0) this.alertEmoteTimer -= dt;
+    if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
+    if (this.hookCooldown > 0) this.hookCooldown -= dt;
 
     // Nur in der aktiven Dimension berechnen
     if (this.dimension !== enemyManager.game.currentDimension) return;
@@ -6364,6 +6382,15 @@ class EnemyEntity {
     const dx = player.x - this.x;
     const dy = player.y - this.y;
     const distToPlayer = Math.hypot(dx, dy);
+
+    // Spezial: Teleportation im Gange
+    if (this.isTeleporting) {
+      this.teleportTimer -= dt;
+      if (this.teleportTimer <= 0) {
+        this.completeTeleport(player, map, combatManager);
+      }
+      return;
+    }
 
     // Ausrichtung
     if (Math.abs(dx) > Math.abs(dy)) {
@@ -6427,6 +6454,16 @@ class EnemyEntity {
       }
 
       if (this.telegraphTimer <= 0) {
+        if (this.isHooking) {
+          this.isHooking = false;
+          if (combatManager) {
+            combatManager.fireGrapplingHook(this, player.x, player.y);
+          }
+          this.state = 'idle';
+          this.cooldownTimer = 0.9;
+          return;
+        }
+
         this.executeAttack(player, combatManager, enemyManager);
         this.state = 'idle';
         this.cooldownTimer = ENEMY_CONFIG.ATTACK_RECOVERY_TIME + Math.random() * 0.4;
@@ -6442,6 +6479,20 @@ class EnemyEntity {
       if (this.state === 'idle' || this.state === 'wander') {
         this.alertEmoteTimer = 1.0;
         enemyManager.alertPack(this.packId, this.x, this.y);
+      }
+
+      // 1. Anti-Kiting: Leeren-Monster teleportieren sich zum Spieler!
+      if (this.category === 'void' && distToPlayer > 75 && this.teleportCooldown <= 0 && this.state !== 'attack') {
+        this.startTeleport(player, map, combatManager);
+        return;
+      }
+
+      // 2. Anti-Kiting: Yeti und Trolle haben einen Enterhaken, mit dem sie den Spieler heranziehen!
+      if ((this.typeId === 'boulder_troll' || this.typeId === 'frost_giant') &&
+          distToPlayer >= 65 && distToPlayer <= 230 &&
+          this.hookCooldown <= 0 && this.state !== 'attack' && this.cooldownTimer <= 0) {
+        this.startHookAttack(player, combatManager);
+        return;
       }
 
       // Bereite Angriff vor, wenn in Angriffsreichweite
@@ -6507,6 +6558,62 @@ class EnemyEntity {
     const ty2 = Math.floor((nextY + (dirY > 0 ? this.radius : -this.radius)) / TILE_SIZE);
     if (!map.isSolid || !map.isSolid(tx2, ty2)) {
       this.y = nextY;
+    }
+  }
+
+  startTeleport(player, map, combatManager) {
+    this.isTeleporting = true;
+    this.teleportTimer = 0.32;
+    this.teleportCooldown = 4.5 + Math.random() * 1.5;
+    this.state = 'idle';
+
+    if (combatManager) {
+      combatManager.addHitSparks(this.x, this.y - 4, '#a855f7', 16, 90);
+      combatManager.addFloatingText('🔮 SCHATTEN-SPRUNG!', this.x, this.y - 18, '#c084fc');
+    }
+
+    // Bestimme Zielposition nahe dem Spieler (flankierend / im Rücken)
+    const angle = Math.random() * Math.PI * 2;
+    const targetDist = 26 + Math.random() * 12;
+    const destX = player.x + Math.cos(angle) * targetDist;
+    const destY = player.y + Math.sin(angle) * targetDist;
+
+    if (isFlyingEnemy(this.typeId)) {
+      this.teleportDest = { x: destX, y: destY };
+    } else {
+      const tx = Math.floor(destX / TILE_SIZE);
+      const ty = Math.floor(destY / TILE_SIZE);
+      const safeTile = findNearestWalkableTile(map, tx, ty, 8);
+      this.teleportDest = {
+        x: safeTile.tx * TILE_SIZE + 8,
+        y: safeTile.ty * TILE_SIZE + 8
+      };
+    }
+  }
+
+  completeTeleport(player, map, combatManager) {
+    if (this.teleportDest) {
+      this.x = this.teleportDest.x;
+      this.y = this.teleportDest.y;
+    }
+    this.isTeleporting = false;
+    this.teleportDest = null;
+    this.cooldownTimer = 0.25;
+
+    if (combatManager) {
+      combatManager.addHitSparks(this.x, this.y - 4, '#7c3aed', 18, 120);
+    }
+  }
+
+  startHookAttack(player, combatManager) {
+    this.state = 'attack';
+    this.telegraphTimer = 0.38;
+    this.isHooking = true;
+    this.hookCooldown = 5.5 + Math.random() * 1.5;
+
+    if (combatManager) {
+      combatManager.addFloatingText('⛓️ ENTERHAKEN!', this.x, this.y - 20, '#f59e0b');
+      combatManager.addHitSparks(this.x, this.y - 6, '#f59e0b', 8);
     }
   }
 
@@ -6829,11 +6936,21 @@ class EnemyEntity {
     player.takeDamage(damage, dir);
   }
 
-  takeDamage(amount, knockbackAngle, knockbackForce, combatManager) {
+  takeDamage(amount, knockbackAngle, knockbackForce, combatManager, isRange = false) {
     if (this.state === 'dead') return;
 
     this.hp -= amount;
     this.hitFlash = 0.25;
+
+    // Wenn Leeren-Monster aus der Ferne getroffen wird -> Sofortiger Konter-Teleport zum Schützen!
+    if (isRange && this.category === 'void' && combatManager?.game?.player && !this.isTeleporting) {
+      const player = combatManager.game.player;
+      const map = combatManager.game.currentMap || combatManager.game.map;
+      const dist = Math.hypot(player.x - this.x, player.y - this.y);
+      if (dist > 75) {
+        this.startTeleport(player, map, combatManager);
+      }
+    }
 
     // Knockback (Kleine Blob-Gegner fliegen mit starkem Impuls wie Kegel weg!)
     if (this.baseSpeed > 0) {
@@ -6996,7 +7113,7 @@ class EnemyManager {
     // 4. Schnee & Eisberge (Nordosten)
     // RIESIGER KOLOSS: Yeti-Wächter (Frost Giant)
     this.spawnEnemy('frost_giant', 88 * TILE_SIZE, 16 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
-      scale: 1.65, hp: 420, atk: 42, xpValue: 75, elevation: 1
+      scale: 1.65, hp: 1500, atk: 65, xpValue: 220, elevation: 1
     });
 
     // 5. Düsterer Sumpf (Südosten)
@@ -7018,7 +7135,7 @@ class EnemyManager {
     // 6. Felsgebirge & Bergpfade (Höhenebene +1, +2)
     // RIESIGER KOLOSS: Moos-Koloss (Boulder Troll) am Bergpass
     this.spawnEnemy('boulder_troll', 56 * TILE_SIZE, 28 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
-      scale: 1.60, hp: 380, atk: 38, xpValue: 65, elevation: 1
+      scale: 1.60, hp: 1400, atk: 60, xpValue: 200, elevation: 1
     });
 
     // 2er-Wache Origami-Krieger (Cursed Paper Knights)
@@ -7029,17 +7146,25 @@ class EnemyManager {
     // 7. Die Leere / Void (Osten)
     // 2er-Patrouille Leeren-Verschlinger (Void Reapers)
     this.spawnPack('void_reaper', 108 * TILE_SIZE, 45 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers', {
-      scale: 1.15, hp: 130, atk: 30, xpValue: 35
+      scale: 1.15, hp: 540, atk: 55, xpValue: 90
+    });
+
+    // Zweite Patrouille Leeren-Verschlinger im Süden der Leere
+    this.spawnPack('void_reaper', 116 * TILE_SIZE, 68 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers_south', {
+      scale: 1.15, hp: 540, atk: 55, xpValue: 90
     });
 
     // RIESIGER TITAN: Schwebende Mondqualle: Auge des Abgrunds (Gazer of the Void)
     this.spawnEnemy('gazer_of_the_void', 115 * TILE_SIZE, 55 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
-      scale: 1.55, hp: 360, atk: 40, xpValue: 70
+      scale: 1.55, hp: 1350, atk: 75, xpValue: 220
     });
 
-    // Brunnen-Falle: Schatten-Tentakel (Abyss Tentacle)
+    // Brunnen-Fallen: Schatten-Tentakel (Abyss Tentacles)
     this.spawnEnemy('abyss_tentacle', 118 * TILE_SIZE, 38 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
-      scale: 1.25, hp: 160, atk: 34, xpValue: 40
+      scale: 1.25, hp: 480, atk: 50, xpValue: 80
+    });
+    this.spawnEnemy('abyss_tentacle', 121 * TILE_SIZE, 62 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+      scale: 1.25, hp: 480, atk: 50, xpValue: 80
     });
 
     // 8. Brand- & Vulkanzone (Zwischen Felsen und Wüste)
@@ -7060,16 +7185,108 @@ class EnemyManager {
     });
 
     // =========================================================================
-    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION)
+    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION - MASSIVES HIMMELSREICH)
     // =========================================================================
-    // Wolken-Astrologe (Star Astromancer) auf hoher Traumwolke
-    this.spawnEnemy('star_astromancer', 45 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, null, {
-      scale: 1.15, hp: 150, atk: 32, xpValue: 40
+    // Nördliche Reihe (Inseln A1 - A5)
+    // A1 (20, 20): Harpyien-Schwarm
+    this.spawnPack('sky_harpy', 20 * TILE_SIZE, 20 * TILE_SIZE, 3, 30, DIMENSIONS.CLOUDS, 'pack_harpies_a1', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
     });
 
-    // 3er-Patrouille Wolken-Harpyien (Sky Harpies)
-    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 32 * TILE_SIZE, 3, 34, DIMENSIONS.CLOUDS, 'pack_harpies', {
-      scale: 1.05, hp: 85, atk: 24, xpValue: 22
+    // A2 (44, 20): Wolken-Astrologe mit Harpyien-Garde
+    this.spawnEnemy('star_astromancer', 44 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_a2', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 45 * TILE_SIZE, 21 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_a2', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // A3 (65, 14 - Nordgipfel Schrein): Heiligtums-Wächter Astrologe + Harpyien
+    this.spawnEnemy('star_astromancer', 65 * TILE_SIZE, 14 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_a3', {
+      scale: 1.20, hp: 520, atk: 62, xpValue: 95
+    });
+    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 16 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_sky_a3', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // A4 (86, 20): Harpyien-Garde
+    this.spawnPack('sky_harpy', 86 * TILE_SIZE, 20 * TILE_SIZE, 3, 28, DIMENSIONS.CLOUDS, 'pack_harpies_a4', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // A5 (110, 20): Fernost-Astrologe & Harpyien
+    this.spawnEnemy('star_astromancer', 110 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_a5', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 110 * TILE_SIZE, 22 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_a5', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // Mittlere Reihe (Inseln B1 - B5)
+    // B1 (18, 44): West-Horizont Harpyien
+    this.spawnPack('sky_harpy', 18 * TILE_SIZE, 44 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_b1', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // B2 (38, 44): Westzentrum Harpyien
+    this.spawnPack('sky_harpy', 38 * TILE_SIZE, 44 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_harpies_b2', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // B3 (65, 44 - Zentrales Wolkenheiligtum Schrein): Gross-Astrologe & Elite-Schwarm
+    this.spawnEnemy('star_astromancer', 65 * TILE_SIZE, 43 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_central', {
+      scale: 1.35, hp: 650, atk: 68, xpValue: 130
+    });
+    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 46 * TILE_SIZE, 4, 32, DIMENSIONS.CLOUDS, 'pack_sky_central', {
+      scale: 1.10, hp: 410, atk: 52, xpValue: 70
+    });
+
+    // B4 (90, 44): Ostzentrum Harpyien
+    this.spawnPack('sky_harpy', 90 * TILE_SIZE, 44 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_b4', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // B5 (112, 44 - Morgenwolke Schrein): Astrologe & Harpyien
+    this.spawnEnemy('star_astromancer', 112 * TILE_SIZE, 44 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_b5', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 112 * TILE_SIZE, 46 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_b5', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // Südliche Reihe (Inseln C1 - C5)
+    // C1 (24, 70): Südwest Harpyien
+    this.spawnPack('sky_harpy', 24 * TILE_SIZE, 70 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_c1', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // C2 (44, 70): Astrologe & Harpyien
+    this.spawnEnemy('star_astromancer', 44 * TILE_SIZE, 70 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_c2', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 44 * TILE_SIZE, 72 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_c2', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // C3 (65, 74): Südgipfel Astrologe & Harpyien
+    this.spawnEnemy('star_astromancer', 65 * TILE_SIZE, 74 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_c3', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 76 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_sky_c3', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // C4 (90, 70): Harpyien
+    this.spawnPack('sky_harpy', 90 * TILE_SIZE, 70 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_c4', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
+    });
+
+    // C5 (112, 70): Fern-Südost Astrologe & Harpyien
+    this.spawnEnemy('star_astromancer', 112 * TILE_SIZE, 70 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_c5', {
+      scale: 1.15, hp: 480, atk: 60, xpValue: 85
+    });
+    this.spawnPack('sky_harpy', 112 * TILE_SIZE, 72 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_c5', {
+      scale: 1.05, hp: 390, atk: 50, xpValue: 65
     });
   }
 
@@ -10095,6 +10312,7 @@ class CombatManager {
     this.shockwaves = [];
     this.celestialStrikes = [];
     this.hazardPuddles = [];
+    this.grapplingHooks = [];
     this.defeatPoofs = [];
 
     // Training Dummies for target practice & feedback
@@ -10382,6 +10600,28 @@ class CombatManager {
     });
   }
 
+  fireGrapplingHook(enemy, targetX, targetY) {
+    const angle = Math.atan2(targetY - enemy.y, targetX - enemy.x);
+    const speed = 400;
+    this.grapplingHooks.push({
+      dimension: enemy.dimension || this.game?.currentDimension || 'overworld',
+      enemy,
+      startX: enemy.x,
+      startY: enemy.y,
+      tipX: enemy.x,
+      tipY: enemy.y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      angle,
+      length: 0,
+      maxLength: 230,
+      state: 'extend', // 'extend' | 'pull' | 'retract'
+      color: enemy.typeId === 'frost_giant' ? '#7dd3fc' : '#94a3b8',
+      hookColor: enemy.typeId === 'frost_giant' ? '#38bdf8' : '#78350f',
+      damage: 18
+    });
+  }
+
   checkMeleeHits(hitbox) {
     let hitAny = false;
 
@@ -10549,9 +10789,18 @@ class CombatManager {
         const enemies = this.game.enemyManager.getActiveEnemies();
         for (const enemy of enemies) {
           if (Math.hypot(enemy.x - arrow.x, enemy.y - arrow.y) <= (enemy.radius + 6)) {
+            // Anti-Range: Ritter und Skorpione blocken alles, was aus der Range kommt!
+            if (enemy.typeId === 'cursed_knight' || enemy.typeId === 'emperor_scorpion') {
+              const sparkColor = enemy.typeId === 'cursed_knight' ? '#f1f5f9' : '#f59e0b';
+              this.addHitSparks(arrow.x, arrow.y, sparkColor, 14, 80);
+              this.addFloatingText('🛡️ GEBLOCKT!', enemy.x, enemy.y - 18, '#38bdf8');
+              hitEnemy = true;
+              break;
+            }
+
             const dmg = arrow.isCharged ? 45 : 22;
             const kb = arrow.isCharged ? 160 : 85;
-            enemy.takeDamage(dmg, arrow.angle, kb, this);
+            enemy.takeDamage(dmg, arrow.angle, kb, this, true);
             hitEnemy = true;
             break;
           }
@@ -10869,6 +11118,101 @@ class CombatManager {
         this.defeatPoofs.splice(i, 1);
       }
     }
+
+    // 12. Update Grappling Hooks (Yeti & Trolle Enterhaken)
+    for (let i = this.grapplingHooks.length - 1; i >= 0; i--) {
+      const hook = this.grapplingHooks[i];
+      if (hook.dimension && curDim && hook.dimension !== curDim) continue;
+      if (!hook.enemy || hook.enemy.state === 'dead') {
+        this.grapplingHooks.splice(i, 1);
+        continue;
+      }
+
+      hook.startX = hook.enemy.x;
+      hook.startY = hook.enemy.y;
+
+      if (hook.state === 'extend') {
+        hook.tipX += hook.vx * dt;
+        hook.tipY += hook.vy * dt;
+        hook.length = Math.hypot(hook.tipX - hook.startX, hook.tipY - hook.startY);
+
+        const tX = Math.floor(hook.tipX / TILE_SIZE);
+        const tY = Math.floor(hook.tipY / TILE_SIZE);
+        const hitObstacle = this.isArrowObstacle(map, tX, tY);
+
+        if (hitObstacle || hook.length >= hook.maxLength) {
+          hook.state = 'retract';
+          this.addHitSparks(hook.tipX, hook.tipY, hook.color, 6);
+          continue;
+        }
+
+        const distToPlayer = Math.hypot(player.x - hook.tipX, player.y - hook.tipY);
+        if (distToPlayer <= (player.radius + 8) && !player.isDead) {
+          if (player.dash && player.dash.active) {
+            this.addFloatingText('💨 AUSGEWICHEN!', player.x, player.y - 16, '#67e8f9');
+            hook.state = 'retract';
+            continue;
+          }
+
+          if (player.shield && player.shield.active && player.shield.energy > 0) {
+            player.shield.energy = Math.max(0, player.shield.energy - hook.damage * 0.8);
+            this.addHitSparks(player.x, player.y, '#38bdf8', 12);
+            this.addFloatingText('🛡️ GEBLOCKT!', player.x, player.y - 18, '#38bdf8');
+            hook.state = 'retract';
+            continue;
+          }
+
+          hook.state = 'pull';
+          player.takeDamage(hook.damage, { x: hook.vx, y: hook.vy });
+          this.addHitSparks(player.x, player.y, '#ef4444', 14);
+          this.addFloatingText('⛓️ HERANGEZOGEN!', player.x, player.y - 24, '#f59e0b');
+          if (this.game.camera) this.game.camera.shake(4.5, 0.22);
+        }
+      } else if (hook.state === 'pull') {
+        const dx = hook.enemy.x - player.x;
+        const dy = hook.enemy.y - player.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist <= 36 || player.isDead) {
+          hook.enemy.cooldownTimer = 0.15;
+          this.grapplingHooks.splice(i, 1);
+          continue;
+        }
+
+        const pullSpeed = 440;
+        const stepX = (dx / dist) * pullSpeed * dt;
+        const stepY = (dy / dist) * pullSpeed * dt;
+        player.x += stepX;
+        player.y += stepY;
+        hook.tipX = player.x;
+        hook.tipY = player.y;
+
+        if (Math.random() < 0.35) {
+          this.hitSparks.push({
+            dimension: curDim,
+            x: player.x,
+            y: player.y + 4,
+            vx: -stepX * 0.1,
+            vy: -stepY * 0.1 - 5,
+            color: '#d4d4d8',
+            size: 2.2,
+            life: 0.2,
+            maxLife: 0.2
+          });
+        }
+      } else if (hook.state === 'retract') {
+        const dx = hook.startX - hook.tipX;
+        const dy = hook.startY - hook.tipY;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= 25) {
+          this.grapplingHooks.splice(i, 1);
+          continue;
+        }
+        const retractSpeed = 520;
+        hook.tipX += (dx / dist) * retractSpeed * dt;
+        hook.tipY += (dy / dist) * retractSpeed * dt;
+      }
+    }
   }
 
   // ==========================================================================
@@ -10879,6 +11223,7 @@ class CombatManager {
     this.renderHazardPuddles(ctx, t);
     this.renderShockwaves(ctx, t);
     this.renderCelestialStrikes(ctx, t);
+    this.renderGrapplingHooks(ctx, t);
     this.renderStuckArrows(ctx);
     this.renderTrainingDummies(ctx, t);
     this.renderFlyingArrows(ctx);
@@ -10887,6 +11232,62 @@ class CombatManager {
     this.renderSlashEffects(ctx);
     this.renderSparks(ctx);
     this.renderFloatingTexts(ctx);
+  }
+
+  renderGrapplingHooks(ctx, t) {
+    const curDim = this.game?.currentDimension || 'overworld';
+    for (const hook of this.grapplingHooks) {
+      if (hook.dimension && curDim && hook.dimension !== curDim) continue;
+
+      const sx = Math.round(hook.startX);
+      const sy = Math.round(hook.startY);
+      const tx = Math.round(hook.tipX);
+      const ty = Math.round(hook.tipY);
+
+      const dx = tx - sx;
+      const dy = ty - sy;
+      const dist = Math.hypot(dx, dy);
+      if (dist < 4) continue;
+
+      ctx.save();
+      // Eisenkettenglieder zeichnen
+      const numLinks = Math.max(2, Math.floor(dist / 9));
+      for (let j = 0; j <= numLinks; j++) {
+        const lx = sx + (dx * j) / numLinks;
+        const ly = sy + (dy * j) / numLinks;
+
+        ctx.fillStyle = j % 2 === 0 ? hook.color : '#475569';
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.ellipse(lx, ly, 3.2, 2.0, Math.atan2(dy, dx), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Scharfer Enterhaken-Kopf an der Spitze
+      ctx.translate(tx, ty);
+      ctx.rotate(Math.atan2(dy, dx));
+
+      ctx.fillStyle = hook.hookColor || '#475569';
+      ctx.fillRect(-3, -2, 6, 4);
+
+      ctx.strokeStyle = hook.color;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      // Oberer Haken
+      ctx.moveTo(3, -2);
+      ctx.quadraticCurveTo(8, -8, 2, -10);
+      // Unterer Haken
+      ctx.moveTo(3, 2);
+      ctx.quadraticCurveTo(8, 8, 2, 10);
+      // Mitteldorn
+      ctx.moveTo(2, 0);
+      ctx.lineTo(8, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    }
   }
 
   renderHazardPuddles(ctx, t) {
