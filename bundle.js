@@ -1462,9 +1462,9 @@ const BESTIARY_DATA = [
     biomeBadge: 'Grasland',
     badgeClass: 'badge-grass',
     variants: ['Smaragd-Tau (Standard)', 'Honig-Gelee (Wüste)', 'Frost-Träne (Schnee)'],
-    scale: 0.70,
-    xpValue: 3,
-    stats: { hp: 20, maxHp: 20, atk: 8, spd: 'Mittel', rng: '25px (Körper-Platscher)' },
+    scale: 0.48,
+    xpValue: 2,
+    stats: { hp: 12, maxHp: 12, atk: 5, spd: 'Mittel', rng: '22px (Körper-Platscher)' },
     behavior: 'Ein herziges, transparentes Tropfen-Wesen mit einem kleinen Eichelkern und Kleeblatt im Bauch. Hüpft fröhlich und teilt sich bei Gefahr kurz in zwei Mini-Tröpfchen.',
     counter: 'Mit einfachen Schwerthieben schnell besiegbar. Vorsicht beim Zerschlagen: Mini-Blobs hüpfen flink davon!',
     lore: 'Entsteht aus Morgentautropfen auf uralten Eichenblättern. Kitzelt sanft an den Zehen und liebt sonnige Waldlichtungen.',
@@ -6210,6 +6210,61 @@ BESTIARY_DATA.forEach(def => {
   BESTIARY_MAP[def.id] = def;
 });
 
+/** Gibt an, ob ein Monster fliegt oder schwebt (darf über Wasser/Abgründen existieren) */
+function isFlyingEnemy(typeId) {
+  return typeId === 'gazer_of_the_void' ||
+         typeId === 'sky_harpy' ||
+         typeId === 'star_astromancer' ||
+         typeId === 'lava_core';
+}
+
+/** Prüft, ob ein Kachelfeld für Boden-Gegner begehbar ist */
+function isTileWalkable(map, tx, ty) {
+  if (!map || !map.isValid(tx, ty)) return false;
+  if (map.isSolid && map.isSolid(tx, ty)) return false;
+  if (map.isDeadly && map.isDeadly(tx, ty)) return false;
+
+  const ground = map.getGroundTile ? map.getGroundTile(tx, ty) : (map.ground ? map.ground[ty]?.[tx] : 0);
+  if (ground === TILES.WATER ||
+      ground === TILES.SWAMP_WATER ||
+      ground === TILES.CAVE_WATER ||
+      ground === TILES.VOID_LAKE ||
+      ground === TILES.SKY_ABYSS) {
+    return false;
+  }
+
+  const obj = map.getObjectTile ? map.getObjectTile(tx, ty) : (map.objects ? map.objects[ty]?.[tx] : 0);
+  if (obj && OBJ_PROPS[obj] && OBJ_PROPS[obj].solid) {
+    return false;
+  }
+
+  if (map.checkTreeCollision && map.checkTreeCollision(tx * TILE_SIZE + 8, ty * TILE_SIZE + 8, 4)) {
+    return false;
+  }
+
+  return true;
+}
+
+/** Sucht in Spiralen das nächste gültige begehbare Kachelfeld */
+function findNearestWalkableTile(map, tx, ty, maxRadius = 14) {
+  if (isTileWalkable(map, tx, ty)) return { tx, ty };
+
+  for (let r = 1; r <= maxRadius; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) === r || Math.abs(dy) === r) {
+          const nx = tx + dx;
+          const ny = ty + dy;
+          if (isTileWalkable(map, nx, ny)) {
+            return { tx: nx, ty: ny };
+          }
+        }
+      }
+    }
+  }
+  return { tx, ty };
+}
+
 /**
  * EnemyEntity - Ein lebendiges, animiertes Monster in der Spielwelt
  */
@@ -6238,7 +6293,7 @@ class EnemyEntity {
     this.elevation = options.elevation || 0;
 
     // Proportionale Skalierung (Schwache Monster kleiner, Kolosse/Bosse riesig!)
-    this.scale = options.scale ?? this.def.scale ?? (this.category === 'boss' ? 1.6 : (this.typeId === 'green_slime' || this.typeId === 'cave_weaver' || this.typeId === 'lava_core' ? 0.72 : 1.0));
+    this.scale = options.scale ?? this.def.scale ?? (this.typeId === 'green_slime' ? 0.48 : (this.category === 'boss' ? 1.6 : (this.typeId === 'cave_weaver' || this.typeId === 'lava_core' ? 0.72 : 1.0)));
 
     // Hitbox-Radius proportional zur Skalierung
     let baseRadius = 9;
@@ -6246,10 +6301,12 @@ class EnemyEntity {
       baseRadius = 18;
     } else if (this.category === 'reptile' || this.category === 'beast') {
       baseRadius = 11;
-    } else if (this.typeId === 'green_slime' || this.typeId === 'cave_weaver' || this.typeId === 'lava_core') {
+    } else if (this.typeId === 'green_slime') {
+      baseRadius = 6;
+    } else if (this.typeId === 'cave_weaver' || this.typeId === 'lava_core') {
       baseRadius = 7;
     }
-    this.radius = Math.round(baseRadius * this.scale);
+    this.radius = Math.max(3, Math.round(baseRadius * this.scale));
 
     // Werte aus Bestiarium / Optionen
     this.maxHp = options.hp ?? this.def.stats.hp ?? 50;
@@ -6778,10 +6835,11 @@ class EnemyEntity {
     this.hp -= amount;
     this.hitFlash = 0.25;
 
-    // Knockback
+    // Knockback (Kleine Blob-Gegner fliegen mit starkem Impuls wie Kegel weg!)
     if (this.baseSpeed > 0) {
-      this.x += Math.cos(knockbackAngle) * (knockbackForce * 0.08);
-      this.y += Math.sin(knockbackAngle) * (knockbackForce * 0.08);
+      const kbMult = (this.typeId === 'green_slime' || this.scale < 0.6) ? 0.24 : 0.08;
+      this.x += Math.cos(knockbackAngle) * (knockbackForce * kbMult);
+      this.y += Math.sin(knockbackAngle) * (knockbackForce * kbMult);
     }
 
     // Treffer-Partikel
@@ -6803,6 +6861,24 @@ class EnemyEntity {
     // Poof / Konfetti-Partikelwolke
     if (combatManager) {
       combatManager.addDefeatPoof(this.x, this.y, this.category);
+
+      // Spritzige Gelee-Partikel für Blobs
+      if (this.typeId === 'green_slime') {
+        for (let s = 0; s < 10; s++) {
+          const pAng = Math.random() * Math.PI * 2;
+          const sp = Math.random() * 50 + 15;
+          combatManager.hitSparks.push({
+            x: this.x,
+            y: this.y,
+            vx: Math.cos(pAng) * sp,
+            vy: Math.sin(pAng) * sp - 15,
+            color: Math.random() > 0.4 ? '#4ade80' : '#22c55e',
+            size: Math.random() * 2.5 + 1.2,
+            life: 0.35,
+            maxLife: 0.35
+          });
+        }
+      }
     }
   }
 
@@ -6884,9 +6960,9 @@ class EnemyManager {
     // =========================================================================
 
     // 1. Grasland & Lichtungen (nahe Spawn 30, 45)
-    // 6er-Schwarm Tau-Tropfen Blobs (klein, schwach, flink)
-    this.spawnPack('green_slime', 38 * TILE_SIZE, 46 * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_slimes', {
-      scale: 0.70, hp: 20, atk: 8, xpValue: 3
+    // RIESIGER 28er-Massen-Schwarm winziger Tau-Tropfen Blobs (super klein, schwach, fliegen beim Hieb wie Kegel weg!)
+    this.spawnPack('green_slime', 39 * TILE_SIZE, 46 * TILE_SIZE, 28, 55, DIMENSIONS.OVERWORLD, 'pack_slimes', {
+      scale: 0.48, hp: 12, atk: 5, xpValue: 2
     });
 
     // 3er-Gruppe Waldhüter-Wildschweine (Tusk Boars)
@@ -6996,8 +7072,40 @@ class EnemyManager {
     });
   }
 
+  getMapForDimension(dim) {
+    if (!this.game) return null;
+    if (dim === DIMENSIONS.CAVES) {
+      return this.game.caves?.main_complex || null;
+    }
+    if (dim === DIMENSIONS.CLOUDS) {
+      return this.game.cloudMap || null;
+    }
+    return this.game.overworldMap || this.game.map || null;
+  }
+
+  findWalkablePosition(typeId, rawX, rawY, dimension) {
+    // Fliegende Gegner dürfen frei über Abgründen/Wasser schweben
+    if (isFlyingEnemy(typeId)) {
+      return { x: rawX, y: rawY };
+    }
+
+    const map = this.getMapForDimension(dimension);
+    if (!map) return { x: rawX, y: rawY };
+
+    const tx = Math.floor(rawX / TILE_SIZE);
+    const ty = Math.floor(rawY / TILE_SIZE);
+
+    // Finde nächste freie begehbare Land-Kachel (kein Wasser, kein Felsen, kein Baum, kein Abgrund)
+    const safeTile = findNearestWalkableTile(map, tx, ty, 14);
+    return {
+      x: safeTile.tx * TILE_SIZE + 8 + (Math.random() - 0.5) * 4,
+      y: safeTile.ty * TILE_SIZE + 8 + (Math.random() - 0.5) * 4
+    };
+  }
+
   spawnEnemy(typeId, x, y, dimension = DIMENSIONS.OVERWORLD, packId = null, options = {}) {
-    const enemy = new EnemyEntity(typeId, x, y, dimension, packId, options);
+    const pos = this.findWalkablePosition(typeId, x, y, dimension);
+    const enemy = new EnemyEntity(typeId, pos.x, pos.y, dimension, packId, options);
     this.enemies.push(enemy);
     return enemy;
   }
@@ -7007,10 +7115,11 @@ class EnemyManager {
     const created = [];
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-      const dist = Math.random() * radius * 0.6 + radius * 0.4;
-      const ex = centerX + Math.cos(angle) * dist;
-      const ey = centerY + Math.sin(angle) * dist;
-      const enemy = new EnemyEntity(typeId, ex, ey, dimension, pack, options);
+      const dist = Math.random() * radius * 0.7 + radius * 0.3;
+      const rawX = centerX + Math.cos(angle) * dist;
+      const rawY = centerY + Math.sin(angle) * dist;
+      const pos = this.findWalkablePosition(typeId, rawX, rawY, dimension);
+      const enemy = new EnemyEntity(typeId, pos.x, pos.y, dimension, pack, options);
       this.enemies.push(enemy);
       created.push(enemy);
     }
@@ -10911,7 +11020,6 @@ class Game {
 
     this.touchControls = new TouchControls(this.input, (action, isDown) => this.handleTouchButton(action, isDown));
     this.combat = new CombatManager(this);
-    this.enemyManager = new EnemyManager(this);
 
     // Multi-Dimension Maps & Core Systems
     this.overworldMap = new WorldMap();
@@ -10927,6 +11035,8 @@ class Game {
     this.map = this.overworldMap;
     this.currentDimension = DIMENSIONS.OVERWORLD;
     this.activeSubCave = null;
+
+    this.enemyManager = new EnemyManager(this);
 
     this.spriteManager = new SpriteManager();
     this.player = new Player(this.map.spawnPoint.x, this.map.spawnPoint.y, this.map, this);

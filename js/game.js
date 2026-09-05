@@ -26,7 +26,6 @@ class Game {
 
     this.touchControls = new TouchControls(this.input, (action, isDown) => this.handleTouchButton(action, isDown));
     this.combat = new CombatManager(this);
-    this.enemyManager = new EnemyManager(this);
 
     // Multi-Dimension Maps & Core Systems
     this.overworldMap = new WorldMap();
@@ -42,6 +41,8 @@ class Game {
     this.map = this.overworldMap;
     this.currentDimension = DIMENSIONS.OVERWORLD;
     this.activeSubCave = null;
+
+    this.enemyManager = new EnemyManager(this);
 
     this.spriteManager = new SpriteManager();
     this.player = new Player(this.map.spawnPoint.x, this.map.spawnPoint.y, this.map, this);
