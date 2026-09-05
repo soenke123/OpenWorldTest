@@ -1701,8 +1701,8 @@ canvas#gameCanvas {
   margin: 0;
 }
 
-/* World Preset Selection Card in Step 3 */
-.wizard-world-select-card {
+/* World Info Card in Step 3 (Host chooses world centrally) */
+.wizard-world-info-card {
   width: 100%;
   max-width: 420px;
   background: rgba(15, 23, 42, 0.75);
@@ -1717,7 +1717,7 @@ canvas#gameCanvas {
   backdrop-filter: blur(8px);
 }
 
-.world-select-header {
+.world-info-header {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1726,37 +1726,24 @@ canvas#gameCanvas {
   color: #cbd5e1;
 }
 
-.world-preset-select {
+.wizard-active-world-name {
   width: 100%;
   background: rgba(10, 15, 29, 0.9);
   border: 1.5px solid rgba(167, 139, 250, 0.4);
   border-radius: 10px;
-  padding: 8px 12px;
+  padding: 9px 12px;
   font-size: 0.95rem;
   font-weight: 700;
   color: #38bdf8;
-  outline: none;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: inherit;
+  letter-spacing: 0.01em;
 }
 
-.world-preset-select:focus {
-  border-color: #55e6a5;
-  box-shadow: 0 0 12px rgba(85, 230, 165, 0.3);
-}
-
-.world-preset-select option {
-  background: #0f172a;
-  color: #f8fafc;
-  padding: 8px;
-}
-
-.world-preset-desc {
-  font-size: 0.78rem;
-  color: #94a3b8;
+.wizard-world-host-note {
+  font-size: 0.8rem;
+  color: #fbbf24;
   line-height: 1.35;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.22);
   border-radius: 8px;
   padding: 6px 10px;
 }
@@ -3186,7 +3173,12 @@ canvas#gameCanvas {
   text-align: center;
 }
 
-
-
-
+/* =======================================================
+   MULTIPLAYER CLEANUP: DevTools & Showroom ausblenden
+   ======================================================= */
+#dev-tools-wrapper,
+#showroom-btn,
+.dev-showroom-link {
+  display: none !important;
+}
 

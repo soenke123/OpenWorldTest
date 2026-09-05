@@ -132,7 +132,8 @@ const server = http.createServer(async (req, res) => {
       qrDataUrl,
       worldId: roomState.worldId,
       gameState: roomState.gameState,
-      playerCount: roomState.players.size
+      playerCount: roomState.players.size,
+      hasHost: Boolean(roomState.hostWs && roomState.hostWs.readyState === WebSocket.OPEN)
     }));
     return;
   }
@@ -180,12 +181,23 @@ wss.on('connection', (ws) => {
 
     switch (msg.type) {
       case 'join': {
-        clientRole = msg.role === 'host' ? 'host' : 'player';
+        const requestedRole = msg.role === 'host' ? 'host' : 'player';
 
-        if (clientRole === 'host') {
-          roomState.hostWs = ws;
-          console.log(`[Multiplayer] 👑 Host verbunden (ID: ${clientId})`);
+        // Nur EIN Host ist erlaubt! Wenn bereits ein Host aktiv ist, wird die Rolle abgewiesen
+        if (requestedRole === 'host') {
+          if (roomState.hostWs && roomState.hostWs !== ws && roomState.hostWs.readyState === WebSocket.OPEN) {
+            console.warn(`[Multiplayer] ⚠️ Host-Slot bereits belegt. Client (ID: ${clientId}) wird zum Spieler heruntergestuft.`);
+            clientRole = 'player';
+          } else {
+            clientRole = 'host';
+            roomState.hostWs = ws;
+            console.log(`[Multiplayer] 👑 Host verbunden (ID: ${clientId})`);
+          }
         } else {
+          clientRole = 'player';
+        }
+
+        if (clientRole === 'player') {
           const playerRecord = {
             id: clientId,
             ws,
@@ -219,7 +231,11 @@ wss.on('connection', (ws) => {
         }
 
         // Send initialization package to the connected client
-        const currentPlayers = Array.from(roomState.players.values()).map(getPlayerSummary);
+        // EIGENER SPIELER WIRD HIER HERAUSGEFILTERT, damit keine Geister-Kopie entsteht!
+        const otherPlayers = Array.from(roomState.players.values())
+          .filter(p => p.id !== clientId)
+          .map(getPlayerSummary);
+
         sendTo(ws, {
           type: 'init',
           clientId,
@@ -229,7 +245,8 @@ wss.on('connection', (ws) => {
           lanIp: LAN_IP,
           port: PORT,
           joinUrl: `http://${LAN_IP}:${PORT}`,
-          players: currentPlayers
+          players: otherPlayers,
+          hasHost: Boolean(roomState.hostWs && roomState.hostWs.readyState === WebSocket.OPEN)
         });
         break;
       }

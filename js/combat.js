@@ -422,6 +422,7 @@ export class CombatManager {
     if (this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
       const curDim = this.game.currentDimension || 'overworld';
       for (const remotePlayer of this.game.remotePlayers.values()) {
+        if (remotePlayer.id === this.game.network.clientId) continue;
         if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
 
         const dx = remotePlayer.x - hitbox.x;
@@ -674,6 +675,7 @@ export class CombatManager {
       if (!hitEnemy && this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
         const curDim = this.game.currentDimension || 'overworld';
         for (const remotePlayer of this.game.remotePlayers.values()) {
+          if (remotePlayer.id === this.game.network.clientId) continue;
           if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
 
           if (Math.hypot(remotePlayer.x - arrow.x, remotePlayer.y - arrow.y) <= (remotePlayer.radius + 6)) {

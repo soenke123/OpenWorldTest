@@ -15464,10 +15464,7 @@ class NetworkManager {
   }
 
   handleMessage(msg) {
-    // Standard-Event an registrierte Listener
-    this.emit(msg.type, msg);
-
-    // Globale Aktionen
+    // 1. Zuerst globale interne State-Updates setzen
     switch (msg.type) {
       case 'init':
         this.clientId = msg.clientId;
@@ -15482,6 +15479,9 @@ class NetworkManager {
         }
         break;
     }
+
+    // 2. Danach Event an registrierte Listener senden (this.clientId ist nun garantiert gesetzt!)
+    this.emit(msg.type, msg);
   }
 
   update(dt, player) {
@@ -16282,6 +16282,7 @@ class CombatManager {
     if (this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
       const curDim = this.game.currentDimension || 'overworld';
       for (const remotePlayer of this.game.remotePlayers.values()) {
+        if (remotePlayer.id === this.game.network.clientId) continue;
         if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
 
         const dx = remotePlayer.x - hitbox.x;
@@ -16534,6 +16535,7 @@ class CombatManager {
       if (!hitEnemy && this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
         const curDim = this.game.currentDimension || 'overworld';
         for (const remotePlayer of this.game.remotePlayers.values()) {
+          if (remotePlayer.id === this.game.network.clientId) continue;
           if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
 
           if (Math.hypot(remotePlayer.x - arrow.x, remotePlayer.y - arrow.y) <= (remotePlayer.radius + 6)) {
@@ -21382,7 +21384,18 @@ class Game {
     if (this.confirmHeroSubEl && defChar) {
       this.confirmHeroSubEl.textContent = defChar.subtitle ? `${defChar.subtitle}.` : `${defChar.name}.`;
     }
+    this.updateWizardWorldDisplay();
     this.renderConfirmPreview();
+  }
+
+  updateWizardWorldDisplay(worldId) {
+    const activeWorldEl = document.getElementById('wizard-active-world-name');
+    if (!activeWorldEl) return;
+    const currentId = worldId || (this.overworldMap && this.overworldMap.preset ? this.overworldMap.preset.id : getSelectedWorldId());
+    const preset = getWorldPreset(currentId);
+    if (preset) {
+      activeWorldEl.textContent = `${preset.id}. ${preset.name} (${preset.badge})`;
+    }
   }
 
   renderCharacterSelectCards() {
@@ -21485,15 +21498,6 @@ class Game {
       this.player.setSkin(this.selectedHeroSkin);
     }
 
-    // Check if player selected a different world preset in the wizard
-    const worldSelectEl = document.getElementById('world-preset-select');
-    if (worldSelectEl && worldSelectEl.value) {
-      const chosenWorldId = parseInt(worldSelectEl.value, 10);
-      if (chosenWorldId && this.overworldMap && this.overworldMap.preset.id !== chosenWorldId) {
-        this.switchWorld(chosenWorldId);
-      }
-    }
-
     this.updatePlayerNameUI();
 
     if (this.charSelectModal) {
@@ -21515,46 +21519,20 @@ class Game {
   }
 
   initWorldSelectUI() {
-    const worldPresetSelect = document.getElementById('world-preset-select');
-    const worldPresetDesc = document.getElementById('world-preset-desc');
     const devWorldSelect = document.getElementById('dev-world-select');
-
     const presets = getAllWorldPresets();
     const currentId = getSelectedWorldId();
 
-    const populateSelect = (selectEl) => {
-      if (!selectEl) return;
-      selectEl.innerHTML = '';
+    if (devWorldSelect) {
+      devWorldSelect.innerHTML = '';
       presets.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
         opt.textContent = `${p.id}. ${p.name} (${p.badge})`;
         if (p.id === currentId) opt.selected = true;
-        selectEl.appendChild(opt);
+        devWorldSelect.appendChild(opt);
       });
-    };
 
-    populateSelect(worldPresetSelect);
-    populateSelect(devWorldSelect);
-
-    const updateDesc = (id) => {
-      if (!worldPresetDesc) return;
-      const preset = getWorldPreset(id);
-      worldPresetDesc.innerHTML = `<strong style="color: ${preset.color || '#38bdf8'}">${preset.badge}: ${preset.name}</strong> - <em>${preset.subtitle}</em><br><span style="color: #cbd5e1">${preset.description}</span>`;
-    };
-
-    updateDesc(currentId);
-
-    if (worldPresetSelect) {
-      worldPresetSelect.addEventListener('change', (e) => {
-        const newId = parseInt(e.target.value, 10);
-        setSelectedWorldId(newId);
-        updateDesc(newId);
-        if (devWorldSelect) devWorldSelect.value = newId;
-      });
-    }
-
-    if (devWorldSelect) {
       devWorldSelect.addEventListener('change', (e) => {
         const newId = parseInt(e.target.value, 10);
         if (newId) {
@@ -21562,6 +21540,8 @@ class Game {
         }
       });
     }
+
+    this.updateWizardWorldDisplay(currentId);
   }
 
   switchWorld(worldId) {
@@ -21659,6 +21639,35 @@ class Game {
 
   initMultiplayerUI() {
     this.btnStartAsHost = document.getElementById('btn-start-as-host');
+    const wizardHostBanner = document.querySelector('.wizard-host-banner');
+    const wizardDivider = document.querySelector('.wizard-divider');
+
+    // Host-Rolle nur auf dem Host-Rechner (localhost / 127.0.0.1) erlauben
+    const isLocalhost = typeof window !== 'undefined' && window.location &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    // Wenn nicht am Host-PC (z.B. Handy/Tablet/anderer PC im LAN): Host-Banner komplett ausblenden!
+    if (!isLocalhost) {
+      if (wizardHostBanner) wizardHostBanner.style.display = 'none';
+      if (wizardDivider) wizardDivider.style.display = 'none';
+    } else {
+      // Am Host-PC: prüfen ob bereits ein Host aktiv ist
+      if (typeof fetch !== 'undefined') {
+        fetch('/api/server-info')
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.hasHost && !this.isHost) {
+              if (wizardHostBanner) wizardHostBanner.style.display = 'none';
+              if (wizardDivider) wizardDivider.style.display = 'none';
+            }
+            if (data && data.worldId) {
+              this.updateWizardWorldDisplay(data.worldId);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+
     if (this.btnStartAsHost) {
       this.btnStartAsHost.addEventListener('click', () => {
         this.startAsHost();
@@ -21682,8 +21691,8 @@ class Game {
       });
     }
 
-    // URL Query Parameter ?host=true Support
-    if (typeof window !== 'undefined' && window.location) {
+    // URL Query Parameter ?host=true Support (nur auf localhost)
+    if (isLocalhost && typeof window !== 'undefined' && window.location) {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get('host') === 'true' || urlParams.get('host') === '1') {
         this.startAsHost();
@@ -21696,20 +21705,25 @@ class Game {
 
     this.network.on('init', (msg) => {
       this.remotePlayers.clear();
+      const myId = msg.clientId || (this.network ? this.network.clientId : null);
       if (msg.players) {
         for (const p of msg.players) {
-          if (p.id !== this.network.clientId) {
+          if (p.id !== myId) {
             this.remotePlayers.set(p.id, new RemotePlayer(p));
           }
         }
       }
-      if (msg.worldId && this.overworldMap && this.overworldMap.preset.id !== msg.worldId) {
-        this.switchWorld(msg.worldId);
+      if (msg.worldId) {
+        if (this.overworldMap && this.overworldMap.preset.id !== msg.worldId) {
+          this.switchWorld(msg.worldId);
+        }
+        this.updateWizardWorldDisplay(msg.worldId);
       }
     });
 
     this.network.on('player_joined', (msg) => {
-      if (msg.player && msg.player.id !== this.network.clientId) {
+      const myId = this.network ? this.network.clientId : null;
+      if (msg.player && msg.player.id !== myId) {
         this.remotePlayers.set(msg.player.id, new RemotePlayer(msg.player));
         this.showToast(`👋 ${msg.player.name} ist beigetreten!`);
       }
@@ -21721,6 +21735,7 @@ class Game {
     });
 
     this.network.on('player_update', (msg) => {
+      if (this.network && msg.id === this.network.clientId) return;
       const rp = this.remotePlayers.get(msg.id);
       if (rp) {
         rp.updateFromNetwork(msg);
@@ -21728,6 +21743,7 @@ class Game {
     });
 
     this.network.on('player_action', (msg) => {
+      if (this.network && msg.id === this.network.clientId) return;
       const rp = this.remotePlayers.get(msg.id);
       if (rp) {
         rp.triggerAction(msg.action, msg);
@@ -21763,6 +21779,7 @@ class Game {
 
     this.network.on('world_changed', (msg) => {
       this.switchWorld(msg.worldId);
+      this.updateWizardWorldDisplay(msg.worldId);
       this.showToast(`🌍 Welt gewechselt: ${getWorldPreset(msg.worldId).name}`);
     });
 
@@ -21773,6 +21790,7 @@ class Game {
     this.network.on('round_started', (msg) => {
       this.hideMatchResultsModal();
       this.switchWorld(msg.worldId);
+      this.updateWizardWorldDisplay(msg.worldId);
 
       // Reset local player
       if (!this.isHost && this.player) {

@@ -106,10 +106,7 @@ export class NetworkManager {
   }
 
   handleMessage(msg) {
-    // Standard-Event an registrierte Listener
-    this.emit(msg.type, msg);
-
-    // Globale Aktionen
+    // 1. Zuerst globale interne State-Updates setzen
     switch (msg.type) {
       case 'init':
         this.clientId = msg.clientId;
@@ -124,6 +121,9 @@ export class NetworkManager {
         }
         break;
     }
+
+    // 2. Danach Event an registrierte Listener senden (this.clientId ist nun garantiert gesetzt!)
+    this.emit(msg.type, msg);
   }
 
   update(dt, player) {

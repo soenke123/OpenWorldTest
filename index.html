@@ -14,8 +14,8 @@
     <div id="top-bar">
       <!-- Left Controls: Dev Tools & Compact Player Status -->
       <div id="top-left-group">
-        <!-- Dev Tools Wrapper (Collapsible) -->
-        <div id="dev-tools-wrapper">
+        <!-- Dev Tools Wrapper (Ausgeblendet im Multiplayer-Modus) -->
+        <div id="dev-tools-wrapper" style="display: none !important;">
           <button id="dev-tools-toggle" class="top-nav-btn dev-toggle-btn" title="Dev Tools ein-/ausklappen">
             <span>⚙️ Dev Tools</span>
             <span id="dev-toggle-icon" class="toggle-arrow">▼</span>
@@ -170,7 +170,7 @@
         <button id="fullscreen-btn" class="top-nav-btn fs-btn" title="Vollbildmodus aktivieren/beenden">
           <span id="fs-icon">⛶</span> <span id="fs-text">Vollbild</span>
         </button>
-        <a href="showroom.html" id="showroom-btn" class="top-nav-btn showroom-nav-btn">
+        <a href="showroom.html" id="showroom-btn" class="top-nav-btn showroom-nav-btn" style="display: none !important;">
           <span>🎨 Showroom</span>
         </a>
       </div>
@@ -551,13 +551,13 @@
             <p id="char-confirm-greeting" class="char-confirm-greeting">Du bist <span id="confirm-hero-name" class="highlight-name">Ren</span>,</p>
             <p id="char-confirm-sub" class="char-confirm-sub">der Schattengänger.</p>
           </div>
-          <div class="wizard-world-select-card">
-            <div class="world-select-header">
+          <div class="wizard-world-info-card">
+            <div class="world-info-header">
               <span class="world-label-icon">🗺️</span>
-              <span class="world-label-text">Wähle deine Spielwelt:</span>
+              <span class="world-label-text">Aktive Spielwelt:</span>
             </div>
-            <select id="world-preset-select" class="world-preset-select"></select>
-            <div id="world-preset-desc" class="world-preset-desc">Lade Weltbeschreibung...</div>
+            <div id="wizard-active-world-name" class="wizard-active-world-name">1. Das Smaragd-Hochland (Ausgewogen)</div>
+            <div class="wizard-world-host-note">👑 Die Spielwelt wird zentral vom Spielleiter bestimmt.</div>
           </div>
           <div class="wizard-nav-row">
             <button id="btn-step3-back" class="btn-wizard-nav btn-wizard-secondary">
