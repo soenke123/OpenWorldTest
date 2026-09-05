@@ -1,5 +1,5 @@
 import { TILE_SIZE, PLAYER_CONFIG, TILES, OBJECTS, ELEVATION_PIXEL_OFFSET, RAMPS, COMBAT_CONFIG } from './constants.js';
-import { CHARACTERS_MAP, getSelectedSkin, setSelectedSkin } from './characters.js';
+import { CHARACTERS_MAP, getSelectedSkin, setSelectedSkin, getSelectedPlayerName, setSelectedPlayerName } from './characters.js';
 
 export class Player {
   constructor(x, y, map, game = null) {
@@ -28,6 +28,7 @@ export class Player {
 
     // Active Character Skin (15 selectable Dark Ghibli Papercraft heroes)
     this.skinId = (typeof getSelectedSkin === 'function') ? getSelectedSkin() : 'ren_twilight';
+    this.name = (typeof getSelectedPlayerName === 'function') ? getSelectedPlayerName() : 'Ren';
 
     // Health & Damage States
     this.maxHp = PLAYER_CONFIG.MAX_HP || 100;
@@ -173,6 +174,24 @@ export class Player {
             maxLife: 0.5
           });
         }
+      }
+    }
+  }
+
+  setName(name) {
+    if (typeof name === 'string' && name.trim()) {
+      this.name = name.trim().slice(0, 20);
+      if (typeof setSelectedPlayerName === 'function') {
+        setSelectedPlayerName(this.name);
+      }
+    }
+  }
+
+  setSkin(skinId) {
+    if (CHARACTERS_MAP && CHARACTERS_MAP[skinId]) {
+      this.skinId = skinId;
+      if (typeof setSelectedSkin === 'function') {
+        setSelectedSkin(skinId);
       }
     }
   }
@@ -1894,6 +1913,35 @@ export class Player {
       // Health Fill (dynamic green -> yellow -> red)
       ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
       ctx.fillRect(barX, barY, barW * hpPct, barH);
+      ctx.restore();
+    }
+
+    // 4g. Overhead Player Nameplate (Dark Ghibli Papercraft)
+    if (this.name && !this.isDead) {
+      ctx.save();
+      ctx.font = 'bold 8.5px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const nameY = (this.hp < this.maxHp) ? py - 33 + bob : py - 27 + bob;
+      const textMetrics = (typeof ctx.measureText === 'function') ? ctx.measureText(this.name) : { width: this.name.length * 5.5 };
+      const textW = Math.max(16, textMetrics.width);
+      const padX = 4;
+      const badgeH = 11;
+
+      // Dark Papercraft Badge & Drop Shadow
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.fillRect(px - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
+
+      // Delicate Paper Border
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(px - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
+
+      // Pure White Text
+      ctx.fillStyle = '#f8fafc';
+      if (typeof ctx.fillText === 'function') {
+        ctx.fillText(this.name, px, nameY);
+      }
       ctx.restore();
     }
 

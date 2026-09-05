@@ -4,13 +4,32 @@
  * Identische Spielmechanik, Hitboxen und Kampfaktionen für alle Helden.
  */
 
-// LocalStorage Key for chosen skin
+// LocalStorage Keys for chosen skin & player name
 export const STORAGE_KEY_SKIN = 'ocarina_player_skin';
+export const STORAGE_KEY_NAME = 'ocarina_player_name';
+
+export const RANDOM_HERO_NAMES = [
+  'Ren', 'Kaito', 'Jiro', 'Taro', 'Sora', 'Kanna', 'Aoi', 'Mei',
+  'Yuto', 'Poko', 'Kuro', 'Toru', 'Hayate', 'Shiratama', 'Mukuro',
+  'Haku', 'Ashitaka', 'San', 'Chihiro', 'Howl', 'Nausicaä', 'Kiki',
+  'Tsuki', 'Kohaku', 'Genji', 'Kagome', 'Rin', 'Botan', 'Shin'
+];
+
+export function getRandomHeroName() {
+  return RANDOM_HERO_NAMES[Math.floor(Math.random() * RANDOM_HERO_NAMES.length)];
+}
+
+function getStorage() {
+  if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
+  if (typeof localStorage !== 'undefined') return localStorage;
+  return null;
+}
 
 export function getSelectedSkin() {
-  if (typeof window !== 'undefined' && window.localStorage) {
+  const storage = getStorage();
+  if (storage) {
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY_SKIN);
+      const saved = storage.getItem(STORAGE_KEY_SKIN);
       if (saved && CHARACTERS_MAP[saved]) return saved;
     } catch (e) {
       // ignore
@@ -20,9 +39,39 @@ export function getSelectedSkin() {
 }
 
 export function setSelectedSkin(skinId) {
-  if (CHARACTERS_MAP[skinId] && typeof window !== 'undefined' && window.localStorage) {
+  const storage = getStorage();
+  if (CHARACTERS_MAP[skinId] && storage) {
     try {
-      window.localStorage.setItem(STORAGE_KEY_SKIN, skinId);
+      storage.setItem(STORAGE_KEY_SKIN, skinId);
+    } catch (e) {
+      // ignore
+    }
+  }
+}
+
+export function getSelectedPlayerName() {
+  const storage = getStorage();
+  if (storage) {
+    try {
+      const saved = storage.getItem(STORAGE_KEY_NAME);
+      if (saved && saved.trim()) return saved.trim().slice(0, 20);
+    } catch (e) {
+      // ignore
+    }
+  }
+  const currentSkin = getSelectedSkin();
+  if (CHARACTERS_MAP[currentSkin]) {
+    return CHARACTERS_MAP[currentSkin].name;
+  }
+  return 'Ren';
+}
+
+export function setSelectedPlayerName(name) {
+  const storage = getStorage();
+  if (storage && typeof name === 'string') {
+    try {
+      const clean = name.trim().slice(0, 20) || 'Ren';
+      storage.setItem(STORAGE_KEY_NAME, clean);
     } catch (e) {
       // ignore
     }

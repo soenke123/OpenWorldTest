@@ -139,6 +139,30 @@ canvas#gameCanvas {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
 }
 
+.compact-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #38bdf8;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 2px;
+  margin-bottom: 1px;
+}
+
+.compact-name-icon {
+  font-size: 0.72rem;
+  line-height: 1;
+}
+
+.compact-player-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+}
+
 .compact-stat-row {
   display: flex;
   align-items: center;
@@ -1363,4 +1387,419 @@ canvas#gameCanvas {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==========================================================================
+   CHARACTER & NAME SELECTION MODAL (Game Setup / Intro)
+   ========================================================================== */
+.char-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(8, 10, 16, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  opacity: 1;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.char-modal-backdrop.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.char-modal-dialog {
+  background: rgba(18, 22, 34, 0.96);
+  border: 1.5px solid rgba(167, 139, 250, 0.4);
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.85), 0 0 40px rgba(167, 139, 250, 0.2);
+  width: 100%;
+  max-width: 860px;
+  max-height: 92vh;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px;
+  gap: 12px;
+  overflow: hidden;
+  animation: charModalPop 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+  color: #f8fafc;
+  user-select: none;
+}
+
+@keyframes charModalPop {
+  0% { transform: scale(0.92); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Modal Header */
+.char-modal-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 10px;
+}
+
+.char-modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.char-modal-icon {
+  font-size: 1.4rem;
+}
+
+.char-modal-header h2 {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.char-modal-subtitle {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+/* Name Input Section */
+.char-name-section {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+
+.char-name-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.char-name-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.hero-name-input {
+  flex: 1;
+  background: rgba(10, 14, 24, 0.85);
+  border: 1.5px solid rgba(167, 139, 250, 0.4);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #38bdf8;
+  outline: none;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.hero-name-input:focus {
+  border-color: #55e6a5;
+  box-shadow: 0 0 12px rgba(85, 230, 165, 0.35);
+  color: #55e6a5;
+}
+
+.btn-random-name {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cbd5e1;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-random-name:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.btn-random-name:active {
+  transform: scale(0.96);
+}
+
+/* Category Filter Pills */
+.char-filter-pills-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+}
+
+.char-pill-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.char-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.char-pill-btn.active {
+  background: #a78bfa;
+  color: #0f172a;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(167, 139, 250, 0.35);
+}
+
+/* 15 Characters Grid */
+.char-select-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 360px;
+  padding: 4px 6px 8px 2px;
+}
+
+/* Custom Scrollbar for Grid */
+.char-select-grid::-webkit-scrollbar {
+  width: 6px;
+}
+.char-select-grid::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+.char-select-grid::-webkit-scrollbar-thumb {
+  background: rgba(167, 139, 250, 0.35);
+  border-radius: 3px;
+}
+.char-select-grid::-webkit-scrollbar-thumb:hover {
+  background: rgba(167, 139, 250, 0.6);
+}
+
+/* Individual Hero Select Card */
+.char-select-card {
+  background: rgba(15, 20, 32, 0.85);
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  position: relative;
+}
+
+.char-select-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(24, 30, 48, 0.92);
+}
+
+.char-select-card.is-selected {
+  border-color: #55e6a5;
+  background: rgba(18, 36, 38, 0.96);
+  box-shadow: 0 0 16px rgba(85, 230, 165, 0.35);
+}
+
+.char-select-card.is-selected::after {
+  content: '✓';
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  color: #55e6a5;
+  background: rgba(85, 230, 165, 0.2);
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.char-card-canvas {
+  width: 60px;
+  height: 60px;
+  image-rendering: auto;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.45));
+}
+
+.char-card-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.15;
+}
+
+.char-card-sub {
+  font-size: 0.65rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.char-card-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+
+/* Footer / Start Game Button */
+.char-modal-footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-start-game {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  padding: 12px 32px;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.45);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  width: 100%;
+  max-width: 380px;
+  justify-content: center;
+}
+
+.btn-start-game:hover {
+  background: linear-gradient(135deg, #34d399, #10b981);
+  box-shadow: 0 6px 25px rgba(16, 185, 129, 0.65);
+  transform: translateY(-2px);
+}
+
+.btn-start-game:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.start-btn-icon {
+  font-size: 1.2rem;
+}
+
+/* Mobile Responsiveness for Landscape Mode */
+@media (max-height: 520px) {
+  .char-modal-dialog {
+    padding: 8px 14px;
+    gap: 6px;
+    max-height: 98vh;
+    max-height: 98dvh;
+    border-radius: 14px;
+  }
+
+  .char-modal-header {
+    padding-bottom: 4px;
+  }
+
+  .char-modal-header h2 {
+    font-size: 1.05rem;
+  }
+
+  .char-modal-subtitle {
+    display: none;
+  }
+
+  .char-name-section {
+    padding: 4px 10px;
+    gap: 2px;
+  }
+
+  .char-name-label {
+    font-size: 0.7rem;
+  }
+
+  .hero-name-input {
+    padding: 4px 8px;
+    font-size: 0.82rem;
+  }
+
+  .btn-random-name {
+    padding: 4px 8px;
+    font-size: 0.74rem;
+  }
+
+  .char-filter-pills-row {
+    gap: 4px;
+  }
+
+  .char-pill-btn {
+    padding: 2px 8px;
+    font-size: 0.68rem;
+  }
+
+  .char-select-grid {
+    max-height: 145px;
+    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+    gap: 6px;
+  }
+
+  .char-select-card {
+    padding: 4px 3px;
+    gap: 2px;
+  }
+
+  .char-card-canvas {
+    width: 44px;
+    height: 44px;
+  }
+
+  .char-card-name {
+    font-size: 0.72rem;
+  }
+
+  .char-card-sub {
+    display: none;
+  }
+
+  .char-modal-footer {
+    padding-top: 4px;
+  }
+
+  .btn-start-game {
+    padding: 7px 18px;
+    font-size: 0.88rem;
+    max-width: 280px;
+  }
+}
+
 

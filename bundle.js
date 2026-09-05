@@ -336,13 +336,32 @@ class Noise2D {
  * Identische Spielmechanik, Hitboxen und Kampfaktionen für alle Helden.
  */
 
-// LocalStorage Key for chosen skin
+// LocalStorage Keys for chosen skin & player name
 const STORAGE_KEY_SKIN = 'ocarina_player_skin';
+const STORAGE_KEY_NAME = 'ocarina_player_name';
+
+const RANDOM_HERO_NAMES = [
+  'Ren', 'Kaito', 'Jiro', 'Taro', 'Sora', 'Kanna', 'Aoi', 'Mei',
+  'Yuto', 'Poko', 'Kuro', 'Toru', 'Hayate', 'Shiratama', 'Mukuro',
+  'Haku', 'Ashitaka', 'San', 'Chihiro', 'Howl', 'Nausicaä', 'Kiki',
+  'Tsuki', 'Kohaku', 'Genji', 'Kagome', 'Rin', 'Botan', 'Shin'
+];
+
+function getRandomHeroName() {
+  return RANDOM_HERO_NAMES[Math.floor(Math.random() * RANDOM_HERO_NAMES.length)];
+}
+
+function getStorage() {
+  if (typeof window !== 'undefined' && window.localStorage) return window.localStorage;
+  if (typeof localStorage !== 'undefined') return localStorage;
+  return null;
+}
 
 function getSelectedSkin() {
-  if (typeof window !== 'undefined' && window.localStorage) {
+  const storage = getStorage();
+  if (storage) {
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY_SKIN);
+      const saved = storage.getItem(STORAGE_KEY_SKIN);
       if (saved && CHARACTERS_MAP[saved]) return saved;
     } catch (e) {
       // ignore
@@ -352,9 +371,39 @@ function getSelectedSkin() {
 }
 
 function setSelectedSkin(skinId) {
-  if (CHARACTERS_MAP[skinId] && typeof window !== 'undefined' && window.localStorage) {
+  const storage = getStorage();
+  if (CHARACTERS_MAP[skinId] && storage) {
     try {
-      window.localStorage.setItem(STORAGE_KEY_SKIN, skinId);
+      storage.setItem(STORAGE_KEY_SKIN, skinId);
+    } catch (e) {
+      // ignore
+    }
+  }
+}
+
+function getSelectedPlayerName() {
+  const storage = getStorage();
+  if (storage) {
+    try {
+      const saved = storage.getItem(STORAGE_KEY_NAME);
+      if (saved && saved.trim()) return saved.trim().slice(0, 20);
+    } catch (e) {
+      // ignore
+    }
+  }
+  const currentSkin = getSelectedSkin();
+  if (CHARACTERS_MAP[currentSkin]) {
+    return CHARACTERS_MAP[currentSkin].name;
+  }
+  return 'Ren';
+}
+
+function setSelectedPlayerName(name) {
+  const storage = getStorage();
+  if (storage && typeof name === 'string') {
+    try {
+      const clean = name.trim().slice(0, 20) || 'Ren';
+      storage.setItem(STORAGE_KEY_NAME, clean);
     } catch (e) {
       // ignore
     }
@@ -9156,6 +9205,7 @@ class Player {
 
     // Active Character Skin (15 selectable Dark Ghibli Papercraft heroes)
     this.skinId = (typeof getSelectedSkin === 'function') ? getSelectedSkin() : 'ren_twilight';
+    this.name = (typeof getSelectedPlayerName === 'function') ? getSelectedPlayerName() : 'Ren';
 
     // Health & Damage States
     this.maxHp = PLAYER_CONFIG.MAX_HP || 100;
@@ -9301,6 +9351,24 @@ class Player {
             maxLife: 0.5
           });
         }
+      }
+    }
+  }
+
+  setName(name) {
+    if (typeof name === 'string' && name.trim()) {
+      this.name = name.trim().slice(0, 20);
+      if (typeof setSelectedPlayerName === 'function') {
+        setSelectedPlayerName(this.name);
+      }
+    }
+  }
+
+  setSkin(skinId) {
+    if (CHARACTERS_MAP && CHARACTERS_MAP[skinId]) {
+      this.skinId = skinId;
+      if (typeof setSelectedSkin === 'function') {
+        setSelectedSkin(skinId);
       }
     }
   }
@@ -11022,6 +11090,35 @@ class Player {
       // Health Fill (dynamic green -> yellow -> red)
       ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
       ctx.fillRect(barX, barY, barW * hpPct, barH);
+      ctx.restore();
+    }
+
+    // 4g. Overhead Player Nameplate (Dark Ghibli Papercraft)
+    if (this.name && !this.isDead) {
+      ctx.save();
+      ctx.font = 'bold 8.5px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const nameY = (this.hp < this.maxHp) ? py - 33 + bob : py - 27 + bob;
+      const textMetrics = (typeof ctx.measureText === 'function') ? ctx.measureText(this.name) : { width: this.name.length * 5.5 };
+      const textW = Math.max(16, textMetrics.width);
+      const padX = 4;
+      const badgeH = 11;
+
+      // Dark Papercraft Badge & Drop Shadow
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
+      ctx.fillRect(px - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
+
+      // Delicate Paper Border
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(px - textW / 2 - padX, nameY - badgeH / 2, textW + padX * 2, badgeH);
+
+      // Pure White Text
+      ctx.fillStyle = '#f8fafc';
+      if (typeof ctx.fillText === 'function') {
+        ctx.fillText(this.name, px, nameY);
+      }
       ctx.restore();
     }
 
@@ -13284,10 +13381,27 @@ class Game {
     this.lanternStatusEl = document.getElementById('lantern-status-hint');
     this.timePanelEl = document.getElementById('time-panel');
 
+    // Character & Name Selection State
+    this.compactPlayerNameEl = document.getElementById('compact-player-name');
+    this.charSelectModal = document.getElementById('character-select-modal');
+    this.heroNameInput = document.getElementById('hero-name-input');
+    this.btnRandomName = document.getElementById('btn-random-hero-name');
+    this.btnStartGame = document.getElementById('btn-start-game');
+    this.charSelectFilters = document.getElementById('char-select-filters');
+    this.charSelectGrid = document.getElementById('char-select-grid');
+    this.btnOpenCharSelect = document.getElementById('btn-open-char-select');
+
+    this.isCharacterSelectOpen = !!this.charSelectModal;
+    this.selectedHeroSkin = this.player.skinId || getSelectedSkin();
+    this.charPreviewCanvases = {};
+    this.charCategoryFilter = 'all';
+
     this.lastTime = 0;
     this.animTime = 0;
 
     this.initEvents();
+    this.initCharacterSelectModal();
+    this.updatePlayerNameUI();
     this.resize();
     this.start();
   }
@@ -13383,6 +13497,14 @@ class Game {
     window.addEventListener('resize', () => this.resize());
 
     window.addEventListener('keydown', (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
+        if (e.code === 'Enter' && e.target === this.heroNameInput) {
+          this.startGameWithSelectedHero();
+        }
+        return;
+      }
+      if (this.isCharacterSelectOpen) return;
+
       this.input.keys[e.code] = true;
       if (e.repeat) return; // Prevent OS keyboard auto-repeat from resetting charge timers!
 
@@ -13417,6 +13539,11 @@ class Game {
     });
 
     window.addEventListener('keyup', (e) => {
+      if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
+        return;
+      }
+      if (this.isCharacterSelectOpen) return;
+
       this.input.keys[e.code] = false;
       if (e.code === 'KeyJ') {
         this.player.releaseMelee();
@@ -13431,6 +13558,7 @@ class Game {
 
     if (this.canvas) {
       this.canvas.addEventListener('mousedown', (e) => {
+        if (this.isCharacterSelectOpen) return;
         const rect = this.canvas.getBoundingClientRect();
         const scaleX = this.canvas.width / rect.width;
         const scaleY = this.canvas.height / rect.height;
@@ -13795,6 +13923,11 @@ class Game {
   }
 
   update(dt) {
+    if (this.isCharacterSelectOpen) {
+      this.updateCharacterSelectPreviews(dt);
+      return;
+    }
+
     // 1. Advance Day-Night Clock
     this.gameTime = (this.gameTime + dt * this.timeSpeed) % 24;
 
@@ -13908,7 +14041,7 @@ class Game {
 
         if (info) {
           if (titleEl) titleEl.textContent = info.cause === 'enemy' ? 'IM KAMPF GEFALLEN!' : 'IN DIE LEERE GESTÜRZT!';
-          if (descEl) descEl.textContent = info.cause === 'enemy' ? 'Ein Monster hat dich überwältigt...' : 'Der Abgrund hat dich verschlungen...';
+          if (descEl) descEl.textContent = info.cause === 'enemy' ? `${this.player.name || 'Held'} wurde von einem Monster überwältigt...` : `${this.player.name || 'Held'} stürzte in den ewigen Abgrund...`;
           if (detailsEl) detailsEl.classList.remove('hidden');
           if (levelEl) levelEl.textContent = `⚡ Level halbiert: Lv. ${info.oldExactLevel.toFixed(2)} → Lv. ${info.newExactLevel.toFixed(2)}`;
           if (xpEl) xpEl.textContent = `✨ ${info.dropXp} EP als Beute gedroppt`;
@@ -16525,6 +16658,183 @@ class Game {
     this.ctx.fillText(`${msg.name} (Gefunden: ${msg.total})`, x + w / 2, y + 41);
 
     this.ctx.restore();
+  }
+
+  initCharacterSelectModal() {
+    if (!this.charSelectModal) return;
+
+    // Set initial name into input
+    const initialName = getSelectedPlayerName();
+    if (this.heroNameInput) {
+      this.heroNameInput.value = initialName;
+      this.heroNameInput.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        if (val) {
+          setSelectedPlayerName(val);
+          if (this.player) this.player.setName(val);
+          this.updatePlayerNameUI();
+        }
+      });
+    }
+
+    // Random name dice button
+    if (this.btnRandomName) {
+      this.btnRandomName.addEventListener('click', () => {
+        const randomName = getRandomHeroName();
+        if (this.heroNameInput) {
+          this.heroNameInput.value = randomName;
+        }
+        setSelectedPlayerName(randomName);
+        if (this.player) this.player.setName(randomName);
+        this.updatePlayerNameUI();
+      });
+    }
+
+    // Category filter pills
+    if (this.charSelectFilters) {
+      this.charSelectFilters.addEventListener('click', (e) => {
+        const btn = e.target.closest('.char-pill-btn');
+        if (!btn) return;
+        const cat = btn.dataset.filter || 'all';
+        this.charCategoryFilter = cat;
+        this.charSelectFilters.querySelectorAll('.char-pill-btn').forEach(b => {
+          b.classList.toggle('active', b === btn);
+        });
+        this.renderCharacterSelectCards();
+      });
+    }
+
+    // Start Game Button
+    if (this.btnStartGame) {
+      this.btnStartGame.addEventListener('click', () => {
+        this.startGameWithSelectedHero();
+      });
+    }
+
+    // Dev Tools Re-open Button
+    if (this.btnOpenCharSelect) {
+      this.btnOpenCharSelect.addEventListener('click', () => {
+        this.openCharacterSelectModal();
+      });
+    }
+
+    // Populate initial cards
+    this.renderCharacterSelectCards();
+  }
+
+  renderCharacterSelectCards() {
+    if (!this.charSelectGrid) return;
+    this.charSelectGrid.innerHTML = '';
+    this.charPreviewCanvases = {};
+
+    const list = (typeof CHARACTERS_DATA !== 'undefined' ? CHARACTERS_DATA : []).filter(c => {
+      if (this.charCategoryFilter === 'all') return true;
+      return c.category === this.charCategoryFilter;
+    });
+
+    list.forEach(char => {
+      const isSelected = char.id === this.selectedHeroSkin;
+      const card = document.createElement('div');
+      card.className = `char-select-card${isSelected ? ' is-selected' : ''}`;
+      card.dataset.charId = char.id;
+
+      card.innerHTML = `
+        <div class="char-canvas-wrap">
+          <canvas width="60" height="60" class="char-preview-canvas" data-char-id="${char.id}"></canvas>
+        </div>
+        <div class="char-card-info">
+          <div class="char-card-name">${char.name}</div>
+          <div class="char-card-subtitle">${char.subtitle}</div>
+          <div class="char-card-tag">${char.tag}</div>
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        this.selectedHeroSkin = char.id;
+        setSelectedSkin(char.id);
+        if (this.player) this.player.setSkin(char.id);
+
+        this.charSelectGrid.querySelectorAll('.char-select-card').forEach(c => {
+          c.classList.toggle('is-selected', c.dataset.charId === char.id);
+        });
+
+        if (this.heroNameInput) {
+          const currentVal = this.heroNameInput.value.trim();
+          const wasDefaultName = CHARACTERS_DATA.some(c => c.name === currentVal) || !currentVal;
+          if (wasDefaultName) {
+            this.heroNameInput.value = char.name;
+            setSelectedPlayerName(char.name);
+            if (this.player) this.player.setName(char.name);
+            this.updatePlayerNameUI();
+          }
+        }
+      });
+
+      this.charSelectGrid.appendChild(card);
+
+      const canvas = card.querySelector('canvas');
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.imageSmoothingEnabled = false;
+          this.charPreviewCanvases[char.id] = { canvas, ctx, charDef: char };
+        }
+      }
+    });
+
+    this.updateCharacterSelectPreviews(0);
+  }
+
+  updateCharacterSelectPreviews(dt) {
+    if (!this.charPreviewCanvases) return;
+    for (const [id, item] of Object.entries(this.charPreviewCanvases)) {
+      const { canvas, ctx, charDef } = item;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (typeof charDef.render === 'function') {
+        charDef.render(ctx, 30, 48, this.animTime, 'down', true, 0);
+      }
+    }
+  }
+
+  startGameWithSelectedHero() {
+    let chosenName = this.heroNameInput ? this.heroNameInput.value.trim() : '';
+    if (!chosenName) {
+      const defChar = (typeof CHARACTERS_MAP !== 'undefined' ? CHARACTERS_MAP[this.selectedHeroSkin] : null) || (CHARACTERS_DATA && CHARACTERS_DATA[0]);
+      chosenName = defChar ? defChar.name : 'Ren';
+    }
+
+    setSelectedPlayerName(chosenName);
+    setSelectedSkin(this.selectedHeroSkin);
+
+    if (this.player) {
+      this.player.setName(chosenName);
+      this.player.setSkin(this.selectedHeroSkin);
+    }
+
+    this.updatePlayerNameUI();
+
+    if (this.charSelectModal) {
+      this.charSelectModal.classList.add('hidden');
+    }
+    this.isCharacterSelectOpen = false;
+  }
+
+  openCharacterSelectModal() {
+    if (!this.charSelectModal) return;
+    this.isCharacterSelectOpen = true;
+    this.selectedHeroSkin = this.player ? (this.player.skinId || getSelectedSkin()) : getSelectedSkin();
+    if (this.heroNameInput && this.player) {
+      this.heroNameInput.value = this.player.name || getSelectedPlayerName();
+    }
+    this.charSelectModal.classList.remove('hidden');
+    this.renderCharacterSelectCards();
+  }
+
+  updatePlayerNameUI() {
+    const name = this.player ? this.player.name : getSelectedPlayerName();
+    if (this.compactPlayerNameEl) {
+      this.compactPlayerNameEl.textContent = name;
+    }
   }
 }
 

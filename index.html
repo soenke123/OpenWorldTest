@@ -23,6 +23,9 @@
 
         <div id="hud" class="dev-tools-dropdown">
           <div class="hud-panel dev-quick-actions">
+            <button id="btn-open-char-select" class="dev-action-btn" title="Charakter & Heldenname ändern" style="color: #a78bfa;">
+              🎭 Held & Name wählen
+            </button>
             <button id="btn-reset-player" class="dev-action-btn dev-reset-btn" title="Spieler respawnen und zurücksetzen (R)">
               🔄 Reset / Respawn
             </button>
@@ -119,6 +122,10 @@
 
       <!-- Always-Visible Compact Player Status Pill -->
       <div id="player-compact-hud" class="player-compact-hud" title="Spielerstatus (Leben & EP)">
+        <div class="compact-name-row">
+          <span class="compact-name-icon">🎭</span>
+          <span id="compact-player-name" class="compact-player-name">Ren</span>
+        </div>
         <div class="compact-stat-row hp-row">
           <span class="compact-icon">❤️</span>
           <div class="compact-bar-track">
@@ -327,6 +334,52 @@
 
         <div class="skill-modal-footer">
           <span>Drücke Taste <code>C</code> oder <code>Esc</code> zum Schließen</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- =======================================================
+         CHARACTER & NAME SELECTION MODAL (Game Intro / Setup)
+         ======================================================= -->
+    <div id="character-select-modal" class="char-modal-backdrop">
+      <div class="char-modal-dialog">
+        <div class="char-modal-header">
+          <div class="char-modal-title-group">
+            <span class="char-modal-icon">🎭</span>
+            <h2>Wähle deinen Helden &amp; Namen</h2>
+          </div>
+          <span class="char-modal-subtitle">15 Ghibli-Helden • Gleiche Werte &amp; Angriffe • Wähle deinen Stil</span>
+        </div>
+
+        <!-- Name Input Section -->
+        <div class="char-name-section">
+          <label for="hero-name-input" class="char-name-label">Dein Heldenname:</label>
+          <div class="char-name-input-row">
+            <input type="text" id="hero-name-input" class="hero-name-input" maxlength="20" placeholder="Dein Heldenname..." value="Ren" autocomplete="off" spellcheck="false">
+            <button id="btn-random-hero-name" class="btn-random-name" title="Zufälliger Ghibli-Name">
+              <span>🎲 Zufall</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Category Filters -->
+        <div class="char-filter-pills-row" id="char-select-filters">
+          <button class="char-pill-btn active" data-category="all">Alle (15)</button>
+          <button class="char-pill-btn" data-category="male">⚔️ Männlich (4)</button>
+          <button class="char-pill-btn" data-category="female">🌸 Weiblich (4)</button>
+          <button class="char-pill-btn" data-category="beast">🐾 Tierwesen (5)</button>
+          <button class="char-pill-btn" data-category="spirit">👻 Geisterwesen (2)</button>
+        </div>
+
+        <!-- 15 Characters Selection Grid -->
+        <div id="char-select-grid" class="char-select-grid"></div>
+
+        <!-- Footer / Start Game Button -->
+        <div class="char-modal-footer">
+          <button id="btn-start-game" class="btn-start-game" title="Das Abenteuer beginnen!">
+            <span class="start-btn-icon">⚔️</span>
+            <span class="start-btn-text">Los geht's! (Abenteuer starten)</span>
+          </button>
         </div>
       </div>
     </div>
