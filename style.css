@@ -1701,6 +1701,66 @@ canvas#gameCanvas {
   margin: 0;
 }
 
+/* World Preset Selection Card in Step 3 */
+.wizard-world-select-card {
+  width: 100%;
+  max-width: 420px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+}
+
+.world-select-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.world-preset-select {
+  width: 100%;
+  background: rgba(10, 15, 29, 0.9);
+  border: 1.5px solid rgba(167, 139, 250, 0.4);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #38bdf8;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.world-preset-select:focus {
+  border-color: #55e6a5;
+  box-shadow: 0 0 12px rgba(85, 230, 165, 0.3);
+}
+
+.world-preset-select option {
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 8px;
+}
+
+.world-preset-desc {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.35;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
 /* Navigation Buttons Row */
 .wizard-nav-row {
   display: flex;

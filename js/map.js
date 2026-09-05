@@ -1,10 +1,14 @@
 import { MAP_WIDTH, MAP_HEIGHT, TILES, TILE_PROPS, OBJECTS, OBJ_PROPS, CANOPY, BIOMES, TREES, TILE_SIZE, TILE_LAYER_ORDER, ELEVATION, RAMPS } from './constants.js';
 import { Noise2D } from './noise.js';
+import { getWorldPreset, getSelectedWorldId } from './worldPresets.js';
 
 export class WorldMap {
-  constructor() {
-    this.width = MAP_WIDTH;
-    this.height = MAP_HEIGHT;
+  constructor(presetId = null) {
+    const id = presetId !== null ? presetId : getSelectedWorldId();
+    this.preset = (typeof id === 'object' && id !== null) ? id : getWorldPreset(id);
+
+    this.width = this.preset.width || MAP_WIDTH;
+    this.height = this.preset.height || MAP_HEIGHT;
 
     this.ground = [];
     this.objects = [];
@@ -14,11 +18,12 @@ export class WorldMap {
     this.kodamas = [];
     this.elevation = []; // Int8Array: -1, 0, 1, 2
     this.ramps = [];     // Uint8Array: RAMPS.*
-    this.holeEntrances = []; // Portale / Zugänge zu Höhlen in Löchern
+    this.holeEntrances = []; // Portale / Zugänge zu Höhlen
     this.trampolines = [];   // Trampoline zum Wolkenreich
+    this.shrines = [];       // Shinto-Schreine auf der Oberwelt
 
-    this.spawnPoint = { x: 30, y: 45 }; // In 16px tiles
-    this.noise = new Noise2D(4242);     // Deterministic seed for reproducible test world
+    this.spawnPoint = { ...this.preset.spawnPoint };
+    this.noise = new Noise2D(this.preset.seed || 4242);
 
     this.initMap();
   }
@@ -33,37 +38,81 @@ export class WorldMap {
     }
 
     const n = this.noise;
+    const p = this.preset;
+    const mb = p.mainBiome || 'grass';
+    const vz = p.voidZone || { x: 268, y: 40, radius: 18 };
 
     // --------------------------------------------------------------------
-    // STEP 1: ORGANIC BIOME ASSIGNMENT WITH NOISE PERTURBATION
+    // STEP 1: ORGANIC BIOME ASSIGNMENT WITH DOMAIN WARPING & MAIN BIOME
     // --------------------------------------------------------------------
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
-        // Domain warping for natural, curvy, non-linear biome borders
-        const warpX = x + n.fbm(x * 0.04, y * 0.04, 3) * 12;
-        const warpY = y + n.fbm((x + 50) * 0.04, (y + 50) * 0.04, 3) * 12;
+        // Domain warping for natural curvy biome borders
+        const warpX = x + n.fbm(x * 0.02, y * 0.02, 3) * 16;
+        const warpY = y + n.fbm((x + 60) * 0.02, (y + 60) * 0.02, 3) * 16;
 
         const nx = warpX / this.width;
         const ny = warpY / this.height;
 
-        // Default: Grassland
         let tile = TILES.GRASS;
 
-        // Northeast: Snow & Ice
-        if (nx > 0.52 && ny < 0.44) {
+        if (mb === 'snow') {
+          // Main Biome: Snow dominates ~70% of the world
           tile = TILES.SNOW;
-        }
-        // Southwest: Desert & Quicksand
-        else if (nx < 0.46 && ny > 0.52) {
+          // Thawed central valley around spawn
+          if (nx > 0.12 && nx < 0.48 && ny > 0.32 && ny < 0.70) {
+            tile = TILES.GRASS;
+          }
+          // Far desert plateau in southwest corner
+          else if (nx < 0.22 && ny > 0.72) {
+            tile = TILES.SAND;
+          }
+          // Frosted marsh / swamp pocket
+          else if (nx > 0.55 && nx < 0.75 && ny > 0.68) {
+            tile = TILES.SWAMP_GROUND;
+          }
+        } else if (mb === 'desert') {
+          // Main Biome: Desert dominates ~70% of the world
           tile = TILES.SAND;
+          // Green oasis valley around spawn
+          if (nx > 0.14 && nx < 0.46 && ny > 0.34 && ny < 0.68) {
+            tile = TILES.GRASS;
+          }
+          // High snow peaks in northeast corner
+          else if (nx > 0.70 && ny < 0.34) {
+            tile = TILES.SNOW;
+          }
+          // Mud oasis / swamp in southeast
+          else if (nx > 0.52 && nx < 0.72 && ny > 0.62) {
+            tile = TILES.SWAMP_GROUND;
+          }
+        } else {
+          // Main Biome: Grassland dominates ~70% of the world
+          tile = TILES.GRASS;
+          // Snow & Ice in Northeast
+          if (nx > 0.64 && ny < 0.42) {
+            tile = TILES.SNOW;
+          }
+          // Desert & Quicksand in Southwest
+          else if (nx < 0.36 && ny > 0.60) {
+            tile = TILES.SAND;
+          }
+          // Swamp in Southeast
+          else if (nx > 0.48 && nx < 0.78 && ny > 0.62) {
+            tile = TILES.SWAMP_GROUND;
+          }
         }
-        // Far East: The Void
-        else if (nx > 0.74 && ny > 0.35) {
+
+        // Void Zone: Strictly 1 Single edge rift
+        const distVoid = Math.hypot(x - vz.x, y - vz.y);
+        if (distVoid < vz.radius) {
           tile = TILES.VOID_GROUND;
         }
-        // Southeast: Swamp
-        else if (nx > 0.44 && ny > 0.48) {
-          tile = TILES.SWAMP_GROUND;
+
+        // Spawn Clearing: Dedicated large open flat area around spawn
+        const distSpawn = Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y);
+        if (distSpawn < p.spawnClearingRadius) {
+          tile = (mb === 'snow' ? TILES.SNOW : (mb === 'desert' ? TILES.SAND : TILES.GRASS));
         }
 
         this.ground[y][x] = tile;
@@ -71,18 +120,21 @@ export class WorldMap {
     }
 
     // --------------------------------------------------------------------
-    // STEP 2: ORGANIC MEANDERING RIVER & WATER BODIES
+    // STEP 2: LARGE RIVERS & WATER BODIES
     // --------------------------------------------------------------------
-    // A natural winding river flowing from North to South through Grassland
+    // Major meandering river flowing north to south across the world
+    const riverBaseX = Math.round(this.width * 0.42);
     for (let y = 0; y < this.height; y++) {
-      // River center weaves with noise
-      const riverCenter = 44 + Math.sin(y * 0.08) * 8 + n.noise(y * 0.05, 10) * 10;
-      const riverWidth = 3.5 + Math.sin(y * 0.15) * 1.5;
+      const riverCenter = riverBaseX + Math.sin(y * 0.04) * 22 + n.noise(y * 0.02, 10) * 26;
+      const riverWidth = 4.5 + Math.sin(y * 0.08) * 1.5;
 
       for (let x = 0; x < this.width; x++) {
+        // Protect spawn clearing from river cuts
+        const distSpawn = Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y);
+        if (distSpawn < p.spawnClearingRadius + 4) continue;
+
         const dist = Math.abs(x - riverCenter);
         if (dist < riverWidth) {
-          // If in swamp area, turn into swamp water
           if (this.ground[y][x] === TILES.SWAMP_GROUND) {
             this.ground[y][x] = TILES.SWAMP_WATER;
           } else if (this.ground[y][x] !== TILES.VOID_GROUND) {
@@ -92,373 +144,126 @@ export class WorldMap {
       }
     }
 
-    // Organic Lake in Snow region
-    this.createOrganicBlob(88, 22, 9, TILES.WATER, 0.6);
+    // Second River Branch (for wide multi-river worlds)
+    if (p.id % 2 === 0) {
+      const river2BaseX = Math.round(this.width * 0.74);
+      for (let y = 0; y < this.height; y++) {
+        const riverCenter2 = river2BaseX + Math.sin((y + 30) * 0.045) * 18 + n.noise(y * 0.025, 25) * 20;
+        const riverWidth2 = 3.8 + Math.sin(y * 0.09) * 1.2;
 
-    // Organic Swamp Water Ponds in Swamp
-    this.createOrganicBlob(72, 64, 7, TILES.SWAMP_WATER, 0.55);
-    this.createOrganicBlob(86, 78, 8, TILES.SWAMP_WATER, 0.58);
+        for (let x = 0; x < this.width; x++) {
+          const distVoid = Math.hypot(x - vz.x, y - vz.y);
+          if (distVoid < vz.radius + 3) continue;
 
-    // --------------------------------------------------------------------
-    // STEP 3: QUICKSAND IN THE DESERT (Organic swirling sinkhole)
-    // --------------------------------------------------------------------
-    this.createOrganicBlob(28, 72, 8, TILES.QUICKSAND, 0.5);
-
-    // --------------------------------------------------------------------
-    // STEP 4: DEADLY VOID LAKE IN THE VOID (Jagged Abyss)
-    // --------------------------------------------------------------------
-    this.createOrganicBlob(112, 62, 10, TILES.VOID_LAKE, 0.52);
-
-    // --------------------------------------------------------------------
-    // STEP 5: BRIDGES OVER THE RIVER
-    // --------------------------------------------------------------------
-    // Main horizontal wooden bridge connecting West and East
-    const bridgeY = 44;
-    for (let x = 36; x <= 52; x++) {
-      if (this.ground[bridgeY][x] === TILES.WATER || this.ground[bridgeY][x] === TILES.SWAMP_WATER) {
-        this.ground[bridgeY - 1][x] = TILES.BRIDGE_H;
-        this.ground[bridgeY][x] = TILES.BRIDGE_H;
+          const dist = Math.abs(x - riverCenter2);
+          if (dist < riverWidth2) {
+            if (this.ground[y][x] === TILES.SWAMP_GROUND) {
+              this.ground[y][x] = TILES.SWAMP_WATER;
+            } else if (this.ground[y][x] !== TILES.VOID_GROUND) {
+              this.ground[y][x] = TILES.WATER;
+            }
+          }
+        }
       }
     }
 
-    // Northern snow crossing bridge
-    const bridgeY2 = 18;
-    for (let x = 36; x <= 50; x++) {
-      if (this.ground[bridgeY2][x] === TILES.WATER) {
-        this.ground[bridgeY2][x] = TILES.BRIDGE_H;
+    // Large Organic Lakes
+    // 1. Central Great Lake
+    this.createOrganicBlob(Math.round(this.width * 0.52), Math.round(this.height * 0.44), 16, TILES.WATER, 0.55);
+
+    // 2. Northern Mountain Tarn / Glacier Lake
+    this.createOrganicBlob(Math.round(this.width * 0.76), Math.round(this.height * 0.22), 14, TILES.WATER, 0.58);
+
+    // 3. Desert Oasis Pool / Quicksand
+    const oasisX = Math.round(this.width * 0.22);
+    const oasisY = Math.round(this.height * 0.75);
+    this.createOrganicBlob(oasisX, oasisY, 11, TILES.WATER, 0.5);
+    this.createOrganicBlob(oasisX + 18, oasisY + 8, 9, TILES.QUICKSAND, 0.48);
+
+    // 4. Swamp Lagoon
+    this.createOrganicBlob(Math.round(this.width * 0.64), Math.round(this.height * 0.74), 13, TILES.SWAMP_WATER, 0.54);
+
+    // 5. Void Lake (Jagged Abyss in the Void Zone)
+    this.createOrganicBlob(vz.x, vz.y, Math.round(vz.radius * 0.55), TILES.VOID_LAKE, 0.52);
+
+    // --------------------------------------------------------------------
+    // STEP 3: WOODEN BRIDGES OVER RIVERS
+    // --------------------------------------------------------------------
+    const bridgePositionsY = [
+      Math.round(this.height * 0.25),
+      Math.round(this.height * 0.50),
+      Math.round(this.height * 0.78)
+    ];
+
+    for (const by of bridgePositionsY) {
+      for (let x = 10; x < this.width - 10; x++) {
+        if (this.ground[by][x] === TILES.WATER || this.ground[by][x] === TILES.SWAMP_WATER) {
+          // Verify if it's a river crossing (has solid banks on left and right)
+          let hasLeftBank = false;
+          let hasRightBank = false;
+          for (let k = 1; k <= 14; k++) {
+            if (x - k >= 0 && this.ground[by][x - k] !== TILES.WATER && this.ground[by][x - k] !== TILES.SWAMP_WATER) hasLeftBank = true;
+            if (x + k < this.width && this.ground[by][x + k] !== TILES.WATER && this.ground[by][x + k] !== TILES.SWAMP_WATER) hasRightBank = true;
+          }
+          if (hasLeftBank && hasRightBank) {
+            this.ground[by - 1][x] = TILES.BRIDGE_H;
+            this.ground[by][x] = TILES.BRIDGE_H;
+          }
+        }
       }
     }
 
     // --------------------------------------------------------------------
-    // STEP 6: NATURAL WINDING DIRT PATHS
+    // STEP 4: WINDING DIRT TRAILS
     // --------------------------------------------------------------------
-    // Connect spawn point to bridge and north
-    this.createWindingPath(this.spawnPoint.x, this.spawnPoint.y, 42, 44, 2);
-    this.createWindingPath(46, 44, 75, 44, 2);
-    this.createWindingPath(30, 45, 20, 20, 2); // towards forest
+    // Connect spawn clearing to central bridge and northern/southern forests
+    this.createWindingPath(this.spawnPoint.x + p.spawnClearingRadius - 2, this.spawnPoint.y, riverBaseX - 4, bridgePositionsY[1], 2);
+    this.createWindingPath(this.spawnPoint.x, this.spawnPoint.y - p.spawnClearingRadius + 2, Math.round(this.width * 0.25), Math.round(this.height * 0.28), 2);
+    this.createWindingPath(this.spawnPoint.x, this.spawnPoint.y + p.spawnClearingRadius - 2, Math.round(this.width * 0.25), Math.round(this.height * 0.72), 2);
 
     // --------------------------------------------------------------------
-    // STEP 6b: MULTI-TIER ELEVATION SYSTEM (Plateaus +1, +2 and Holes -1 with Ramps)
+    // STEP 5: MULTI-TIER ELEVATION SYSTEM (Hills +1, +2 and Valleys -1)
     // --------------------------------------------------------------------
     this.generateElevationsAndRamps();
 
     // --------------------------------------------------------------------
-    // STEP 7: DENSE LIVING FOREST (Thick Canopy Roof + Walkable Trails)
+    // STEP 6: MULTIPLE FORESTS (4 to 7 Distinct Forests, Large & Small)
     // --------------------------------------------------------------------
-    this.trees = [];
-
-    // Clear canopy array
-    for (let y = 0; y < this.height; y++) {
-      this.canopy[y].fill(CANOPY.NONE);
-    }
-
-    // 1. Thick Forest Canopy Roof with Organic Sunbeam Openings
-    for (let y = 4; y <= 34; y++) {
-      for (let x = 4; x <= 40; x++) {
-        if (!this.isValid(x, y)) continue;
-        const gTile = this.ground[y][x];
-        if (gTile === TILES.WATER || gTile === TILES.SWAMP_WATER || gTile === TILES.BRIDGE_H) continue;
-        if (Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y) < 5) continue;
-
-        const distFromCenter = Math.hypot(x - 22, y - 18);
-        const forestDensity = n.fbm(x * 0.12, y * 0.12, 3);
-
-        if (distFromCenter < 16 + forestDensity * 7) {
-          // Forest floor gets dirt and rich shaded soil
-          if (n.noise(x * 0.28, y * 0.28) > -0.1) {
-            this.ground[y][x] = TILES.DIRT;
-          }
-
-          // Seltene, kleine Lichtschneisen ("nur an einigen wenigen Stellen bricht ein Sonnenstrahl durch")
-          const gapNoise = n.noise(x * 0.35, y * 0.35);
-          if (gapNoise > 0.68) {
-            // Sunlit gap: ground visible from above!
-            this.canopy[y][x] = CANOPY.NONE;
-            if (n.noise(x * 1.7, y * 1.7) > 0.2) {
-              this.objects[y][x] = OBJECTS.FOREST_FLOWERS;
-            } else if (n.noise(x * 1.7, y * 1.7) < -0.2) {
-              this.objects[y][x] = OBJECTS.FERN;
-            }
-          } else {
-            // Dichtes, geschlossenes Blätterdach über dem Kopf
-            this.canopy[y][x] = CANOPY.TREE_CROWN;
-          }
-        }
-      }
-    }
-
-    // 1b. Grosse, überlappende Baumkronen für das geschlossene Kronendach
-    this.canopyCrowns = [];
-    const crownSpacingX = 18;
-    const crownSpacingY = 16;
-
-    for (let py = 3 * TILE_SIZE; py <= 36 * TILE_SIZE; py += crownSpacingY) {
-      const rowIndex = Math.floor(py / crownSpacingY);
-      const rowOffset = (rowIndex % 2 === 1) ? crownSpacingX * 0.5 : 0;
-
-      for (let px = 3 * TILE_SIZE; px <= 42 * TILE_SIZE; px += crownSpacingX) {
-        const jx = px + rowOffset + n.noise(px * 0.15, py * 0.15) * 5;
-        const jy = py + n.noise(px * 0.25, py * 0.25) * 5;
-
-        const tileX = Math.floor(jx / TILE_SIZE);
-        const tileY = Math.floor(jy / TILE_SIZE);
-
-        if (!this.isValid(tileX, tileY)) continue;
-        if (this.canopy[tileY][tileX] !== CANOPY.TREE_CROWN) continue;
-
-        // Verschiedene Baumarten & organische Kronengrößen (deutlich größer als 1 Tile!)
-        const tRand = Math.abs(n.noise(tileX * 0.7 + 15, tileY * 0.7 + 15));
-        let treeType = TREES.OAK;
-        if (tRand > 0.76) treeType = TREES.PINE;
-        else if (tRand > 0.54) treeType = TREES.BIRCH;
-        else if (tRand > 0.40) treeType = TREES.AUTUMN;
-        else if (tRand > 0.22) treeType = TREES.BLOSSOM;
-
-        const radius = 17 + Math.abs(n.noise(tileX * 0.85, tileY * 0.85)) * 5; // 17px bis 22px Radius = 34px bis 44px Durchmesser!
-        const hasLantern = (n.noise(jx * 0.18, jy * 0.18) > 0.65);
-
-        this.canopyCrowns.push({
-          x: jx,
-          y: jy,
-          type: treeType,
-          radius,
-          hasLantern
-        });
-      }
-    }
-
-    // Von Nord nach Süd sortieren, damit südliche Kronen die nördlichen mit Schatten überdecken
-    this.canopyCrowns.sort((a, b) => a.y - b.y);
-
-    // 2. Walkable Trees under the Canopy (Spaced 4 tiles apart so player can walk freely!)
-    for (let ty = 6; ty <= 32; ty += 4) {
-      for (let tx = 6; tx <= 38; tx += 4) {
-        const jx = tx + (n.noise(tx * 1.3, ty * 1.3) * 1.4);
-        const jy = ty + (n.noise(tx * 2.1, ty * 2.1) * 1.4);
-        const rx = Math.round(jx);
-        const ry = Math.round(jy);
-        if (!this.isValid(rx, ry)) continue;
-        const gTile = this.ground[ry][rx];
-        if (gTile === TILES.WATER || gTile === TILES.SWAMP_WATER || gTile === TILES.BRIDGE_H) continue;
-        if (Math.hypot(rx - this.spawnPoint.x, ry - this.spawnPoint.y) < 5) continue;
-
-        const distFromCenter = Math.hypot(rx - 22, ry - 18);
-        const forestDensity = n.fbm(rx * 0.12, ry * 0.12, 3);
-
-        if (distFromCenter < 14 + forestDensity * 6) {
-          // Diverse tree species under canopy
-          const tRand = Math.abs(n.noise(rx * 0.7 + 10, ry * 0.7 + 10));
-          let treeType = TREES.OAK;
-          if (tRand > 0.72) {
-            treeType = TREES.PINE;
-          } else if (tRand > 0.52) {
-            treeType = TREES.BIRCH;
-          } else if (tRand > 0.38) {
-            treeType = TREES.AUTUMN;
-          } else if (tRand > 0.22) {
-            treeType = TREES.BLOSSOM;
-          } else if (tRand > 0.12) {
-            treeType = TREES.SAPLING;
-          }
-
-          const variant = Math.abs(Math.floor(n.noise(rx * 3.3, ry * 3.3) * 10)) % 2;
-          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, treeType, variant);
-
-          // Selective obstacles ("nur an manchen stellen kommt man nicht durch")
-          const obstRand = n.noise(rx * 1.9, ry * 1.9);
-          if (obstRand > 0.58 && rx + 1 < this.width && this.objects[ry][rx + 1] === OBJECTS.NONE && !this.isNearRamp(rx + 1, ry, 2)) {
-            this.objects[ry][rx + 1] = OBJECTS.FALLEN_LOG;
-          } else if (obstRand < -0.58 && ry + 1 < this.height && this.objects[ry + 1][rx] === OBJECTS.NONE && !this.isNearRamp(rx, ry + 1, 2)) {
-            this.objects[ry + 1][rx] = OBJECTS.ROCK_STONE;
-          }
-
-          // Walkable undergrowth
-          const underRand = n.noise(rx * 2.5, ry * 2.5);
-          if (underRand > 0.45 && this.objects[ry][rx] === OBJECTS.NONE) {
-            this.objects[ry][rx] = OBJECTS.FERN;
-          } else if (underRand < -0.45 && this.objects[ry][rx] === OBJECTS.NONE) {
-            this.objects[ry][rx] = OBJECTS.MUSHROOM_BROWN;
-          }
-        }
-      }
-    }
-
-    // 2. Snow Biome: Snowy Firs & Conifers
-    for (let ty = 6; ty <= 36; ty += 4) {
-      for (let tx = 65; tx <= 122; tx += 4) {
-        if (!this.isValid(tx, ty)) continue;
-        if (this.ground[ty][tx] !== TILES.SNOW) continue;
-        const snowNoise = n.fbm(tx * 0.1, ty * 0.1, 2);
-        if (snowNoise > 0.12) {
-          const jx = tx + n.noise(tx * 1.5, ty * 1.5) * 1.4;
-          const jy = ty + n.noise(tx * 2.5, ty * 2.5) * 1.4;
-          const rx = Math.round(jx);
-          const ry = Math.round(jy);
-          if (this.isValid(rx, ry) && this.ground[ry][rx] === TILES.SNOW) {
-            const isSnowy = n.noise(rx * 0.6, ry * 0.6) > 0.0;
-            this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, isSnowy ? TREES.SNOWY_PINE : TREES.PINE, Math.abs(rx) % 2);
-          }
-        }
-      }
-    }
-
-    // 3. Swamp Biome: Gnarled Weeping Willows & Deadwood
-    for (let ty = 52; ty <= 84; ty += 4) {
-      for (let tx = 55; tx <= 118; tx += 4) {
-        if (!this.isValid(tx, ty)) continue;
-        if (this.ground[ty][tx] !== TILES.SWAMP_GROUND) continue;
-        const swampNoise = n.fbm(tx * 0.11, ty * 0.11, 2);
-        if (swampNoise > 0.15) {
-          const jx = tx + n.noise(tx * 1.7, ty * 1.7) * 1.4;
-          const jy = ty + n.noise(tx * 2.7, ty * 2.7) * 1.4;
-          const rx = Math.round(jx);
-          const ry = Math.round(jy);
-          if (this.isValid(rx, ry) && this.ground[ry][rx] === TILES.SWAMP_GROUND) {
-            const isWillow = n.noise(rx * 0.5, ry * 0.5) > -0.1;
-            this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, isWillow ? TREES.SWAMP_WILLOW : TREES.DEADWOOD, Math.abs(rx) % 2);
-          }
-        }
-      }
-    }
-
-    // 4. Desert Biome: Desert Palms near Water & Oases
-    for (let ty = 54; ty <= 82; ty += 3) {
-      for (let tx = 8; tx <= 44; tx += 3) {
-        if (!this.isValid(tx, ty)) continue;
-        if (this.ground[ty][tx] !== TILES.SAND) continue;
-
-        let nearWater = false;
-        for (let dy = -3; dy <= 3; dy++) {
-          for (let dx = -3; dx <= 3; dx++) {
-            const cx = tx + dx, cy = ty + dy;
-            if (this.isValid(cx, cy)) {
-              const g = this.ground[cy][cx];
-              if (g === TILES.WATER || g === TILES.QUICKSAND) {
-                nearWater = true;
-                break;
-              }
-            }
-          }
-          if (nearWater) break;
-        }
-
-        if (nearWater && n.noise(tx * 0.4, ty * 0.4) > 0.0) {
-          this.addTree(tx * TILE_SIZE + 8, ty * TILE_SIZE + 12, TREES.PALM, Math.abs(tx) % 2);
-        }
-      }
-    }
-
-    // 5. Grassland Plains: Scattered Solitary & Pair Trees
-    for (let ty = 36; ty <= 60; ty += 5) {
-      for (let tx = 10; tx <= 65; tx += 5) {
-        if (!this.isValid(tx, ty)) continue;
-        if (this.ground[ty][tx] !== TILES.GRASS) continue;
-        if (Math.hypot(tx - this.spawnPoint.x, ty - this.spawnPoint.y) < 5) continue;
-
-        if (n.noise(tx * 0.22, ty * 0.22) > 0.32) {
-          const jx = tx + n.noise(tx * 1.8, ty * 1.8) * 1.8;
-          const jy = ty + n.noise(tx * 2.8, ty * 2.8) * 1.8;
-          const rx = Math.round(jx);
-          const ry = Math.round(jy);
-          if (this.isValid(rx, ry) && this.ground[ry][rx] === TILES.GRASS) {
-            const pVal = n.noise(rx * 0.8, ry * 0.8);
-            const type = pVal > 0.35 ? TREES.BLOSSOM : (pVal > -0.1 ? TREES.OAK : TREES.BIRCH);
-            this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, type, 0);
-          }
-        }
-      }
-    }
+    this.generateMultipleForests();
 
     // --------------------------------------------------------------------
-    // STEP 8: OBJECTS & DECORATIONS WITH TRANSPARENT BACKGROUNDS
-    // (Rocks, Ice Boulders, Void Crystals, Bushes, Cacti, Ferns, Flowers, Logs)
+    // STEP 7: BIOME TREES & PROPS OUTSIDE DENSE FORESTS
     // --------------------------------------------------------------------
-    for (let y = 2; y < this.height - 2; y++) {
-      for (let x = 2; x < this.width - 2; x++) {
-        if (this.objects[y][x] !== OBJECTS.NONE) continue;
-        const ground = this.ground[y][x];
-        if (ground === TILES.WATER || ground === TILES.SWAMP_WATER || ground === TILES.VOID_LAKE ||
-            ground === TILES.QUICKSAND || ground === TILES.BRIDGE_H || ground === TILES.BRIDGE_V) {
-          continue;
-        }
+    this.populateBiomeTreesAndFlora();
 
-        // Keep ramps and stairs corridors 100% free of obstacles
-        if (this.isNearRamp(x, y, 2)) continue;
+    // --------------------------------------------------------------------
+    // STEP 8: SPAWN CLEARING CLEANUP (100% Flat, Free & Open)
+    // --------------------------------------------------------------------
+    this.clearSpawnArea();
 
-        // Don't place solid object right on a tree base
-        let onTree = false;
-        for (const t of this.trees) {
-          if (Math.hypot(t.x - (x * TILE_SIZE + 8), t.y - (y * TILE_SIZE + 8)) < 12) {
-            onTree = true;
-            break;
-          }
-        }
-        if (onTree) continue;
+    // --------------------------------------------------------------------
+    // STEP 9: SHINTO-SCHREINE (5 to 8 Overworld + Void Shrine)
+    // --------------------------------------------------------------------
+    this.placeOverworldShrines();
 
-        const objNoise = n.noise(x * 0.25, y * 0.25);
-        const rand = n.noise(x * 1.7, y * 1.7);
+    // --------------------------------------------------------------------
+    // STEP 10: TRAMPOLINE ZUM WOLKENREICH (5 to 10 pro Karte)
+    // --------------------------------------------------------------------
+    this.placeTrampolines();
 
-        // Grassland Objects: Boulders, Bushes, Flowers, Ferns
-        if (ground === TILES.GRASS) {
-          if (objNoise > 0.52 && rand > 0.6) {
-            this.objects[y][x] = OBJECTS.ROCK_STONE;
-          } else if (objNoise > 0.44 && rand < -0.45) {
-            this.objects[y][x] = OBJECTS.BUSH;
-          } else if (rand > 0.72) {
-            this.objects[y][x] = OBJECTS.FOREST_FLOWERS;
-          } else if (rand < -0.65) {
-            this.objects[y][x] = OBJECTS.FERN;
-          }
-        }
+    // --------------------------------------------------------------------
+    // STEP 11: HÖHLEN-ZUGÄNGE
+    // --------------------------------------------------------------------
+    this.placeCaveEntrances();
 
-        // Forest Floor / Dirt Paths: Mushrooms, Logs, Ferns
-        else if (ground === TILES.DIRT) {
-          if (rand > 0.68) {
-            this.objects[y][x] = OBJECTS.MUSHROOM_BROWN;
-          } else if (rand < -0.68) {
-            this.objects[y][x] = OBJECTS.FERN;
-          } else if (objNoise > 0.52 && rand > 0.35) {
-            this.objects[y][x] = OBJECTS.FALLEN_LOG;
-          }
-        }
+    // --------------------------------------------------------------------
+    // STEP 12: RAMPEN & TREPPEN FREIHALTEN
+    // --------------------------------------------------------------------
+    this.clearRampsAndAccessCorridors();
 
-        // Snow Objects: Ice Boulders
-        else if (ground === TILES.SNOW) {
-          if (objNoise > 0.42 && rand > 0.45) {
-            this.objects[y][x] = OBJECTS.ROCK_ICE;
-          }
-        }
-
-        // Desert Objects: Cacti & Desert Boulders
-        else if (ground === TILES.SAND) {
-          if (objNoise > 0.45 && rand > 0.6) {
-            this.objects[y][x] = OBJECTS.CACTUS;
-          } else if (objNoise > 0.5 && rand < -0.4) {
-            this.objects[y][x] = OBJECTS.ROCK_STONE;
-          }
-        }
-
-        // Swamp Objects: Mushrooms, Fallen Logs & Mossy Rocks
-        else if (ground === TILES.SWAMP_GROUND) {
-          if (objNoise > 0.45 && rand > 0.55) {
-            this.objects[y][x] = rand > 0.75 ? OBJECTS.MUSHROOM_BROWN : OBJECTS.MUSHROOM;
-          } else if (objNoise > 0.5 && rand < -0.5) {
-            this.objects[y][x] = OBJECTS.FALLEN_LOG;
-          } else if (objNoise > 0.48 && rand < -0.3) {
-            this.objects[y][x] = OBJECTS.ROCK_STONE;
-          }
-        }
-
-        // The Void: Neon Void Crystals
-        else if (ground === TILES.VOID_GROUND) {
-          if (objNoise > 0.38 && rand > 0.4) {
-            this.objects[y][x] = OBJECTS.ROCK_VOID;
-          }
-        }
-      }
-    }
-
-    // Outer boundary water barrier
+    // --------------------------------------------------------------------
+    // STEP 13: OUTER 2-TILE WATER BORDER
+    // --------------------------------------------------------------------
     for (let x = 0; x < this.width; x++) {
       this.ground[0][x] = TILES.WATER;
       this.ground[1][x] = TILES.WATER;
@@ -471,103 +276,274 @@ export class WorldMap {
       this.ground[y][this.width - 1] = TILES.WATER;
       this.ground[y][this.width - 2] = TILES.WATER;
     }
+  }
 
-    // Ensure spawn tile is clean grass
-    this.ground[this.spawnPoint.y][this.spawnPoint.x] = TILES.GRASS;
-    this.objects[this.spawnPoint.y][this.spawnPoint.x] = OBJECTS.NONE;
-    this.canopy[this.spawnPoint.y][this.spawnPoint.x] = CANOPY.NONE;
+  clearSpawnArea() {
+    const sp = this.spawnPoint;
+    const rad = this.preset.spawnClearingRadius || 15;
+    const mb = this.preset.mainBiome;
+    const baseTile = (mb === 'snow' ? TILES.SNOW : (mb === 'desert' ? TILES.SAND : TILES.GRASS));
 
-    // Place Stone Lanterns (Tōrō) and Torii Gates at bridge crossings & paths
-    if (this.isValid(35, 42)) this.objects[42][35] = OBJECTS.STONE_TORO;
-    if (this.isValid(35, 45)) this.objects[45][35] = OBJECTS.STONE_TORO;
-    if (this.isValid(53, 42)) this.objects[42][53] = OBJECTS.STONE_TORO;
-    if (this.isValid(53, 45)) this.objects[45][53] = OBJECTS.STONE_TORO;
-    if (this.isValid(35, 18)) this.objects[18][35] = OBJECTS.TORII_GATE;
-    if (this.isValid(51, 18)) this.objects[18][51] = OBJECTS.TORII_GATE;
+    for (let dy = -rad - 1; dy <= rad + 1; dy++) {
+      for (let dx = -rad - 1; dx <= rad + 1; dx++) {
+        const x = sp.x + dx;
+        const y = sp.y + dy;
+        if (!this.isValid(x, y)) continue;
 
-    // Populate Kodama Forest Spirits in the sacred forest & mossy groves
-    this.kodamas = [];
-    for (let i = 0; i < 28; i++) {
-      const kx = 8 + Math.abs(n.noise(i * 13.7, 42.1)) * 34;
-      const ky = 6 + Math.abs(n.noise(i * 27.3, 81.5)) * 28;
-      const tx = Math.floor(kx);
-      const ty = Math.floor(ky);
-      if (this.isValid(tx, ty) && (this.ground[ty][tx] === TILES.GRASS || this.ground[ty][tx] === TILES.DIRT)) {
-        this.kodamas.push({
-          x: tx * TILE_SIZE + 8 + (n.noise(i * 3, 1) * 3),
-          y: ty * TILE_SIZE + 10 + (n.noise(i * 3, 2) * 3),
-          tiltSpeed: 2.2 + Math.abs(n.noise(i, 9)) * 2,
-          tiltOffset: i * 1.6,
-          floatOffset: i * 2.3
+        const dist = Math.hypot(dx, dy);
+        if (dist <= rad) {
+          this.ground[y][x] = baseTile;
+          this.objects[y][x] = OBJECTS.NONE;
+          this.canopy[y][x] = CANOPY.NONE;
+          this.elevation[y][x] = ELEVATION.GROUND;
+          this.ramps[y][x] = RAMPS.NONE;
+        }
+      }
+    }
+
+    // Remove any trees inside spawn area
+    this.trees = this.trees.filter(t => Math.hypot(t.x - sp.x * TILE_SIZE, t.y - sp.y * TILE_SIZE) > (rad * TILE_SIZE));
+    this.canopyCrowns = this.canopyCrowns.filter(c => Math.hypot(c.x - sp.x * TILE_SIZE, c.y - sp.y * TILE_SIZE) > (rad * TILE_SIZE));
+  }
+
+  generateMultipleForests() {
+    const n = this.noise;
+    const p = this.preset;
+    const count = p.forestCount || 5;
+
+    // Define forest centers spread across the 290x200 world
+    const forestCenters = [
+      { cx: Math.round(this.width * 0.18), cy: Math.round(this.height * 0.25), r: 20, type: TREES.OAK, name: 'Smaragd-Urwald' },
+      { cx: Math.round(this.width * 0.62), cy: Math.round(this.height * 0.18), r: 24, type: (p.mainBiome === 'snow' ? TREES.SNOWY_PINE : TREES.PINE), name: 'Nord-Kiefernforst' },
+      { cx: Math.round(this.width * 0.20), cy: Math.round(this.height * 0.72), r: 18, type: (p.mainBiome === 'desert' ? TREES.PALM : TREES.BIRCH), name: 'Südwest-Hain' },
+      { cx: Math.round(this.width * 0.78), cy: Math.round(this.height * 0.52), r: 22, type: TREES.AUTUMN, name: 'Goldblätterwald' },
+      { cx: Math.round(this.width * 0.48), cy: Math.round(this.height * 0.82), r: 16, type: (p.mainBiome === 'snow' ? TREES.SNOWY_PINE : TREES.BLOSSOM), name: 'Blüten-Dickicht' },
+      { cx: Math.round(this.width * 0.85), cy: Math.round(this.height * 0.80), r: 15, type: TREES.PINE, name: 'Ostgipfel-Gehölz' },
+      { cx: Math.round(this.width * 0.35), cy: Math.round(this.height * 0.45), r: 14, type: TREES.BIRCH, name: 'Flussaue-Wäldchen' }
+    ].slice(0, count);
+
+    for (const f of forestCenters) {
+      this.buildDenseForest(f.cx, f.cy, f.r, f.type);
+    }
+  }
+
+  buildDenseForest(cx, cy, radius, primaryTreeType) {
+    const n = this.noise;
+    const r = radius;
+
+    // 1. Canopy roof
+    for (let y = cy - r; y <= cy + r; y++) {
+      for (let x = cx - r; x <= cx + r; x++) {
+        if (!this.isValid(x, y)) continue;
+        const g = this.ground[y][x];
+        if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.BRIDGE_H) continue;
+        if (Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y) < this.preset.spawnClearingRadius + 2) continue;
+
+        const dist = Math.hypot(x - cx, y - cy);
+        const density = n.fbm(x * 0.12, y * 0.12, 2);
+        if (dist < r + density * 6) {
+          if (n.noise(x * 0.28, y * 0.28) > -0.1 && g !== TILES.SNOW && g !== TILES.SAND && g !== TILES.VOID_GROUND) {
+            this.ground[y][x] = TILES.DIRT;
+          }
+
+          const gapNoise = n.noise(x * 0.35, y * 0.35);
+          if (gapNoise > 0.68) {
+            this.canopy[y][x] = CANOPY.NONE;
+            if (n.noise(x * 1.7, y * 1.7) > 0.2) {
+              this.objects[y][x] = OBJECTS.FOREST_FLOWERS;
+            } else if (n.noise(x * 1.7, y * 1.7) < -0.2) {
+              this.objects[y][x] = OBJECTS.FERN;
+            }
+          } else {
+            this.canopy[y][x] = CANOPY.TREE_CROWN;
+          }
+        }
+      }
+    }
+
+    // 2. Large overlapping canopy crowns
+    const crownSpacingX = 18;
+    const crownSpacingY = 16;
+    const minPy = Math.max(2, cy - r) * TILE_SIZE;
+    const maxPy = Math.min(this.height - 2, cy + r) * TILE_SIZE;
+    const minPx = Math.max(2, cx - r) * TILE_SIZE;
+    const maxPx = Math.min(this.width - 2, cx + r) * TILE_SIZE;
+
+    for (let py = minPy; py <= maxPy; py += crownSpacingY) {
+      const rowIndex = Math.floor(py / crownSpacingY);
+      const rowOffset = (rowIndex % 2 === 1) ? crownSpacingX * 0.5 : 0;
+
+      for (let px = minPx; px <= maxPx; px += crownSpacingX) {
+        const jx = px + rowOffset + n.noise(px * 0.15, py * 0.15) * 5;
+        const jy = py + n.noise(px * 0.25, py * 0.25) * 5;
+
+        const tileX = Math.floor(jx / TILE_SIZE);
+        const tileY = Math.floor(jy / TILE_SIZE);
+
+        if (!this.isValid(tileX, tileY)) continue;
+        if (this.canopy[tileY][tileX] !== CANOPY.TREE_CROWN) continue;
+
+        const radiusCrown = 17 + Math.abs(n.noise(tileX * 0.85, tileY * 0.85)) * 5;
+        const hasLantern = (n.noise(jx * 0.18, jy * 0.18) > 0.68);
+
+        this.canopyCrowns.push({
+          x: jx,
+          y: jy,
+          type: primaryTreeType,
+          radius: radiusCrown,
+          hasLantern
         });
       }
     }
 
-    // Sacred Shrines on Overworld (Ancient Void Shrine in the Abyss)
-    this.shrines = [];
-    const voidShrineX = 108;
-    const voidShrineY = 62;
-    if (this.isValid(voidShrineX, voidShrineY)) {
-      this.ground[voidShrineY][voidShrineX] = TILES.VOID_GROUND;
-      this.objects[voidShrineY][voidShrineX] = OBJECTS.SHRINE;
-      this.shrines.push({ x: voidShrineX, y: voidShrineY, name: 'Schrein des Ewigen Abgrunds' });
+    // 3. Walkable Tree Trunks under the canopy
+    for (let ty = cy - r + 2; ty <= cy + r - 2; ty += 4) {
+      for (let tx = cx - r + 2; tx <= cx + r - 2; tx += 4) {
+        const jx = tx + (n.noise(tx * 1.3, ty * 1.3) * 1.4);
+        const jy = ty + (n.noise(tx * 2.1, ty * 2.1) * 1.4);
+        const rx = Math.round(jx);
+        const ry = Math.round(jy);
+        if (!this.isValid(rx, ry)) continue;
+        const gTile = this.ground[ry][rx];
+        if (gTile === TILES.WATER || gTile === TILES.SWAMP_WATER || gTile === TILES.BRIDGE_H) continue;
+        if (Math.hypot(rx - this.spawnPoint.x, ry - this.spawnPoint.y) < this.preset.spawnClearingRadius) continue;
+
+        const dist = Math.hypot(rx - cx, ry - cy);
+        if (dist < r - 2) {
+          const variant = Math.abs(Math.floor(n.noise(rx * 3.3, ry * 3.3) * 10)) % 2;
+          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, primaryTreeType, variant);
+
+          // Flora & selective obstacles
+          const obstRand = n.noise(rx * 1.9, ry * 1.9);
+          if (obstRand > 0.62 && rx + 1 < this.width && this.objects[ry][rx + 1] === OBJECTS.NONE) {
+            this.objects[ry][rx + 1] = OBJECTS.FALLEN_LOG;
+          } else if (obstRand < -0.62 && ry + 1 < this.height && this.objects[ry + 1][rx] === OBJECTS.NONE) {
+            this.objects[ry + 1][rx] = OBJECTS.ROCK_STONE;
+          }
+
+          const underRand = n.noise(rx * 2.5, ry * 2.5);
+          if (underRand > 0.45 && this.objects[ry][rx] === OBJECTS.NONE) {
+            this.objects[ry][rx] = OBJECTS.FERN;
+          } else if (underRand < -0.45 && this.objects[ry][rx] === OBJECTS.NONE) {
+            this.objects[ry][rx] = OBJECTS.MUSHROOM_BROWN;
+          }
+        }
+      }
     }
-
-    // --------------------------------------------------------------------
-    // STEP 9: HÖHLEN-ZUGÄNGE IN LÖCHERN & TRAMPOLINE ZUM WOLKENREICH
-    // --------------------------------------------------------------------
-    this.placeCaveEntrances();
-    this.placeTrampolines();
-
-    // --------------------------------------------------------------------
-    // STEP 10: RAMPEN & TREPPEN FREIHALTEN (Keine Bäume oder Objekte)
-    // --------------------------------------------------------------------
-    this.clearRampsAndAccessCorridors();
   }
 
-  placeCaveEntrances() {
-    this.holeEntrances = [
-      { x: 12, y: 38, targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Loch (Tiefenhöhlen)' },
-      { x: 34, y: 12, targetCave: 'forest_grotto', targetX: 11, targetY: 11, name: 'Wald-Loch (Moosige Grotte)' },
-      { x: 38, y: 76, targetCave: 'main_complex', targetX: 20, targetY: 53, name: 'Wüsten-Trichter (Tiefenhöhlen)' },
-      { x: 104, y: 16, targetCave: 'snow_grotto', targetX: 11, targetY: 11, name: 'Schnee-Eisspalte (Eis-Grotte)' },
-      { x: 118, y: 48, targetCave: 'void_grotto', targetX: 12, targetY: 11, name: 'Leeren-Riss (Astrale Kluft)' },
-      { x: 82, y: 64, targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' }
-    ];
+  populateBiomeTreesAndFlora() {
+    const n = this.noise;
+    for (let ty = 6; ty < this.height - 6; ty += 5) {
+      for (let tx = 6; tx < this.width - 6; tx += 5) {
+        if (!this.isValid(tx, ty)) continue;
+        if (this.canopy[ty][tx] === CANOPY.TREE_CROWN) continue;
+        if (Math.hypot(tx - this.spawnPoint.x, ty - this.spawnPoint.y) < this.preset.spawnClearingRadius) continue;
 
-    for (const entrance of this.holeEntrances) {
-      if (this.isValid(entrance.x, entrance.y)) {
-        this.objects[entrance.y][entrance.x] = OBJECTS.CAVE_ENTRANCE;
+        const g = this.ground[ty][tx];
+        const jx = tx + n.noise(tx * 1.4, ty * 1.4) * 1.6;
+        const jy = ty + n.noise(tx * 2.2, ty * 2.2) * 1.6;
+        const rx = Math.round(jx);
+        const ry = Math.round(jy);
+        if (!this.isValid(rx, ry)) continue;
+        if (this.objects[ry][rx] !== OBJECTS.NONE) continue;
+
+        if (g === TILES.SNOW && n.fbm(rx * 0.1, ry * 0.1, 2) > 0.15) {
+          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.SNOWY_PINE, Math.abs(rx) % 2);
+        } else if (g === TILES.SAND && n.fbm(rx * 0.1, ry * 0.1, 2) > 0.25) {
+          // Date Palm or Cactus
+          if (n.noise(rx * 0.5, ry * 0.5) > 0.1) {
+            this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.PALM, Math.abs(rx) % 2);
+          } else {
+            this.objects[ry][rx] = OBJECTS.CACTUS;
+          }
+        } else if (g === TILES.SWAMP_GROUND && n.fbm(rx * 0.1, ry * 0.1, 2) > 0.18) {
+          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.SWAMP_WILLOW, Math.abs(rx) % 2);
+        }
       }
+    }
+  }
+
+  placeOverworldShrines() {
+    this.shrines = [];
+    const p = this.preset;
+    const count = p.shrineCount || 7;
+
+    const shrineCandidates = [
+      { x: this.spawnPoint.x + 18, y: this.spawnPoint.y - 12, name: 'Schrein des Erwachens' },
+      { x: Math.round(this.width * 0.38), y: Math.round(this.height * 0.26), name: 'Schrein der Waldgeister' },
+      { x: Math.round(this.width * 0.55), y: Math.round(this.height * 0.38), name: 'Schrein des Binnensees' },
+      { x: Math.round(this.width * 0.72), y: Math.round(this.height * 0.24), name: 'Schrein des Ewigen Eises' },
+      { x: Math.round(this.width * 0.25), y: Math.round(this.height * 0.70), name: 'Schrein der Sonnendüne' },
+      { x: Math.round(this.width * 0.70), y: Math.round(this.height * 0.72), name: 'Schrein der Nebelmoore' },
+      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.44), name: 'Schrein der Morgendämmerung' },
+      { x: Math.round(this.width * 0.45), y: Math.round(this.height * 0.84), name: 'Schrein der Blütentäler' }
+    ].slice(0, count);
+
+    for (const sc of shrineCandidates) {
+      if (this.isValid(sc.x, sc.y)) {
+        // Clear obstacles around shrine
+        this.ground[sc.y][sc.x] = (this.preset.mainBiome === 'snow' ? TILES.SNOW : (this.preset.mainBiome === 'desert' ? TILES.SAND : TILES.GRASS));
+        this.objects[sc.y][sc.x] = OBJECTS.SHRINE;
+        this.canopy[sc.y][sc.x] = CANOPY.NONE;
+        this.shrines.push({ x: sc.x, y: sc.y, name: sc.name });
+      }
+    }
+
+    // Ancient Void Shrine inside Void Zone
+    const vz = p.voidZone;
+    const vx = vz.x - 2;
+    const vy = vz.y - 2;
+    if (this.isValid(vx, vy)) {
+      this.ground[vy][vx] = TILES.VOID_GROUND;
+      this.objects[vy][vx] = OBJECTS.SHRINE;
+      this.shrines.push({ x: vx, y: vy, name: 'Schrein des Ewigen Abgrunds' });
     }
   }
 
   placeTrampolines() {
     this.trampolines = [];
-    const candidates = [
-      // Unter Zentraler Himmelsstadt
-      { x: 62, y: 44 }, { x: 68, y: 46 }, { x: 65, y: 42 },
-      // Unter Nordwest-Wolke (Grasland & Wald)
-      { x: 22, y: 18 }, { x: 26, y: 22 }, { x: 18, y: 22 }, { x: 28, y: 16 },
-      // Unter Südwest-Wolke (Wüste)
-      { x: 24, y: 68 }, { x: 28, y: 72 }, { x: 20, y: 70 }, { x: 32, y: 72 },
-      // Unter Nordost-Wolke (Schnee & Eis)
-      { x: 86, y: 20 }, { x: 90, y: 24 }, { x: 84, y: 24 }, { x: 92, y: 18 },
-      // Unter Südost-Wolke (Sumpf)
-      { x: 94, y: 66 }, { x: 98, y: 70 }, { x: 92, y: 68 }, { x: 96, y: 74 },
-      // Unter Brücken-Trittwolken & Außenposten
-      { x: 44, y: 32 }, { x: 44, y: 58 }, { x: 78, y: 33 }, { x: 82, y: 57 },
-      { x: 14, y: 46 }, { x: 115, y: 38 }, { x: 65, y: 12 }, { x: 65, y: 78 }
-    ];
+    const count = this.preset.trampolineCount || 8;
 
-    for (const c of candidates) {
-      if (!this.isValid(c.x, c.y)) continue;
-      const g = this.ground[c.y][c.x];
+    const trampolineSpots = [
+      { x: this.spawnPoint.x + 14, y: this.spawnPoint.y + 14 },
+      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.24) },
+      { x: Math.round(this.width * 0.44), y: Math.round(this.height * 0.18) },
+      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.28) },
+      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.78) },
+      { x: Math.round(this.width * 0.48), y: Math.round(this.height * 0.65) },
+      { x: Math.round(this.width * 0.76), y: Math.round(this.height * 0.72) },
+      { x: Math.round(this.width * 0.88), y: Math.round(this.height * 0.45) },
+      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.52) },
+      { x: Math.round(this.width * 0.62), y: Math.round(this.height * 0.85) }
+    ].slice(0, count);
+
+    for (const ts of trampolineSpots) {
+      if (!this.isValid(ts.x, ts.y)) continue;
+      const g = this.ground[ts.y][ts.x];
       if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.QUICKSAND) continue;
 
-      // Entferne etwaige kleine Felsen/Bäume an der Stelle
-      this.objects[c.y][c.x] = OBJECTS.TRAMPOLINE;
-      this.trampolines.push({ x: c.x, y: c.y });
+      this.objects[ts.y][ts.x] = OBJECTS.TRAMPOLINE;
+      this.canopy[ts.y][ts.x] = CANOPY.NONE;
+      this.trampolines.push({ x: ts.x, y: ts.y });
+    }
+  }
+
+  placeCaveEntrances() {
+    this.holeEntrances = [
+      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Loch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 11, name: 'Wald-Loch (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.82), targetCave: 'main_complex', targetX: 20, targetY: 53, name: 'Wüsten-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.20), targetCave: 'snow_grotto', targetX: 11, targetY: 11, name: 'Schnee-Eisspalte (Eis-Grotte)' },
+      { x: this.preset.voidZone.x - 6, y: this.preset.voidZone.y + 4, targetCave: 'void_grotto', targetX: 12, targetY: 11, name: 'Leeren-Riss (Astrale Kluft)' },
+      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.70), targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' }
+    ];
+
+    for (const entrance of this.holeEntrances) {
+      if (this.isValid(entrance.x, entrance.y)) {
+        this.objects[entrance.y][entrance.x] = OBJECTS.CAVE_ENTRANCE;
+        this.canopy[entrance.y][entrance.x] = CANOPY.NONE;
+      }
     }
   }
 
@@ -580,16 +556,11 @@ export class WorldMap {
     return this.objects[tileY][tileX] === OBJECTS.TRAMPOLINE;
   }
 
-  // Stellt sicher, dass Treppen / Rampen und deren Zugänge 100% frei von Bäumen, Felsen und Objekten sind
   clearRampsAndAccessCorridors() {
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         if (!this.ramps[y] || this.ramps[y][x] === RAMPS.NONE) continue;
 
-        const rampCenterX = x * TILE_SIZE + 8;
-        const rampCenterY = y * TILE_SIZE + 8;
-
-        // 1. Felsen, Holzstämme und sonstige feste Hindernisse im Rampenkorridor entfernen
         for (let dy = -2; dy <= 2; dy++) {
           for (let dx = -2; dx <= 2; dx++) {
             const nx = x + dx;
@@ -597,27 +568,10 @@ export class WorldMap {
             if (!this.isValid(nx, ny)) continue;
 
             const obj = this.objects[ny][nx];
-            if (obj !== OBJECTS.NONE && obj !== OBJECTS.CAVE_ENTRANCE && obj !== OBJECTS.TRAMPOLINE) {
-              const prop = OBJ_PROPS[obj];
-              if (!prop || prop.solid || Math.abs(dx) + Math.abs(dy) <= 2) {
-                this.objects[ny][nx] = OBJECTS.NONE;
-              }
+            if (obj !== OBJECTS.NONE && obj !== OBJECTS.CAVE_ENTRANCE && obj !== OBJECTS.TRAMPOLINE && obj !== OBJECTS.SHRINE) {
+              this.objects[ny][nx] = OBJECTS.NONE;
             }
           }
-        }
-
-        // 2. Bäume im Umkreis von 34px (mehr als 2 Kacheln) um die Treppe entfernen
-        this.trees = this.trees.filter(t => {
-          const dist = Math.hypot(t.x - rampCenterX, t.y - rampCenterY);
-          return dist >= 34;
-        });
-
-        // 3. Überhängende Baumkronen im Kronendach lichten, damit die Treppe hell und sichtbar ist
-        if (this.canopyCrowns) {
-          this.canopyCrowns = this.canopyCrowns.filter(c => {
-            const dist = Math.hypot(c.x - rampCenterX, c.y - rampCenterY);
-            return dist >= 26;
-          });
         }
         for (let dy = -1; dy <= 1; dy++) {
           for (let dx = -1; dx <= 1; dx++) {
@@ -632,29 +586,29 @@ export class WorldMap {
     }
   }
 
-  // Helper for generating organic, wavy blobs (lakes, quicksand pits)
   createOrganicBlob(cx, cy, radius, tileId, threshold = 0.5) {
     const n = this.noise;
     const r = radius + 4;
     for (let y = cy - r; y <= cy + r; y++) {
       for (let x = cx - r; x <= cx + r; x++) {
         if (!this.isValid(x, y)) continue;
+        // Don't cut through spawn clearing
+        if (Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y) < this.preset.spawnClearingRadius + 3) continue;
+
         const dx = x - cx;
         const dy = y - cy;
         const dist = Math.hypot(dx, dy);
         const angle = Math.atan2(dy, dx);
 
-        // Organic wobble on radius
         const wobble = n.noise(Math.cos(angle) * 2, Math.sin(angle) * 2) * (radius * 0.45);
         if (dist <= radius + wobble) {
           this.ground[y][x] = tileId;
-          this.objects[y][x] = OBJECTS.NONE; // Clear objects in water/pit
+          this.objects[y][x] = OBJECTS.NONE;
         }
       }
     }
   }
 
-  // Winding path generator between two points
   createWindingPath(x1, y1, x2, y2, width = 2) {
     const steps = Math.hypot(x2 - x1, y2 - y1) * 1.5;
     for (let i = 0; i <= steps; i++) {
@@ -662,7 +616,6 @@ export class WorldMap {
       let px = x1 + (x2 - x1) * t;
       let py = y1 + (y2 - y1) * t;
 
-      // Add gentle sine/noise curve
       const offset = Math.sin(t * Math.PI) * 4 * this.noise.noise(t * 5, 2);
       px += -((y2 - y1) / (steps || 1)) * offset;
       py += ((x2 - x1) / (steps || 1)) * offset;
@@ -675,8 +628,7 @@ export class WorldMap {
           const cx = tx + ox;
           const cy = ty + oy;
           if (this.isValid(cx, cy)) {
-            // Don't overwrite water
-            if (this.ground[cy][cx] !== TILES.WATER && this.ground[cy][cx] !== TILES.SWAMP_WATER) {
+            if (this.ground[cy][cx] !== TILES.WATER && this.ground[cy][cx] !== TILES.SWAMP_WATER && this.ground[cy][cx] !== TILES.VOID_LAKE) {
               this.ground[cy][cx] = TILES.DIRT;
               this.objects[cy][cx] = OBJECTS.NONE;
             }
@@ -708,12 +660,10 @@ export class WorldMap {
   isSolid(tileX, tileY) {
     if (!this.isValid(tileX, tileY)) return true;
 
-    // Check ground solidity
     const ground = this.getGroundTile(tileX, tileY);
     const groundProps = TILE_PROPS[ground];
     if (groundProps && groundProps.solid) return true;
 
-    // Check object solidity (rocks, ice, void crystals, trunks, cacti)
     const obj = this.getObjectTile(tileX, tileY);
     const objProps = OBJ_PROPS[obj];
     if (objProps && objProps.solid) return true;
@@ -755,7 +705,7 @@ export class WorldMap {
   addTree(px, py, type, variant = 0) {
     const tileX = Math.floor(px / TILE_SIZE);
     const tileY = Math.floor(py / TILE_SIZE);
-    if (this.isNearRamp(tileX, tileY, 2)) return; // Treppen/Rampen immer frei von Bäumen halten!
+    if (this.isNearRamp(tileX, tileY, 2)) return;
 
     for (const t of this.trees) {
       if (Math.hypot(t.x - px, t.y - py) < 14) return;
@@ -773,10 +723,7 @@ export class WorldMap {
       [TREES.DEADWOOD]:     { trunkRadius: 4, crownHeight: 24, width: 24, height: 38, anchorX: 12, anchorY: 35 }
     }[type] || { trunkRadius: 5, crownHeight: 25, width: 24, height: 40, anchorX: 12, anchorY: 38 };
 
-    const nearBridge = (Math.abs(tileX - 44) < 12 && Math.abs(tileY - 44) < 6);
-    const nearSnowBridge = (Math.abs(tileX - 44) < 8 && Math.abs(tileY - 18) < 5);
-    const sacredLantern = (this.noise.noise(px * 0.18, py * 0.18) > 0.52);
-    const hasLantern = nearBridge || nearSnowBridge || sacredLantern;
+    const sacredLantern = (this.noise.noise(px * 0.18, py * 0.18) > 0.55);
 
     this.trees.push({
       id: this.trees.length,
@@ -786,7 +733,7 @@ export class WorldMap {
       tileY,
       type,
       variant,
-      hasLantern,
+      hasLantern: sacredLantern,
       ...meta
     });
   }
@@ -843,36 +790,23 @@ export class WorldMap {
   }
 
   // ==========================================================================
-  // HÖHENEBENEN-SYSTEM (Podeste +1, +2, Löcher -1 und Schrägen / Rampen)
+  // HÖHENEBENEN-SYSTEM (Plateaus & Löcher über 290x200 verteilt)
   // ==========================================================================
   generateElevationsAndRamps() {
-    // 1. Grasland: Podest (+1 & +2) und Gras-Loch (-1)
-    this.createPlateau(20, 52, 8, 6, ELEVATION.LEVEL_1, ['S', 'E']);
-    this.createPlateau(20, 52, 4, 3, ELEVATION.LEVEL_2, ['S']);
-    this.createHole(12, 38, 3, 3, 'S');
+    // Plateaus distributed across the large world
+    this.createPlateau(Math.round(this.width * 0.16), Math.round(this.height * 0.35), 10, 7, ELEVATION.LEVEL_1, ['S', 'E']);
+    this.createPlateau(Math.round(this.width * 0.16), Math.round(this.height * 0.35), 5, 4, ELEVATION.LEVEL_2, ['S']);
+    this.createHole(Math.round(this.width * 0.24), Math.round(this.height * 0.36), 4, 3, 'S');
 
-    // 2. Dichter Wald: Wald-Podest (+1) und Wald-Senke (-1)
-    this.createPlateau(16, 14, 6, 5, ELEVATION.LEVEL_1, ['S']);
-    this.createHole(34, 12, 4, 3, 'S');
+    this.createPlateau(Math.round(this.width * 0.72), Math.round(this.height * 0.28), 12, 8, ELEVATION.LEVEL_1, ['S', 'W']);
+    this.createPlateau(Math.round(this.width * 0.72), Math.round(this.height * 0.28), 6, 4, ELEVATION.LEVEL_2, ['S']);
+    this.createHole(Math.round(this.width * 0.78), Math.round(this.height * 0.20), 4, 3, 'S');
 
-    // 3. Wüste (Sand): Dünen-Plateau (+1 & +2) und Wüsten-Trichter (-1)
-    this.createPlateau(16, 72, 8, 6, ELEVATION.LEVEL_1, ['N', 'E']);
-    this.createPlateau(16, 72, 4, 3, ELEVATION.LEVEL_2, ['E']);
-    this.createHole(38, 76, 4, 4, 'N');
+    this.createPlateau(Math.round(this.width * 0.20), Math.round(this.height * 0.78), 11, 7, ELEVATION.LEVEL_1, ['N', 'E']);
+    this.createHole(Math.round(this.width * 0.22), Math.round(this.height * 0.82), 4, 4, 'N');
 
-    // 4. Schnee & Eis: Eis-Plateau (+1 & +2) und Eisspalte / Loch (-1)
-    this.createPlateau(76, 18, 8, 6, ELEVATION.LEVEL_1, ['S', 'W']);
-    this.createPlateau(76, 18, 4, 3, ELEVATION.LEVEL_2, ['S']);
-    this.createHole(104, 16, 4, 3, 'S');
-
-    // 5. Die Leere: Schwebendes Astral-Podest (+1 & +2) und Leeren-Riss (-1)
-    this.createPlateau(104, 42, 8, 6, ELEVATION.LEVEL_1, ['W', 'N']);
-    this.createPlateau(104, 42, 4, 3, ELEVATION.LEVEL_2, ['W']);
-    this.createHole(118, 48, 4, 3, 'W');
-
-    // 6. Düsterer Sumpf: Sumpf-Plateau (+1) und Sumpf-Kuhle (-1)
-    this.createPlateau(66, 76, 6, 5, ELEVATION.LEVEL_1, ['N']);
-    this.createHole(82, 64, 4, 3, 'S');
+    this.createPlateau(Math.round(this.width * 0.82), Math.round(this.height * 0.68), 10, 7, ELEVATION.LEVEL_1, ['W', 'N']);
+    this.createHole(Math.round(this.width * 0.68), Math.round(this.height * 0.70), 4, 3, 'S');
   }
 
   createPlateau(cx, cy, rx, ry, level = 1, rampDirections = ['S']) {
@@ -885,15 +819,12 @@ export class WorldMap {
         const y = cy + dy;
         if (!this.isValid(x, y)) continue;
 
-        // Wasser, Quicksand, Void-Lake und Brücken auslassen
         const g = this.ground[y][x];
         if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.BRIDGE_H || g === TILES.BRIDGE_V) continue;
-        if (Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y) < 6) continue;
+        if (Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y) < this.preset.spawnClearingRadius + 2) continue;
 
-        // Organische Ellipse mit Noise
         const distNorm = Math.hypot(dx / rx, dy / ry) + n.noise(x * 0.3, y * 0.3) * 0.22;
         if (distNorm <= 1.0) {
-          // Stufe 2 darf nur auf bestehende Stufe 1 gesetzt werden
           if (level === 2 && this.elevation[y][x] < 1) continue;
           this.elevation[y][x] = level;
           tilesInPlateau.push({ x, y });
@@ -903,7 +834,6 @@ export class WorldMap {
 
     if (tilesInPlateau.length === 0) return;
 
-    // Rampen für gewünschte Richtungen anlegen
     for (const dir of rampDirections) {
       this.placePlateauRamp(cx, cy, rx, ry, level, dir);
     }
@@ -922,8 +852,8 @@ export class WorldMap {
         }
       }
       if (this.isValid(rampX, rampY)) {
-        this.elevation[rampY][rampX] = level - 1; // Rampe vermittelt von unterer Ebene
-        this.ramps[rampY][rampX] = RAMPS.UP_NORTH; // Nach Norden hochsteigen
+        this.elevation[rampY][rampX] = level - 1;
+        this.ramps[rampY][rampX] = RAMPS.UP_NORTH;
         this.objects[rampY][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX, rampY + 1)) this.objects[rampY + 1][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX, rampY - 1)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
@@ -938,7 +868,7 @@ export class WorldMap {
       }
       if (this.isValid(rampX, rampY)) {
         this.elevation[rampY][rampX] = level - 1;
-        this.ramps[rampY][rampX] = RAMPS.UP_SOUTH; // Nach Süden hochsteigen
+        this.ramps[rampY][rampX] = RAMPS.UP_SOUTH;
         this.objects[rampY][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX, rampY - 1)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX, rampY + 1)) this.objects[rampY + 1][rampX] = OBJECTS.NONE;
@@ -953,7 +883,7 @@ export class WorldMap {
       }
       if (this.isValid(rampX, rampY)) {
         this.elevation[rampY][rampX] = level - 1;
-        this.ramps[rampY][rampX] = RAMPS.UP_WEST; // Nach Westen hochsteigen
+        this.ramps[rampY][rampX] = RAMPS.UP_WEST;
         this.objects[rampY][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX + 1, rampY)) this.objects[rampY + 1][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX - 1, rampY)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
@@ -968,7 +898,7 @@ export class WorldMap {
       }
       if (this.isValid(rampX, rampY)) {
         this.elevation[rampY][rampX] = level - 1;
-        this.ramps[rampY][rampX] = RAMPS.UP_EAST; // Nach Osten hochsteigen
+        this.ramps[rampY][rampX] = RAMPS.UP_EAST;
         this.objects[rampY][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX - 1, rampY)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX + 1, rampY)) this.objects[rampY + 1][rampX] = OBJECTS.NONE;
@@ -986,11 +916,11 @@ export class WorldMap {
 
         const g = this.ground[y][x];
         if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.BRIDGE_H || g === TILES.BRIDGE_V) continue;
-        if (Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y) < 6) continue;
+        if (Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y) < this.preset.spawnClearingRadius + 2) continue;
 
         const distNorm = Math.hypot(dx / rx, dy / ry) + n.noise(x * 0.35, y * 0.35) * 0.2;
         if (distNorm <= 1.0) {
-          this.elevation[y][x] = ELEVATION.HOLE; // -1
+          this.elevation[y][x] = ELEVATION.HOLE;
           if (this.objects[y][x] === OBJECTS.ROCK_STONE || this.objects[y][x] === OBJECTS.FALLEN_LOG) {
             this.objects[y][x] = OBJECTS.NONE;
           }
@@ -998,7 +928,6 @@ export class WorldMap {
       }
     }
 
-    // Garantiere Aufgangs-Rampe aus dem Loch (-1) nach oben auf Ebene 0
     let rampX = cx;
     let rampY = cy;
     if (exitDir === 'S') {
@@ -1010,7 +939,7 @@ export class WorldMap {
         }
       }
       if (this.isValid(rampX, rampY)) {
-        this.ramps[rampY][rampX] = RAMPS.UP_SOUTH; // Nach Süden rauslaufen
+        this.ramps[rampY][rampX] = RAMPS.UP_SOUTH;
         this.objects[rampY][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX, rampY + 1)) this.objects[rampY + 1][rampX] = OBJECTS.NONE;
       }
@@ -1023,7 +952,7 @@ export class WorldMap {
         }
       }
       if (this.isValid(rampX, rampY)) {
-        this.ramps[rampY][rampX] = RAMPS.UP_NORTH; // Nach Norden rauslaufen
+        this.ramps[rampY][rampX] = RAMPS.UP_NORTH;
         this.objects[rampY][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX, rampY - 1)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
       }
@@ -1036,7 +965,7 @@ export class WorldMap {
         }
       }
       if (this.isValid(rampX, rampY)) {
-        this.ramps[rampY][rampX] = RAMPS.UP_WEST; // Nach Westen rauslaufen
+        this.ramps[rampY][rampX] = RAMPS.UP_WEST;
         this.objects[rampY][rampX] = OBJECTS.NONE;
         if (this.isValid(rampX - 1, rampY)) this.objects[rampY - 1][rampX] = OBJECTS.NONE;
       }
@@ -1061,10 +990,8 @@ export class WorldMap {
     const toElev = this.getElevation(toX, toY);
     const diff = toElev - fromElev;
 
-    // 1. Gleiche Höhe -> immer passierbar
     if (diff === 0) return true;
 
-    // 2. Eine Ebene nach oben (+1): Nur mit passender Rampe
     if (diff === 1) {
       const fromRamp = this.getRamp(fromX, fromY);
       const toRamp = this.getRamp(toX, toY);
@@ -1077,16 +1004,13 @@ export class WorldMap {
       if (moveDx < 0 && (toRamp === RAMPS.UP_WEST || fromRamp === RAMPS.UP_WEST)) return true;
       if (moveDx > 0 && (toRamp === RAMPS.UP_EAST || fromRamp === RAMPS.UP_EAST)) return true;
 
-      // Klippenwand blockiert Aufstieg
       return false;
     }
 
-    // 3. Eine Ebene nach unten (-1): Herabspringen oder über Rampe runtergehen erlaubt
     if (diff === -1) {
       return true;
     }
 
-    // 4. Größere Höhenunterschiede (>= 2 Stufen auf einmal): blockiert
     return false;
   }
 }

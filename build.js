@@ -6,6 +6,7 @@ const files = [
   'js/noise.js',
   'js/characters.js',
   'bestiary.js',
+  'js/worldPresets.js',
   'js/sprites.js',
   'js/caveMap.js',
   'js/cloudMap.js',

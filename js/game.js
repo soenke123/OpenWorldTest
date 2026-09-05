@@ -11,6 +11,7 @@ import { CombatManager } from './combat.js';
 import { EnemyManager } from './enemies.js';
 import { MagicManager } from './magic.js';
 import { CHARACTERS_DATA, CHARACTERS_MAP, getSelectedSkin, setSelectedSkin, getSelectedPlayerName, setSelectedPlayerName, getRandomHeroName } from './characters.js';
+import { getWorldPreset, getAllWorldPresets, getSelectedWorldId, setSelectedWorldId } from './worldPresets.js';
 
 class Game {
   constructor() {
@@ -31,7 +32,7 @@ class Game {
 
     // Multi-Dimension Maps & Core Systems
     this.overworldMap = new WorldMap();
-    this.cloudMap = new CloudMap();
+    this.cloudMap = new CloudMap(this.overworldMap);
     this.caves = {
       main_complex: new CaveMap('main_complex'),
       sub_crystal: new CaveMap('sub_crystal'),
@@ -111,6 +112,7 @@ class Game {
 
     this.initEvents();
     this.initCharacterSelectModal();
+    this.initWorldSelectUI();
     this.updatePlayerNameUI();
     this.resize();
     this.start();
@@ -3694,6 +3696,15 @@ class Game {
       this.player.setSkin(this.selectedHeroSkin);
     }
 
+    // Check if player selected a different world preset in the wizard
+    const worldSelectEl = document.getElementById('world-preset-select');
+    if (worldSelectEl && worldSelectEl.value) {
+      const chosenWorldId = parseInt(worldSelectEl.value, 10);
+      if (chosenWorldId && this.overworldMap && this.overworldMap.preset.id !== chosenWorldId) {
+        this.switchWorld(chosenWorldId);
+      }
+    }
+
     this.updatePlayerNameUI();
 
     if (this.charSelectModal) {
@@ -3707,6 +3718,111 @@ class Game {
     if (this.canvas && typeof this.canvas.focus === 'function') {
       this.canvas.focus();
     }
+  }
+
+  initWorldSelectUI() {
+    const worldPresetSelect = document.getElementById('world-preset-select');
+    const worldPresetDesc = document.getElementById('world-preset-desc');
+    const devWorldSelect = document.getElementById('dev-world-select');
+
+    const presets = getAllWorldPresets();
+    const currentId = getSelectedWorldId();
+
+    const populateSelect = (selectEl) => {
+      if (!selectEl) return;
+      selectEl.innerHTML = '';
+      presets.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.id}. ${p.name} (${p.badge})`;
+        if (p.id === currentId) opt.selected = true;
+        selectEl.appendChild(opt);
+      });
+    };
+
+    populateSelect(worldPresetSelect);
+    populateSelect(devWorldSelect);
+
+    const updateDesc = (id) => {
+      if (!worldPresetDesc) return;
+      const preset = getWorldPreset(id);
+      worldPresetDesc.innerHTML = `<strong style="color: ${preset.color || '#38bdf8'}">${preset.badge}: ${preset.name}</strong> - <em>${preset.subtitle}</em><br><span style="color: #cbd5e1">${preset.description}</span>`;
+    };
+
+    updateDesc(currentId);
+
+    if (worldPresetSelect) {
+      worldPresetSelect.addEventListener('change', (e) => {
+        const newId = parseInt(e.target.value, 10);
+        setSelectedWorldId(newId);
+        updateDesc(newId);
+        if (devWorldSelect) devWorldSelect.value = newId;
+      });
+    }
+
+    if (devWorldSelect) {
+      devWorldSelect.addEventListener('change', (e) => {
+        const newId = parseInt(e.target.value, 10);
+        if (newId) {
+          this.switchWorld(newId);
+        }
+      });
+    }
+  }
+
+  switchWorld(worldId) {
+    const preset = getWorldPreset(worldId);
+    setSelectedWorldId(preset.id);
+
+    // Re-create maps with the new preset
+    this.overworldMap = new WorldMap(preset.id);
+    this.cloudMap = new CloudMap(this.overworldMap);
+
+    if (this.currentDimension === DIMENSIONS.OVERWORLD) {
+      this.map = this.overworldMap;
+    } else if (this.currentDimension === DIMENSIONS.CLOUDS) {
+      this.map = this.cloudMap;
+    }
+
+    // Reposition player to the new world's spawn point
+    if (this.player) {
+      this.player.x = this.overworldMap.spawnPoint.x * TILE_SIZE + 8;
+      this.player.y = this.overworldMap.spawnPoint.y * TILE_SIZE + 8;
+      this.player.elevation = 0;
+      this.player.map = this.map;
+    }
+
+    // Reset camera bounds & center on player
+    this.camera.setWorldBounds(this.map.width, this.map.height);
+    this.camera.follow(this.player.x, this.player.y);
+
+    // Reset Minimap and Fog of War for new world
+    if (this.minimap) {
+      this.minimap.setMap(this.map, this.currentDimension);
+      this.minimap.resetFog();
+    }
+
+    // Reinitialize Shrines & Artifacts
+    if (this.magicManager) {
+      this.magicManager.initShrineArtifacts(this.caves, this.cloudMap, this.overworldMap);
+    }
+
+    // Re-spawn all monster groups for the new terrain and dimensions
+    if (this.enemyManager) {
+      this.enemyManager.initSpawns();
+    }
+
+    // Update World Select UI controls
+    const worldPresetSelect = document.getElementById('world-preset-select');
+    const devWorldSelect = document.getElementById('dev-world-select');
+    const worldPresetDesc = document.getElementById('world-preset-desc');
+    if (worldPresetSelect) worldPresetSelect.value = preset.id;
+    if (devWorldSelect) devWorldSelect.value = preset.id;
+    if (worldPresetDesc) {
+      worldPresetDesc.innerHTML = `<strong style="color: ${preset.color || '#38bdf8'}">${preset.badge}: ${preset.name}</strong> - <em>${preset.subtitle}</em><br><span style="color: #cbd5e1">${preset.description}</span>`;
+    }
+
+    this.showToast(`🌍 Welt gewechselt: ${preset.name}!`);
   }
 
   openCharacterSelectModal() {

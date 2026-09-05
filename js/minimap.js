@@ -6,9 +6,10 @@ export class Minimap {
     this.ctx = this.canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
     this.map = map;
+    this.dimension = 'overworld';
 
-    this.scaleX = this.canvas.width / MAP_WIDTH;
-    this.scaleY = this.canvas.height / MAP_HEIGHT;
+    this.scaleX = this.canvas.width / (this.map ? this.map.width : MAP_WIDTH);
+    this.scaleY = this.canvas.height / (this.map ? this.map.height : MAP_HEIGHT);
 
     this.bgCanvas = document.createElement('canvas');
     this.bgCanvas.width = this.canvas.width;
@@ -16,7 +17,59 @@ export class Minimap {
     this.bgCtx = this.bgCanvas.getContext('2d');
     this.bgCtx.imageSmoothingEnabled = false;
 
+    // Fog of War Canvases (Nebel des Krieges, persistent pro Dimension)
+    this.fogCanvases = {};
+
     this.renderStaticBackground();
+  }
+
+  getFogCanvasKey() {
+    if (this.dimension === 'caves') {
+      return `caves_${this.map.id || 'main'}`;
+    }
+    return this.dimension || 'overworld';
+  }
+
+  getFogCanvas() {
+    const key = this.getFogCanvasKey();
+    if (!this.fogCanvases[key]) {
+      const fc = document.createElement('canvas');
+      fc.width = this.canvas.width;
+      fc.height = this.canvas.height;
+      const fctx = fc.getContext('2d');
+      fctx.fillStyle = '#06070d';
+      fctx.fillRect(0, 0, fc.width, fc.height);
+      this.fogCanvases[key] = { canvas: fc, ctx: fctx };
+    }
+    return this.fogCanvases[key];
+  }
+
+  resetFog() {
+    this.fogCanvases = {};
+  }
+
+  revealFog(playerX, playerY) {
+    const fog = this.getFogCanvas();
+    const fctx = fog.ctx;
+
+    const mx = (playerX / TILE_SIZE) * this.scaleX;
+    const my = (playerY / TILE_SIZE) * this.scaleY;
+    const radius = Math.max(10, 20 * this.scaleX); // ~20 Kacheln Sichtradius
+
+    fctx.save();
+    fctx.globalCompositeOperation = 'destination-out';
+
+    const grad = fctx.createRadialGradient(mx, my, radius * 0.65, mx, my, radius);
+    grad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+    grad.addColorStop(0.8, 'rgba(0, 0, 0, 0.85)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0.0)');
+
+    fctx.fillStyle = grad;
+    fctx.beginPath();
+    fctx.arc(mx, my, radius, 0, Math.PI * 2);
+    fctx.fill();
+
+    fctx.restore();
   }
 
   setMap(map, dimension = 'overworld') {
@@ -207,32 +260,45 @@ export class Minimap {
     // 0. Clear canvas
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // 1. Pre-rendered terrain
+    // 1. Reveal Fog around player
+    if (player && !player.isDead) {
+      this.revealFog(player.x, player.y);
+    }
+
+    // 2. Pre-rendered terrain
     this.ctx.drawImage(this.bgCanvas, 0, 0);
 
-    // 2. Camera Viewport Box
+    // 3. Fog of War Overlay (nur bereits erforschte Gebiete sind sichtbar!)
+    const fog = this.getFogCanvas();
+    if (fog && fog.canvas) {
+      this.ctx.drawImage(fog.canvas, 0, 0);
+    }
+
+    // 4. Camera Viewport Box
     const viewW = (camera.viewportWidth / camera.zoom) / TILE_SIZE * this.scaleX;
     const viewH = (camera.viewportHeight / camera.zoom) / TILE_SIZE * this.scaleY;
     const viewX = (camera.x / TILE_SIZE) * this.scaleX;
     const viewY = (camera.y / TILE_SIZE) * this.scaleY;
 
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
     this.ctx.lineWidth = 1;
     this.ctx.strokeRect(viewX, viewY, viewW, viewH);
 
-    // 3. Player Marker
-    const pX = (player.x / TILE_SIZE) * this.scaleX;
-    const pY = (player.y / TILE_SIZE) * this.scaleY;
+    // 5. Player Marker
+    if (player) {
+      const pX = (player.x / TILE_SIZE) * this.scaleX;
+      const pY = (player.y / TILE_SIZE) * this.scaleY;
 
-    this.ctx.fillStyle = '#ff2a55';
-    this.ctx.beginPath();
-    this.ctx.arc(pX, pY, 3, 0, Math.PI * 2);
-    this.ctx.fill();
+      this.ctx.fillStyle = '#ff2a55';
+      this.ctx.beginPath();
+      this.ctx.arc(pX, pY, 3, 0, Math.PI * 2);
+      this.ctx.fill();
 
-    this.ctx.strokeStyle = '#ffffff';
-    this.ctx.lineWidth = 1;
-    this.ctx.beginPath();
-    this.ctx.arc(pX, pY, 4, 0, Math.PI * 2);
-    this.ctx.stroke();
+      this.ctx.strokeStyle = '#ffffff';
+      this.ctx.lineWidth = 1;
+      this.ctx.beginPath();
+      this.ctx.arc(pX, pY, 4, 0, Math.PI * 2);
+      this.ctx.stroke();
+    }
   }
 }

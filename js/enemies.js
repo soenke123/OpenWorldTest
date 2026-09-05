@@ -88,6 +88,7 @@ export class EnemyEntity {
     this.vx = 0;
     this.vy = 0;
     this.elevation = options.elevation || 0;
+    this.spawnOptions = options;
 
     // Proportionale Skalierung (Schwache Monster kleiner, Kolosse/Bosse riesig!)
     this.scale = options.scale ?? this.def.scale ?? (this.typeId === 'green_slime' ? 0.48 : (this.category === 'boss' ? 1.6 : (this.typeId === 'cave_weaver' || this.typeId === 'lava_core' ? 0.72 : 1.0)));
@@ -921,6 +922,7 @@ export class EnemyManager {
     this.enemies = [];
     this.lootItems = [];
     this.xpOrbs = [];
+    this.respawnQueue = [];
     this.aiActive = true;
 
     this.initSpawns();
@@ -930,222 +932,176 @@ export class EnemyManager {
     this.enemies = [];
     this.lootItems = [];
     this.xpOrbs = [];
+    this.respawnQueue = [];
+
+    const map = this.getMapForDimension(DIMENSIONS.OVERWORLD);
+    const sp = map?.spawnPoint || { x: 50, y: 100 };
+    const vz = map?.preset?.voidZone || { x: 268, y: 40, radius: 18 };
+    const w = map?.width || 290;
+    const h = map?.height || 200;
 
     // =========================================================================
-    // OVERWORLD SPAWNS NACH BIOMEN & GRUPPEN
+    // OVERWORLD SPAWNS NACH BIOMEN & GRUPPEN (290x200 Riesenwelt)
     // =========================================================================
 
-    // 1. Grasland & Lichtungen (nahe Spawn 30, 45)
-    // RIESIGER 28er-Massen-Schwarm winziger Tau-Tropfen Blobs (super klein, schwach, fliegen beim Hieb wie Kegel weg!)
-    this.spawnPack('green_slime', 39 * TILE_SIZE, 46 * TILE_SIZE, 28, 55, DIMENSIONS.OVERWORLD, 'pack_slimes', {
+    // 1. Grasland & Lichtungen (Außerhalb der sicheren Spawn-Lichtung Radius 15)
+    // RIESIGER 28er-Massen-Schwarm winziger Tau-Tropfen Blobs
+    this.spawnPack('green_slime', (sp.x + 18) * TILE_SIZE, (sp.y + 4) * TILE_SIZE, 28, 55, DIMENSIONS.OVERWORLD, 'pack_slimes', {
       scale: 0.48, hp: 12, atk: 5, xpValue: 2
     });
 
     // 3er-Gruppe Waldhüter-Wildschweine (Tusk Boars)
-    this.spawnPack('tusk_boar', 22 * TILE_SIZE, 38 * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_boars', {
+    this.spawnPack('tusk_boar', (sp.x - 18) * TILE_SIZE, (sp.y - 10) * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_boars', {
       scale: 0.88, hp: 55, atk: 18, xpValue: 10
     });
 
-    // 3er-Gruppe Waldläufer-Schützen (Moss Archers) am Waldsaum
-    this.spawnPack('moss_archer', 17 * TILE_SIZE, 28 * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_archers', {
+    // 3er-Gruppe Waldläufer-Schützen (Moss Archers) am Waldrand
+    this.spawnPack('moss_archer', (sp.x - 20) * TILE_SIZE, (sp.y + 14) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_archers', {
       scale: 0.95, hp: 65, atk: 18, xpValue: 15
     });
 
-    // 2. Dichter Dunkelwald (Nordwesten)
-    // 4er-Rudel Okami-Schattenwölfe (Dire Wolves)
-    this.spawnPack('dire_wolf', 24 * TILE_SIZE, 15 * TILE_SIZE, 4, 32, DIMENSIONS.OVERWORLD, 'pack_wolves', {
+    // 2. Dichter Urwald & Forste
+    // 4er-Rudel Okami-Schattenwölfe (Dire Wolves) im Nordwest-Wald
+    this.spawnPack('dire_wolf', Math.round(w * 0.18) * TILE_SIZE, Math.round(h * 0.22) * TILE_SIZE, 4, 32, DIMENSIONS.OVERWORLD, 'pack_wolves_nw', {
+      scale: 0.85, hp: 45, atk: 16, xpValue: 8
+    });
+
+    // Zweites Wolfsrudel im Südwest-Hain
+    this.spawnPack('dire_wolf', Math.round(w * 0.22) * TILE_SIZE, Math.round(h * 0.68) * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_wolves_sw', {
       scale: 0.85, hp: 45, atk: 16, xpValue: 8
     });
 
     // 3. Wüste & Treibsand (Südwesten)
     // RIESIGER APEX-PREDATOR: Dünen-Schlund (Dune Maw)
-    this.spawnEnemy('dune_maw', 25 * TILE_SIZE, 68 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    this.spawnEnemy('dune_maw', Math.round(w * 0.18) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
       scale: 1.55, hp: 340, atk: 36, xpValue: 60
     });
 
     // 2er-Gruppe Kaiser-Skorpione (Emperor Scorpions)
-    this.spawnPack('emperor_scorpion', 16 * TILE_SIZE, 74 * TILE_SIZE, 2, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions', {
+    this.spawnPack('emperor_scorpion', Math.round(w * 0.14) * TILE_SIZE, Math.round(h * 0.84) * TILE_SIZE, 2, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions', {
+      scale: 1.05, hp: 90, atk: 24, xpValue: 20
+    });
+    this.spawnPack('emperor_scorpion', Math.round(w * 0.26) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 2, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions_deep', {
       scale: 1.05, hp: 90, atk: 24, xpValue: 20
     });
 
     // 4. Schnee & Eisberge (Nordosten)
     // RIESIGER KOLOSS: Yeti-Wächter (Frost Giant)
-    this.spawnEnemy('frost_giant', 88 * TILE_SIZE, 16 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    this.spawnEnemy('frost_giant', Math.round(w * 0.78) * TILE_SIZE, Math.round(h * 0.20) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
       scale: 1.65, hp: 1500, atk: 65, xpValue: 220, elevation: 1
+    });
+
+    // 3er-Wache Origami-Krieger am Eispass
+    this.spawnPack('cursed_knight', Math.round(w * 0.72) * TILE_SIZE, Math.round(h * 0.26) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_ice_knights', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
     });
 
     // 5. Düsterer Sumpf (Südosten)
     // 3er-Gruppe Sporen-Spucker (Spore Spitters)
-    this.spawnPack('spore_spitter', 68 * TILE_SIZE, 62 * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_spores', {
+    this.spawnPack('spore_spitter', Math.round(w * 0.62) * TILE_SIZE, Math.round(h * 0.68) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_spores', {
       scale: 0.85, hp: 40, atk: 14, xpValue: 8
     });
 
     // 3er-Gruppe Smaragd-Nattern (Slithering Vipers) am Sumpfteich
-    this.spawnPack('slithering_viper', 82 * TILE_SIZE, 60 * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_vipers', {
+    this.spawnPack('slithering_viper', Math.round(w * 0.70) * TILE_SIZE, Math.round(h * 0.66) * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_vipers', {
       scale: 1.0, hp: 70, atk: 20, xpValue: 15
     });
 
     // 3er-Gruppe Teer-Schlamm Geister (Tar Mire)
-    this.spawnPack('tar_mire', 95 * TILE_SIZE, 75 * TILE_SIZE, 3, 26, DIMENSIONS.OVERWORLD, 'pack_tar', {
+    this.spawnPack('tar_mire', Math.round(w * 0.76) * TILE_SIZE, Math.round(h * 0.74) * TILE_SIZE, 3, 26, DIMENSIONS.OVERWORLD, 'pack_tar', {
       scale: 0.82, hp: 45, atk: 12, xpValue: 8
     });
 
     // 6. Felsgebirge & Bergpfade (Höhenebene +1, +2)
     // RIESIGER KOLOSS: Moos-Koloss (Boulder Troll) am Bergpass
-    this.spawnEnemy('boulder_troll', 56 * TILE_SIZE, 28 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    this.spawnEnemy('boulder_troll', Math.round(w * 0.58) * TILE_SIZE, Math.round(h * 0.32) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
       scale: 1.60, hp: 1400, atk: 60, xpValue: 200, elevation: 1
     });
 
     // 2er-Wache Origami-Krieger (Cursed Paper Knights)
-    this.spawnPack('cursed_knight', 70 * TILE_SIZE, 35 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_samurai', {
+    this.spawnPack('cursed_knight', Math.round(w * 0.64) * TILE_SIZE, Math.round(h * 0.36) * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_samurai', {
       scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
     });
 
-    // 7. Die Leere / Void (Osten)
+    // 7. Die Leere / Void (Genau an der Rand-Void-Zone)
     // 2er-Patrouille Leeren-Verschlinger (Void Reapers)
-    this.spawnPack('void_reaper', 108 * TILE_SIZE, 45 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers', {
+    this.spawnPack('void_reaper', (vz.x - 7) * TILE_SIZE, (vz.y - 5) * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers', {
       scale: 1.15, hp: 540, atk: 55, xpValue: 90
     });
 
-    // Zweite Patrouille Leeren-Verschlinger im Süden der Leere
-    this.spawnPack('void_reaper', 116 * TILE_SIZE, 68 * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers_south', {
+    // Zweite Patrouille Leeren-Verschlinger
+    this.spawnPack('void_reaper', (vz.x + 4) * TILE_SIZE, (vz.y + 7) * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers_south', {
       scale: 1.15, hp: 540, atk: 55, xpValue: 90
     });
 
     // RIESIGER TITAN: Schwebende Mondqualle: Auge des Abgrunds (Gazer of the Void)
-    this.spawnEnemy('gazer_of_the_void', 115 * TILE_SIZE, 55 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    this.spawnEnemy('gazer_of_the_void', vz.x * TILE_SIZE, vz.y * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
       scale: 1.55, hp: 1350, atk: 75, xpValue: 220
     });
 
     // Brunnen-Fallen: Schatten-Tentakel (Abyss Tentacles)
-    this.spawnEnemy('abyss_tentacle', 118 * TILE_SIZE, 38 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    this.spawnEnemy('abyss_tentacle', (vz.x - 6) * TILE_SIZE, (vz.y + 5) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
       scale: 1.25, hp: 480, atk: 50, xpValue: 80
     });
-    this.spawnEnemy('abyss_tentacle', 121 * TILE_SIZE, 62 * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    this.spawnEnemy('abyss_tentacle', (vz.x + 6) * TILE_SIZE, (vz.y - 5) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
       scale: 1.25, hp: 480, atk: 50, xpValue: 80
     });
 
     // 8. Brand- & Vulkanzone (Zwischen Felsen und Wüste)
-    // Laternen-Pyromant mit 5 Calcifer-Feuerdämonen (Schwarm kleiner Feuerfunken)
-    this.spawnEnemy('pyromancer', 85 * TILE_SIZE, 36 * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire', {
+    // Laternen-Pyromant mit 5 Calcifer-Feuerdämonen
+    this.spawnEnemy('pyromancer', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.76) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire', {
       scale: 1.10, hp: 130, atk: 30, xpValue: 35
     });
-    this.spawnPack('lava_core', 85 * TILE_SIZE, 38 * TILE_SIZE, 5, 24, DIMENSIONS.OVERWORLD, 'pack_fire', {
+    this.spawnPack('lava_core', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, 5, 24, DIMENSIONS.OVERWORLD, 'pack_fire', {
       scale: 0.75, hp: 25, atk: 12, xpValue: 4
     });
 
     // =========================================================================
     // HÖHLEN-SPAWNS (CAVES DIMENSION)
     // =========================================================================
-    // 6er-Schwarm Höhlen-Krallenspinnen (Cave Weavers) (klein, viele, fies)
+    // 6er-Schwarm Höhlen-Krallenspinnen (Cave Weavers) in main_complex
     this.spawnPack('cave_weaver', 32 * TILE_SIZE, 26 * TILE_SIZE, 6, 36, DIMENSIONS.CAVES, 'pack_cave_spiders', {
       scale: 0.72, hp: 24, atk: 10, xpValue: 4
     });
 
     // =========================================================================
-    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION - MASSIVES HIMMELSREICH)
+    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION - ASYMMETRISCHES INSELREICH)
     // =========================================================================
-    // Nördliche Reihe (Inseln A1 - A5)
-    // A1 (20, 20): Harpyien-Schwarm
-    this.spawnPack('sky_harpy', 20 * TILE_SIZE, 20 * TILE_SIZE, 3, 30, DIMENSIONS.CLOUDS, 'pack_harpies_a1', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // A2 (44, 20): Wolken-Astrologe mit Harpyien-Garde
-    this.spawnEnemy('star_astromancer', 44 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_a2', {
-      scale: 1.15, hp: 480, atk: 60, xpValue: 85
-    });
-    this.spawnPack('sky_harpy', 45 * TILE_SIZE, 21 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_a2', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // A3 (65, 14 - Nordgipfel Schrein): Heiligtums-Wächter Astrologe + Harpyien
-    this.spawnEnemy('star_astromancer', 65 * TILE_SIZE, 14 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_a3', {
-      scale: 1.20, hp: 520, atk: 62, xpValue: 95
-    });
-    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 16 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_sky_a3', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // A4 (86, 20): Harpyien-Garde
-    this.spawnPack('sky_harpy', 86 * TILE_SIZE, 20 * TILE_SIZE, 3, 28, DIMENSIONS.CLOUDS, 'pack_harpies_a4', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // A5 (110, 20): Fernost-Astrologe & Harpyien
-    this.spawnEnemy('star_astromancer', 110 * TILE_SIZE, 20 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_a5', {
-      scale: 1.15, hp: 480, atk: 60, xpValue: 85
-    });
-    this.spawnPack('sky_harpy', 110 * TILE_SIZE, 22 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_a5', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // Mittlere Reihe (Inseln B1 - B5)
-    // B1 (18, 44): West-Horizont Harpyien
-    this.spawnPack('sky_harpy', 18 * TILE_SIZE, 44 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_b1', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // B2 (38, 44): Westzentrum Harpyien
-    this.spawnPack('sky_harpy', 38 * TILE_SIZE, 44 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_harpies_b2', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // B3 (65, 44 - Zentrales Wolkenheiligtum Schrein): Gross-Astrologe & Elite-Schwarm
-    this.spawnEnemy('star_astromancer', 65 * TILE_SIZE, 43 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_central', {
-      scale: 1.35, hp: 650, atk: 68, xpValue: 130
-    });
-    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 46 * TILE_SIZE, 4, 32, DIMENSIONS.CLOUDS, 'pack_sky_central', {
-      scale: 1.10, hp: 410, atk: 52, xpValue: 70
-    });
-
-    // B4 (90, 44): Ostzentrum Harpyien
-    this.spawnPack('sky_harpy', 90 * TILE_SIZE, 44 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_b4', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // B5 (112, 44 - Morgenwolke Schrein): Astrologe & Harpyien
-    this.spawnEnemy('star_astromancer', 112 * TILE_SIZE, 44 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_b5', {
-      scale: 1.15, hp: 480, atk: 60, xpValue: 85
-    });
-    this.spawnPack('sky_harpy', 112 * TILE_SIZE, 46 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_b5', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // Südliche Reihe (Inseln C1 - C5)
-    // C1 (24, 70): Südwest Harpyien
-    this.spawnPack('sky_harpy', 24 * TILE_SIZE, 70 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_c1', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // C2 (44, 70): Astrologe & Harpyien
-    this.spawnEnemy('star_astromancer', 44 * TILE_SIZE, 70 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_c2', {
-      scale: 1.15, hp: 480, atk: 60, xpValue: 85
-    });
-    this.spawnPack('sky_harpy', 44 * TILE_SIZE, 72 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_c2', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // C3 (65, 74): Südgipfel Astrologe & Harpyien
-    this.spawnEnemy('star_astromancer', 65 * TILE_SIZE, 74 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_c3', {
-      scale: 1.15, hp: 480, atk: 60, xpValue: 85
-    });
-    this.spawnPack('sky_harpy', 65 * TILE_SIZE, 76 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_sky_c3', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // C4 (90, 70): Harpyien
-    this.spawnPack('sky_harpy', 90 * TILE_SIZE, 70 * TILE_SIZE, 3, 26, DIMENSIONS.CLOUDS, 'pack_harpies_c4', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
-
-    // C5 (112, 70): Fern-Südost Astrologe & Harpyien
-    this.spawnEnemy('star_astromancer', 112 * TILE_SIZE, 70 * TILE_SIZE, DIMENSIONS.CLOUDS, 'pack_sky_c5', {
-      scale: 1.15, hp: 480, atk: 60, xpValue: 85
-    });
-    this.spawnPack('sky_harpy', 112 * TILE_SIZE, 72 * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, 'pack_sky_c5', {
-      scale: 1.05, hp: 390, atk: 50, xpValue: 65
-    });
+    const cloudMap = this.getMapForDimension(DIMENSIONS.CLOUDS);
+    if (cloudMap && cloudMap.islands && cloudMap.islands.length > 0) {
+      cloudMap.islands.forEach((isl, idx) => {
+        if (idx % 2 === 0) {
+          this.spawnPack('sky_harpy', isl.x * TILE_SIZE, isl.y * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, `pack_sky_${idx}`, {
+            scale: 1.05, hp: 390, atk: 50, xpValue: 65
+          });
+        }
+        if (idx % 3 === 0) {
+          this.spawnEnemy('star_astromancer', (isl.x + 2) * TILE_SIZE, (isl.y - 1) * TILE_SIZE, DIMENSIONS.CLOUDS, `pack_sky_${idx}`, {
+            scale: 1.18, hp: 500, atk: 62, xpValue: 90
+          });
+        }
+      });
+    } else {
+      // Fallback Spawns across clouds
+      const cloudSpawns = [
+        { x: Math.round(w * 0.15), y: Math.round(h * 0.15) },
+        { x: Math.round(w * 0.35), y: Math.round(h * 0.12) },
+        { x: Math.round(w * 0.55), y: Math.round(h * 0.20) },
+        { x: Math.round(w * 0.50), y: Math.round(h * 0.48) },
+        { x: Math.round(w * 0.78), y: Math.round(h * 0.45) },
+        { x: Math.round(w * 0.60), y: Math.round(h * 0.72) }
+      ];
+      cloudSpawns.forEach((cs, i) => {
+        this.spawnPack('sky_harpy', cs.x * TILE_SIZE, cs.y * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, `pack_sky_fb_${i}`, {
+          scale: 1.05, hp: 390, atk: 50, xpValue: 65
+        });
+        if (i % 2 === 0) {
+          this.spawnEnemy('star_astromancer', cs.x * TILE_SIZE, cs.y * TILE_SIZE, DIMENSIONS.CLOUDS, `pack_sky_fb_${i}`, {
+            scale: 1.15, hp: 480, atk: 60, xpValue: 85
+          });
+        }
+      });
+    }
   }
 
   getMapForDimension(dim) {
@@ -1333,7 +1289,39 @@ export class EnemyManager {
       if (enemy.state === 'dead') {
         this.dropLoot(enemy.x, enemy.y, enemy);
         this.spawnXp(enemy.x, enemy.y, Math.max(1, enemy.xpValue || 2), enemy.dimension);
+
+        // Respawn-Berechnung nach Stärke (3-5 Min)
+        // Schwach (<= 60 HP): 3 Min (180 s)
+        // Mittel (60 < HP < 350): 4 Min (240 s)
+        // Schwer / Boss (>= 350 HP oder category 'boss'): 5 Min (300 s)
+        let respawnTime = 180;
+        if (enemy.maxHp >= 350 || enemy.category === 'boss') {
+          respawnTime = 300;
+        } else if (enemy.maxHp > 60) {
+          respawnTime = 240;
+        }
+
+        this.respawnQueue.push({
+          typeId: enemy.typeId,
+          x: enemy.homeX || enemy.x,
+          y: enemy.homeY || enemy.y,
+          dimension: enemy.dimension,
+          packId: enemy.packId,
+          options: enemy.spawnOptions ? { ...enemy.spawnOptions } : {},
+          timer: respawnTime
+        });
+
         this.enemies.splice(i, 1);
+      }
+    }
+
+    // 1b. Update Respawn Queue (tick down and respawn after 3-5 min)
+    for (let i = this.respawnQueue.length - 1; i >= 0; i--) {
+      const item = this.respawnQueue[i];
+      item.timer -= dt;
+      if (item.timer <= 0) {
+        this.spawnEnemy(item.typeId, item.x, item.y, item.dimension, item.packId, item.options);
+        this.respawnQueue.splice(i, 1);
       }
     }
 

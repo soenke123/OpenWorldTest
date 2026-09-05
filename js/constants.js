@@ -1,9 +1,9 @@
 // 16x16 Tile Size for fine, detailed pixel-art and organic shapes
 export const TILE_SIZE = 16;
 
-// World Dimensions in Tiles (130 x 90 = 2080 x 1440 px)
-export const MAP_WIDTH = 130;
-export const MAP_HEIGHT = 90;
+// World Dimensions in Tiles (290 x 200 = 4640 x 3200 px, 5x larger than original test world)
+export const MAP_WIDTH = 290;
+export const MAP_HEIGHT = 200;
 
 // Dimensions / Worlds
 export const DIMENSIONS = {

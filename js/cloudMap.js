@@ -2,9 +2,10 @@ import { MAP_WIDTH, MAP_HEIGHT, TILES, OBJECTS, BIOMES, TILE_SIZE } from './cons
 import { Noise2D } from './noise.js';
 
 export class CloudMap {
-  constructor() {
-    this.width = MAP_WIDTH;   // 130 Kacheln
-    this.height = MAP_HEIGHT; // 90 Kacheln
+  constructor(overworldMap = null, width = MAP_WIDTH, height = MAP_HEIGHT) {
+    this.overworldMap = overworldMap;
+    this.width = overworldMap ? overworldMap.width : width;
+    this.height = overworldMap ? overworldMap.height : height;
     this.name = 'Rosa Wolkenreich';
     this.biome = BIOMES.CLOUDS;
 
@@ -13,6 +14,7 @@ export class CloudMap {
     this.elevation = [];
     this.ramps = [];
     this.shrines = [];
+    this.islands = [];
 
     this.noise = new Noise2D(9923);
     this.init();
@@ -84,12 +86,11 @@ export class CloudMap {
       }
     }
 
-    this.generateCloudIslands();
+    this.generateCloudArchipelago();
     this.generateRainbowBridges();
     this.generateCloudShrines();
   }
 
-  // Generiert eine organisch geformte rosa Wolke aus mehreren überlappenden Puff-Kreisen
   createCloudPuff(cx, cy, radius, roughness = 0.3) {
     const n = this.noise;
     const r = Math.round(radius);
@@ -110,11 +111,9 @@ export class CloudMap {
     }
   }
 
-  createCloudIsland(cx, cy, radius = 5) {
-    // Kleiner zentraler fluffiger Kern
+  createCloudIsland(cx, cy, radius = 6) {
     this.createCloudPuff(cx, cy, radius);
 
-    // 7 überlappende Bausch-Lappen (Fluffy Lobes) für die süße Wolkenform
     const lobes = 7;
     for (let i = 0; i < lobes; i++) {
       const angle = (i / lobes) * Math.PI * 2;
@@ -123,33 +122,49 @@ export class CloudMap {
       const lRadius = Math.max(2, Math.round(radius * 0.55 + ((i % 2) * 1.2)));
       this.createCloudPuff(lx, ly, lRadius);
     }
+    this.islands.push({ x: cx, y: cy, radius });
   }
 
-  generateCloudIslands() {
-    // 15 kleinere, fluffige rosa Wolkeninseln im Himmel
-    // Nördliche Reihe
-    this.createCloudIsland(20, 20, 4.5);  // A1: West-Wald Himmel
-    this.createCloudIsland(44, 20, 4.5);  // A2: Nordwest Trittwolke
-    this.createCloudIsland(65, 14, 5.0);  // A3: Nordgipfel Wolke (Schrein)
-    this.createCloudIsland(86, 20, 4.5);  // A4: Nordost Schnee Himmel
-    this.createCloudIsland(110, 20, 4.5); // A5: Fernost Wolke
+  generateCloudArchipelago() {
+    this.islands = [];
 
-    // Mittlere Reihe
-    this.createCloudIsland(18, 44, 4.5);  // B1: West Horizont
-    this.createCloudIsland(38, 44, 4.5);  // B2: Westzentrum
-    this.createCloudIsland(65, 44, 5.5);  // B3: Zentrales Wolkenheiligtum (Schrein)
-    this.createCloudIsland(90, 44, 4.5);  // B4: Ostzentrum
-    this.createCloudIsland(112, 44, 5.0); // B5: Fernost Morgenwolke (Schrein)
+    // 1. Inseln direkt über den Trampolinen der Oberwelt verankern
+    if (this.overworldMap && this.overworldMap.trampolines) {
+      for (const tramp of this.overworldMap.trampolines) {
+        this.createCloudIsland(tramp.x, tramp.y, 6.0);
+      }
+    }
 
-    // Südliche Reihe
-    this.createCloudIsland(24, 70, 4.5);  // C1: Südwest Wüsten Himmel
-    this.createCloudIsland(44, 70, 4.5);  // C2: Südwest Trittwolke
-    this.createCloudIsland(65, 74, 5.0);  // C3: Südgipfel Wolke
-    this.createCloudIsland(90, 70, 4.5);  // C4: Südost Sumpf Himmel
-    this.createCloudIsland(112, 70, 4.5); // C5: Fern-Südost Wolke
+    // 2. Zusätzliche asymmetrische Wolken-Cluster über die gesamte 290x200 Welt verteilen
+    const extraSpots = [
+      { x: Math.round(this.width * 0.15), y: Math.round(this.height * 0.15), r: 7.0 },
+      { x: Math.round(this.width * 0.35), y: Math.round(this.height * 0.12), r: 6.5 },
+      { x: Math.round(this.width * 0.55), y: Math.round(this.height * 0.20), r: 8.0 },
+      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.16), r: 7.5 },
+      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.45), r: 6.0 },
+      { x: Math.round(this.width * 0.50), y: Math.round(this.height * 0.48), r: 9.0 },
+      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.45), r: 7.0 },
+      { x: Math.round(this.width * 0.25), y: Math.round(this.height * 0.68), r: 6.5 },
+      { x: Math.round(this.width * 0.60), y: Math.round(this.height * 0.72), r: 8.0 },
+      { x: Math.round(this.width * 0.85), y: Math.round(this.height * 0.80), r: 7.0 },
+      { x: Math.round(this.width * 0.40), y: Math.round(this.height * 0.85), r: 6.5 }
+    ];
+
+    for (const spot of extraSpots) {
+      // Prüfe, ob nicht schon eine Trampolin-Insel zu nah dran ist
+      let tooClose = false;
+      for (const isl of this.islands) {
+        if (Math.hypot(isl.x - spot.x, isl.y - spot.y) < 18) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (!tooClose) {
+        this.createCloudIsland(spot.x, spot.y, spot.r);
+      }
+    }
   }
 
-  // Horizontale Regenbogenbrücke
   createRainbowBridgeH(x1, x2, y, thickness = 2) {
     const minX = Math.min(x1, x2);
     const maxX = Math.max(x1, x2);
@@ -163,7 +178,6 @@ export class CloudMap {
     }
   }
 
-  // Vertikale Regenbogenbrücke
   createRainbowBridgeV(y1, y2, x, thickness = 2) {
     const minY = Math.min(y1, y2);
     const maxY = Math.max(y1, y2);
@@ -178,57 +192,56 @@ export class CloudMap {
   }
 
   generateRainbowBridges() {
-    // ========================================================================
-    // LANGE REGENBOGENBRÜCKEN ZWISCHEN DEN FLUFFIGEN WOLKENINSELN
-    // ========================================================================
-    // 1. Nördliche Querbrücken
-    this.createRainbowBridgeH(25, 39, 20, 2);   // A1 -> A2 (15 Kacheln)
-    this.createRainbowBridgeH(49, 60, 18, 2);   // A2 -> A3 (12 Kacheln)
-    this.createRainbowBridgeV(15, 18, 60, 2);
-    this.createRainbowBridgeH(70, 81, 18, 2);   // A3 -> A4 (12 Kacheln)
-    this.createRainbowBridgeV(15, 18, 70, 2);
-    this.createRainbowBridgeH(91, 105, 20, 2);  // A4 -> A5 (15 Kacheln)
+    // Verbinde gezielt einige nahegelegene Inselpaare zu Clustern,
+    // lasse aber andere Inseln freistehend/losgelöst im Himmel schweben
+    for (let i = 0; i < this.islands.length; i++) {
+      for (let j = i + 1; j < this.islands.length; j++) {
+        const a = this.islands[i];
+        const b = this.islands[j];
 
-    // 2. Mittlere Haupt-Himmelsstraße (Lange Brücken ins Zentrum)
-    this.createRainbowBridgeH(23, 33, 44, 2);   // B1 -> B2 (11 Kacheln)
-    this.createRainbowBridgeH(43, 59, 44, 2);   // B2 -> B3 Zentrum (17 Kacheln!)
-    this.createRainbowBridgeH(71, 85, 44, 2);   // B3 Zentrum -> B4 (15 Kacheln!)
-    this.createRainbowBridgeH(95, 107, 44, 2);  // B4 -> B5 (13 Kacheln)
+        const dx = Math.abs(a.x - b.x);
+        const dy = Math.abs(a.y - b.y);
 
-    // 3. Südliche Querbrücken
-    this.createRainbowBridgeH(29, 39, 70, 2);   // C1 -> C2 (11 Kacheln)
-    this.createRainbowBridgeH(49, 60, 72, 2);   // C2 -> C3 (12 Kacheln)
-    this.createRainbowBridgeV(72, 74, 60, 2);
-    this.createRainbowBridgeH(70, 85, 72, 2);   // C3 -> C4 (16 Kacheln)
-    this.createRainbowBridgeV(72, 74, 70, 2);
-    this.createRainbowBridgeH(95, 107, 70, 2);  // C4 -> C5 (13 Kacheln)
-
-    // 4. Lange vertikale Himmelsbögen (Nord nach Süd)
-    this.createRainbowBridgeV(20, 39, 65, 2);   // A3 Nordgipfel -> B3 Zentrum (20 Kacheln!)
-    this.createRainbowBridgeV(49, 69, 65, 2);   // B3 Zentrum -> C3 Südgipfel (21 Kacheln!)
-
-    // 5. Äußere vertikale Verbindungen
-    this.createRainbowBridgeV(25, 39, 19, 2);   // A1 -> B1 (15 Kacheln)
-    this.createRainbowBridgeV(49, 65, 21, 2);   // B1 -> C1 (17 Kacheln)
-
-    this.createRainbowBridgeV(25, 39, 111, 2);  // A5 -> B5 (15 Kacheln)
-    this.createRainbowBridgeV(49, 65, 112, 2);  // B5 -> C5 (17 Kacheln)
+        // Horizontale Nachbarn mit kleinem Y-Versatz
+        if (dx >= 14 && dx <= 38 && dy <= 6) {
+          if (this.noise.noise(a.x * 0.1, b.y * 0.1) > -0.2) {
+            this.createRainbowBridgeH(a.x, b.x, Math.round((a.y + b.y) / 2), 2);
+          }
+        }
+        // Vertikale Nachbarn mit kleinem X-Versatz
+        else if (dy >= 14 && dy <= 38 && dx <= 6) {
+          if (this.noise.noise(b.x * 0.1, a.y * 0.1) > -0.2) {
+            this.createRainbowBridgeV(a.y, b.y, Math.round((a.x + b.x) / 2), 2);
+          }
+        }
+      }
+    }
   }
 
   generateCloudShrines() {
-    // 1. Schrein des Himmels-Zenits (Im Zentrum des zentralen Wolkenheiligtums)
-    const shrineCenter = { x: 65, y: 42, name: 'Schrein des Himmels-Zenits' };
-    this.objects[shrineCenter.y][shrineCenter.x] = OBJECTS.SHRINE;
-    this.shrines.push(shrineCenter);
+    this.shrines = [];
 
-    // 2. Schrein der Rosa Dämmerung (Auf der Fernost-Morgenwolke)
-    const shrineEast = { x: 112, y: 42, name: 'Schrein der Rosa Dämmerung' };
-    this.objects[shrineEast.y][shrineEast.x] = OBJECTS.SHRINE;
-    this.shrines.push(shrineEast);
+    // Platziere 4 bis 6 Shinto-Schreine auf den größeren Wolkeninseln
+    const shrineNames = [
+      'Schrein der Äther-Winde',
+      'Schrein des Morgensterns',
+      'Schrein der Schwebenden Gipfel',
+      'Schrein des Regenbogens',
+      'Schrein der Weißen Schwingen',
+      'Schrein der Aurora'
+    ];
 
-    // 3. Schrein des Regenbogen-Wächters (Auf dem Nordgipfel)
-    const shrineNorth = { x: 65, y: 13, name: 'Schrein des Regenbogen-Wächters' };
-    this.objects[shrineNorth.y][shrineNorth.x] = OBJECTS.SHRINE;
-    this.shrines.push(shrineNorth);
+    let nameIdx = 0;
+    for (const isl of this.islands) {
+      if (isl.radius >= 6.5 && nameIdx < shrineNames.length) {
+        const sx = isl.x;
+        const sy = isl.y - 1;
+        if (this.isValid(sx, sy)) {
+          this.objects[sy][sx] = OBJECTS.SHRINE;
+          this.shrines.push({ x: sx, y: sy, name: shrineNames[nameIdx] });
+          nameIdx++;
+        }
+      }
+    }
   }
 }

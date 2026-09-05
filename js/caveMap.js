@@ -322,7 +322,7 @@ export class CaveMap {
     placeTorchIfFloor(roomSub.x - 2, roomSub.y);
     placeTorchIfFloor(roomSub.x + 2, roomSub.y);
 
-    // Seltene Schrein-Nische am Seeufer
+    // Seltene Schrein-Nische am Seeufer (Schrein 1)
     const shrineX = roomNE.x + 7;
     const shrineY = roomNE.y - 4;
     if (this.isValid(shrineX, shrineY) && this.ground[shrineY][shrineX] === TILES.CAVE_FLOOR) {
@@ -330,6 +330,17 @@ export class CaveMap {
       this.shrines.push({ x: shrineX, y: shrineY, name: 'Schrein des Tiefenwassers' });
       placeTorchIfFloor(shrineX - 2, shrineY);
       placeTorchIfFloor(shrineX + 2, shrineY);
+    }
+
+    // Zweiter Schrein im Höhlensystem: Schrein der Uralten Tiefen (Schrein 2)
+    const shrine2X = roomSW.x - 5;
+    const shrine2Y = roomSW.y + 4;
+    if (this.isValid(shrine2X, shrine2Y)) {
+      this.ground[shrine2Y][shrine2X] = TILES.CAVE_FLOOR;
+      this.objects[shrine2Y][shrine2X] = OBJECTS.SHRINE;
+      this.shrines.push({ x: shrine2X, y: shrine2Y, name: 'Schrein der Uralten Tiefen' });
+      placeTorchIfFloor(shrine2X - 2, shrine2Y);
+      placeTorchIfFloor(shrine2X + 2, shrine2Y);
     }
   }
 

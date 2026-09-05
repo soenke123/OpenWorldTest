@@ -71,6 +71,12 @@
               <button id="dev-equip-plasma" class="dev-action-btn" style="flex: 1; padding: 4px 2px; font-size: 0.72rem; color: #f472b6;" title="Rosa Plasmakugeln ausrüsten">🔮 Plasma</button>
               <button id="dev-equip-teleport" class="dev-action-btn" style="flex: 1; padding: 4px 2px; font-size: 0.72rem; color: #c084fc;" title="Leeren-Teleport ausrüsten">🌌 Teleport</button>
             </div>
+            <div class="dev-dropdown-row" style="margin-top: 6px;">
+              <span class="hud-label" style="font-size: 0.72rem;">🗺️ Welt:</span>
+              <select id="dev-world-select" class="dev-dropdown" style="font-size: 0.72rem; width: 100%;">
+                <option value="">Lade Welten...</option>
+              </select>
+            </div>
           </div>
 
           <div class="hud-panel" id="biome-panel">
@@ -526,6 +532,14 @@
           <div class="char-confirm-intro">
             <p id="char-confirm-greeting" class="char-confirm-greeting">Du bist <span id="confirm-hero-name" class="highlight-name">Ren</span>,</p>
             <p id="char-confirm-sub" class="char-confirm-sub">der Schattengänger.</p>
+          </div>
+          <div class="wizard-world-select-card">
+            <div class="world-select-header">
+              <span class="world-label-icon">🗺️</span>
+              <span class="world-label-text">Wähle deine Spielwelt:</span>
+            </div>
+            <select id="world-preset-select" class="world-preset-select"></select>
+            <div id="world-preset-desc" class="world-preset-desc">Lade Weltbeschreibung...</div>
           </div>
           <div class="wizard-nav-row">
             <button id="btn-step3-back" class="btn-wizard-nav btn-wizard-secondary">
