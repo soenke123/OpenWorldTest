@@ -7473,6 +7473,8 @@ class Player {
     this.level = 1;
     this.xp = 0;
     this.xpToNext = 50;
+    this.totalXpEarned = 0;
+    this.lastDeathInfo = null;
 
     // Skills & Stat Progression (HP, Melee, Range, Shield)
     this.skills = {
@@ -7574,6 +7576,7 @@ class Player {
   addXp(amount) {
     if (amount <= 0) return;
     this.xp += amount;
+    this.totalXpEarned = (this.totalXpEarned || 0) + amount;
 
     let leveledUp = false;
     while (this.xp >= this.xpToNext) {
@@ -7604,6 +7607,17 @@ class Player {
         }
       }
     }
+  }
+
+  getTotalXpEarned() {
+    if (this.totalXpEarned && this.totalXpEarned > 0) {
+      return this.totalXpEarned;
+    }
+    let total = this.xp || 0;
+    for (let lvl = 1; lvl < this.level; lvl++) {
+      total += Math.round(50 * Math.pow(1.35, lvl - 1));
+    }
+    return total;
   }
 
   investSkillPoint(attribute) {
@@ -8703,6 +8717,86 @@ class Player {
     this.deathTimer = 0;
     this.deathCount++;
 
+    // 1. Calculate and drop 10% of total earned XP at death position (on safe ground if void)
+    const totalEarned = this.getTotalXpEarned();
+    const dropXp = Math.max(0, Math.round(totalEarned * 0.10));
+    const currentDim = this.game?.currentDimension || 'overworld';
+
+    let dropX = this.x;
+    let dropY = this.y;
+    const curTileX = Math.floor(this.x / TILE_SIZE);
+    const curTileY = Math.floor(this.y / TILE_SIZE);
+    if (cause === 'void' || (this.map && typeof this.map.isDeadly === 'function' && this.map.isDeadly(curTileX, curTileY))) {
+      const safePos = this.findSafeLandingPosition(this.map, this.x, this.y);
+      dropX = safePos.x;
+      dropY = safePos.y;
+    }
+
+    if (this.game && this.game.enemyManager && dropXp > 0) {
+      this.game.enemyManager.spawnXp(dropX, dropY, dropXp, currentDim);
+    }
+
+    // 2. Exact Level Halving (e.g. 4.70 -> 2.35)
+    const oldExactLevel = this.level + (this.xpToNext > 0 ? (this.xp / this.xpToNext) : 0);
+    const newExactLevel = Math.max(1.0, oldExactLevel / 2);
+
+    this.level = Math.floor(newExactLevel);
+    const fraction = newExactLevel - this.level;
+    this.xpToNext = Math.round(50 * Math.pow(1.35, this.level - 1));
+    this.xp = Math.round(fraction * this.xpToNext);
+    this.totalXpEarned = this.getTotalXpEarned();
+
+    // 3. Even Skill Reduction matching new level
+    const targetTotalPoints = Math.max(0, this.level - 1);
+    const currentTotalPoints = (this.skills.hp + this.skills.melee + this.skills.range + this.skills.shield) + (this.skillPoints || 0);
+    let pointsToRemove = Math.max(0, currentTotalPoints - targetTotalPoints);
+    let skillsReducedCount = 0;
+
+    if (pointsToRemove > 0) {
+      // First, deduct from unspent skill points
+      const deductFromUnspent = Math.min(this.skillPoints || 0, pointsToRemove);
+      this.skillPoints -= deductFromUnspent;
+      pointsToRemove -= deductFromUnspent;
+
+      // Second, evenly reduce invested skills (round-robin from highest invested skills)
+      while (pointsToRemove > 0) {
+        const maxVal = Math.max(this.skills.hp, this.skills.melee, this.skills.range, this.skills.shield);
+        if (maxVal <= 0) break;
+
+        const candidateSkills = ['hp', 'melee', 'range', 'shield'].filter(s => this.skills[s] === maxVal);
+        for (const s of candidateSkills) {
+          if (pointsToRemove <= 0) break;
+          this.skills[s]--;
+          skillsReducedCount++;
+          pointsToRemove--;
+        }
+      }
+
+      // Recalculate stats based on updated skills
+      this.maxHp = 100 + (this.skills.hp || 0) * 15;
+      this.hp = Math.min(this.hp, this.maxHp);
+      const maxShield = COMBAT_CONFIG.SHIELD_MAX + (this.skills.shield || 0) * 15;
+      this.shield.maxEnergy = maxShield;
+      this.shield.energy = Math.min(this.shield.energy, this.shield.maxEnergy);
+    }
+
+    // 4. Record death info for UI overlay
+    this.lastDeathInfo = {
+      cause,
+      oldExactLevel,
+      newExactLevel,
+      dropXp,
+      skillsReducedCount
+    };
+
+    if (this.game && this.game.combat) {
+      this.game.combat.addFloatingText(`💀 Level halbiert: ${oldExactLevel.toFixed(2)} → ${newExactLevel.toFixed(2)}`, this.x, this.y - 28, '#ef4444', 1.4);
+      if (dropXp > 0) {
+        this.game.combat.addFloatingText(`✨ -${dropXp} EP verloren`, this.x, this.y - 44, '#facc15', 1.4);
+      }
+    }
+
+    // Death particle burst
     for (let i = 0; i < 25; i++) {
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.random() * 35;
@@ -11977,8 +12071,34 @@ class Game {
     }
 
     if (this.deathOverlay) {
-      if (this.player.isDead) this.deathOverlay.classList.remove('hidden');
-      else this.deathOverlay.classList.add('hidden');
+      if (this.player.isDead) {
+        this.deathOverlay.classList.remove('hidden');
+        const info = this.player.lastDeathInfo;
+        const titleEl = document.getElementById('death-title');
+        const descEl = document.getElementById('death-desc');
+        const detailsEl = document.getElementById('death-penalty-details');
+        const levelEl = document.getElementById('death-penalty-level');
+        const xpEl = document.getElementById('death-penalty-xp');
+        const skillsEl = document.getElementById('death-penalty-skills');
+
+        if (info) {
+          if (titleEl) titleEl.textContent = info.cause === 'enemy' ? 'IM KAMPF GEFALLEN!' : 'IN DIE LEERE GESTÜRZT!';
+          if (descEl) descEl.textContent = info.cause === 'enemy' ? 'Ein Monster hat dich überwältigt...' : 'Der Abgrund hat dich verschlungen...';
+          if (detailsEl) detailsEl.classList.remove('hidden');
+          if (levelEl) levelEl.textContent = `⚡ Level halbiert: Lv. ${info.oldExactLevel.toFixed(2)} → Lv. ${info.newExactLevel.toFixed(2)}`;
+          if (xpEl) xpEl.textContent = `✨ ${info.dropXp} EP als Beute gedroppt`;
+          if (skillsEl) {
+            if (info.skillsReducedCount > 0) {
+              skillsEl.textContent = `🛡️ ${info.skillsReducedCount} Skillpunkt${info.skillsReducedCount > 1 ? 'e' : ''} gleichmäßig abgebaut`;
+              skillsEl.classList.remove('hidden');
+            } else {
+              skillsEl.classList.add('hidden');
+            }
+          }
+        }
+      } else {
+        this.deathOverlay.classList.add('hidden');
+      }
     }
 
     // Time-of-Day HUD Update

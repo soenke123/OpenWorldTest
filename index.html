@@ -228,8 +228,13 @@
     <!-- Death Screen Overlay -->
     <div id="death-overlay" class="hidden">
       <div class="death-box">
-        <h2>IN DIE LEERE GESTÜRZT!</h2>
-        <p>Der Abgrund hat dich verschlungen...</p>
+        <h2 id="death-title">IN DIE LEERE GESTÜRZT!</h2>
+        <p id="death-desc">Der Abgrund hat dich verschlungen...</p>
+        <div id="death-penalty-details" class="death-penalty-details hidden">
+          <div id="death-penalty-level" class="death-penalty-item">⚡ Level halbiert: Lv. 4.70 → Lv. 2.35</div>
+          <div id="death-penalty-xp" class="death-penalty-item">✨ 10% EP auf den Boden gefallen</div>
+          <div id="death-penalty-skills" class="death-penalty-item hidden">🛡️ Fähigkeiten gleichmäßig reduziert</div>
+        </div>
         <span class="respawn-timer">Respawn wird ausgeführt...</span>
       </div>
     </div>

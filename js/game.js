@@ -689,8 +689,34 @@ class Game {
     }
 
     if (this.deathOverlay) {
-      if (this.player.isDead) this.deathOverlay.classList.remove('hidden');
-      else this.deathOverlay.classList.add('hidden');
+      if (this.player.isDead) {
+        this.deathOverlay.classList.remove('hidden');
+        const info = this.player.lastDeathInfo;
+        const titleEl = document.getElementById('death-title');
+        const descEl = document.getElementById('death-desc');
+        const detailsEl = document.getElementById('death-penalty-details');
+        const levelEl = document.getElementById('death-penalty-level');
+        const xpEl = document.getElementById('death-penalty-xp');
+        const skillsEl = document.getElementById('death-penalty-skills');
+
+        if (info) {
+          if (titleEl) titleEl.textContent = info.cause === 'enemy' ? 'IM KAMPF GEFALLEN!' : 'IN DIE LEERE GESTÜRZT!';
+          if (descEl) descEl.textContent = info.cause === 'enemy' ? 'Ein Monster hat dich überwältigt...' : 'Der Abgrund hat dich verschlungen...';
+          if (detailsEl) detailsEl.classList.remove('hidden');
+          if (levelEl) levelEl.textContent = `⚡ Level halbiert: Lv. ${info.oldExactLevel.toFixed(2)} → Lv. ${info.newExactLevel.toFixed(2)}`;
+          if (xpEl) xpEl.textContent = `✨ ${info.dropXp} EP als Beute gedroppt`;
+          if (skillsEl) {
+            if (info.skillsReducedCount > 0) {
+              skillsEl.textContent = `🛡️ ${info.skillsReducedCount} Skillpunkt${info.skillsReducedCount > 1 ? 'e' : ''} gleichmäßig abgebaut`;
+              skillsEl.classList.remove('hidden');
+            } else {
+              skillsEl.classList.add('hidden');
+            }
+          }
+        }
+      } else {
+        this.deathOverlay.classList.add('hidden');
+      }
     }
 
     // Time-of-Day HUD Update
