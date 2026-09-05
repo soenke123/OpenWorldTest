@@ -28,6 +28,9 @@
       <button id="btn-mode-bestiary" class="mode-btn">
         <span>👾 Bestiarium (20 Gegner)</span>
       </button>
+      <button id="btn-mode-characters" class="mode-btn">
+        <span>🎭 Charaktere (15 Helden)</span>
+      </button>
     </div>
 
     <!-- Quick Style Switcher (Available in Playground Mode) -->
@@ -531,6 +534,27 @@
       </div>
 
       <div class="tweak-row">
+        <span>Held / Skin:</span>
+        <select id="select-hero-skin" class="tweak-select" onchange="showroom.setPlayerSkin(this.value)">
+          <option value="ren_twilight">Ren (Schattengänger)</option>
+          <option value="kaito_wind">Kaito (Windläufer)</option>
+          <option value="jiro_ronin">Jiro (Papier-Ronin)</option>
+          <option value="taro_lantern">Taro (Lampion-Schmied)</option>
+          <option value="sora_miko">Sora (Kirschblüten-Miko)</option>
+          <option value="kanna_wolf">Kanna (Wolfsprinzessin)</option>
+          <option value="aoi_celestial">Aoi (Sternen-Weise)</option>
+          <option value="mei_herbalist">Mei (Kräuter-Nomadin)</option>
+          <option value="yuto_kitsune">Kitsune Yuto (Fuchs)</option>
+          <option value="poko_tanuki">Tanuki Poko (Marderhund)</option>
+          <option value="kuro_neko">Neko Kuro (Schattenkater)</option>
+          <option value="toru_totoro">Totoro Toru (Waldwächter)</option>
+          <option value="hayate_tengu">Tengu Hayate (Rabenkrieger)</option>
+          <option value="shiratama_spirit">Yurei Shiratama (Geist)</option>
+          <option value="mukuro_shadow">Mukuro (Leeren-Schatten)</option>
+        </select>
+      </div>
+
+      <div class="tweak-row">
         <span>Scanlines / CRT:</span>
         <input type="checkbox" id="check-crt" class="tweak-toggle" onchange="showroom.toggleCRT(this.checked)">
       </div>
@@ -587,6 +611,38 @@
      <div id="bestiary-grid" class="bestiary-grid"></div>
    </section>
  
+   <!-- =======================================================
+        VIEW 4: CHARACTERS VIEW (15 Playable Ghibli Heroes)
+        ======================================================= -->
+   <section id="characters-view" class="hidden">
+     <div class="characters-hero">
+       <div class="characters-hero-badge">🎭 Ocarina of Brawls • Helden-Roster</div>
+       <h1>15 Spielbare Charaktere & Helden-Skins</h1>
+       <p>Handgezeichnet im <strong>Süßen Dark Ghibli 2.5D Papercraft-Stil</strong>. Alle Helden besitzen exakt die gleichen Angriffe, Hitboxen, Stats und Mechaniken deines Hauptcharakters. Wähle deinen Favoriten für den Showroom und das Hauptspiel!</p>
+
+       <!-- Category Filter Pills -->
+       <div id="characters-filters" class="filter-pills-row">
+         <button class="char-filter-btn active" data-category="all">Alle (15)</button>
+         <button class="char-filter-btn" data-category="male">⚔️ Männlich (4)</button>
+         <button class="char-filter-btn" data-category="female">🌸 Weiblich (4)</button>
+         <button class="char-filter-btn" data-category="beast">🐾 Tierwesen (5)</button>
+         <button class="char-filter-btn" data-category="spirit">👻 Geisterwesen (2)</button>
+       </div>
+     </div>
+
+     <!-- Active Hero Selection Banner -->
+     <div class="active-hero-banner">
+       <div class="active-hero-left">
+         <span class="active-hero-label">Aktiver Held:</span>
+         <span id="active-hero-badge-name" class="active-hero-name">Ren (Schattengänger)</span>
+       </div>
+       <div class="active-hero-info">✓ Für Showroom Playground &amp; Hauptspiel aktiv</div>
+     </div>
+
+     <!-- 15 Characters Grid -->
+     <div id="characters-grid" class="characters-grid"></div>
+   </section>
+
    <!-- Script: Showroom Engine & Style Renderers -->
    <script type="module" src="showroom.js"></script>
  </body>

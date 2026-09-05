@@ -1,4 +1,5 @@
 import { BestiaryManager } from './bestiary.js';
+import { CHARACTERS_DATA, CHARACTERS_MAP, getSelectedSkin, setSelectedSkin } from './js/characters.js';
 
 /**
  * Welt-Design Showroom Engine
@@ -1134,6 +1135,12 @@ function drawGhibliTree(ctx, tree, t) {
 function drawGhibliPlayer(ctx, player, t) {
   const px = Math.round(player.x);
   const py = Math.round(player.y);
+
+  if (player.skinId && CHARACTERS_MAP[player.skinId]) {
+    CHARACTERS_MAP[player.skinId].render(ctx, px, py, t, player.direction || 'down', player.isMoving, 0);
+    return;
+  }
+
   const bob = player.isMoving ? Math.sin(t * 9) * 1.5 : 0;
 
   // Shadow
@@ -1626,6 +1633,12 @@ function drawPaperMononokeTree(ctx, tree, t) {
 function drawPaperMononokePlayer(ctx, player, t) {
   const px = Math.round(player.x);
   const py = Math.round(player.y);
+
+  if (player.skinId && CHARACTERS_MAP[player.skinId]) {
+    CHARACTERS_MAP[player.skinId].render(ctx, px, py, t, player.direction || 'down', player.isMoving, 0);
+    return;
+  }
+
   const bob = player.isMoving ? Math.sin(t * 10) * 1.5 : 0;
 
   // Paper card drop shadow
@@ -1880,6 +1893,12 @@ function drawPaperGiantMushroom(ctx, tree, t) {
 function drawPaperSporesPlayer(ctx, player, t) {
   const px = Math.round(player.x);
   const py = Math.round(player.y);
+
+  if (player.skinId && CHARACTERS_MAP[player.skinId]) {
+    CHARACTERS_MAP[player.skinId].render(ctx, px, py, t, player.direction || 'down', player.isMoving, 0);
+    return;
+  }
+
   const bob = player.isMoving ? Math.sin(t * 10) * 1.5 : 0;
 
   // Shadow
@@ -2090,6 +2109,12 @@ function drawPaperLanternTree(ctx, tree, t) {
 function drawPaperLanternPlayer(ctx, player, t) {
   const px = Math.round(player.x);
   const py = Math.round(player.y);
+
+  if (player.skinId && CHARACTERS_MAP[player.skinId]) {
+    CHARACTERS_MAP[player.skinId].render(ctx, px, py, t, player.direction || 'down', player.isMoving, 0);
+    return;
+  }
+
   const bob = player.isMoving ? Math.sin(t * 10) * 1.5 : 0;
 
   // Shadow
@@ -2178,6 +2203,247 @@ function applyTimeOfDayTint(ctx, cam, timeOfDay) {
 }
 
 // ============================================================================
+// 8b. CHARACTER SHOWCASE MANAGER (15 Playable Heroes)
+// ============================================================================
+export class CharacterShowcaseManager {
+  constructor(app = null) {
+    this.app = app;
+    this.container = document.getElementById('characters-grid');
+    this.activeHeroBadge = document.getElementById('active-hero-badge-name');
+    this.filtersContainer = document.getElementById('characters-filters');
+    this.canvases = {};
+    this.charStates = {};
+    this.currentCategory = 'all';
+    this.selectedSkin = getSelectedSkin();
+    this.initialized = false;
+
+    // Initialize individual animation states for all 15 characters
+    CHARACTERS_DATA.forEach(char => {
+      this.charStates[char.id] = {
+        animTime: 0,
+        direction: 'down',
+        isMoving: true,
+        hitTimer: 0
+      };
+    });
+  }
+
+  init() {
+    if (!this.container) {
+      this.container = document.getElementById('characters-grid');
+    }
+    if (!this.activeHeroBadge) {
+      this.activeHeroBadge = document.getElementById('active-hero-badge-name');
+    }
+    if (!this.filtersContainer) {
+      this.filtersContainer = document.getElementById('characters-filters');
+    }
+
+    this.selectedSkin = getSelectedSkin();
+    this.updateActiveHeroBadge();
+
+    if (!this.initialized) {
+      this.initFilterEvents();
+      this.initialized = true;
+    }
+    this.renderCards();
+  }
+
+  updateActiveHeroBadge() {
+    if (this.activeHeroBadge && CHARACTERS_MAP[this.selectedSkin]) {
+      const char = CHARACTERS_MAP[this.selectedSkin];
+      this.activeHeroBadge.textContent = `${char.name} (${char.title.split(' (')[0]})`;
+    }
+  }
+
+  initFilterEvents() {
+    if (!this.filtersContainer) return;
+    this.filtersContainer.querySelectorAll('.char-filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.filtersContainer.querySelectorAll('.char-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        this.currentCategory = btn.dataset.category || 'all';
+        this.renderCards();
+      });
+    });
+  }
+
+  selectSkin(skinId) {
+    if (!CHARACTERS_MAP[skinId]) return;
+    this.selectedSkin = skinId;
+    setSelectedSkin(skinId);
+    this.updateActiveHeroBadge();
+
+    if (this.app && this.app.player) {
+      this.app.player.skinId = skinId;
+    }
+
+    const select = document.getElementById('select-hero-skin');
+    if (select && select.value !== skinId) {
+      select.value = skinId;
+    }
+
+    // Update active visual cues on cards
+    if (this.container) {
+      this.container.querySelectorAll('.character-card').forEach(card => {
+        const isChosen = card.dataset.id === skinId;
+        card.classList.toggle('is-active-skin', isChosen);
+        const btn = card.querySelector('.btn-choose-skin');
+        if (btn) {
+          btn.classList.toggle('btn-is-chosen', isChosen);
+          btn.textContent = isChosen ? '✓ Aktiver Held' : '🎮 Als Held wählen';
+        }
+        let activeTag = card.querySelector('.char-active-indicator');
+        if (isChosen && !activeTag) {
+          const badgeGroup = card.querySelector('.char-badges-group');
+          if (badgeGroup) {
+            const tag = document.createElement('span');
+            tag.className = 'char-active-indicator';
+            tag.textContent = '✓ Aktiv';
+            badgeGroup.appendChild(tag);
+          }
+        } else if (!isChosen && activeTag) {
+          activeTag.remove();
+        }
+      });
+    }
+  }
+
+  renderCards() {
+    if (!this.container) return;
+    this.container.innerHTML = '';
+    this.canvases = {};
+
+    const filtered = this.currentCategory === 'all'
+      ? CHARACTERS_DATA
+      : CHARACTERS_DATA.filter(c => c.category === this.currentCategory);
+
+    filtered.forEach(char => {
+      const st = this.charStates[char.id];
+      const isSelected = char.id === this.selectedSkin;
+
+      const card = document.createElement('div');
+      card.className = `character-card ${isSelected ? 'is-active-skin' : ''}`;
+      card.dataset.id = char.id;
+      card.dataset.category = char.category;
+
+      card.innerHTML = `
+        <div class="char-card-header">
+          <div class="char-title-group">
+            <h3>${char.name}</h3>
+            <span class="char-title">${char.title}</span>
+          </div>
+          <div class="char-badges-group">
+            <span class="char-badge ${char.badgeClass}">${char.categoryName}</span>
+            ${isSelected ? '<span class="char-active-indicator">✓ Aktiv</span>' : ''}
+          </div>
+        </div>
+
+        <div class="char-preview-stage">
+          <canvas id="char-canvas-${char.id}" class="char-canvas" width="80" height="80"></canvas>
+          <div class="char-stage-controls">
+            <button class="char-stage-btn btn-char-anim" title="Animation (Laufen / Stehen)">
+              Modus: <span class="anim-label">${st.isMoving ? 'LAUFEN' : 'STEHEN'}</span>
+            </button>
+            <button class="char-stage-btn btn-char-dir" title="Blickrichtung drehen">
+              🔄 Blick: <span class="dir-label">${st.direction.toUpperCase()}</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="char-details-panel">
+          <p class="char-desc">${char.desc}</p>
+          <div class="char-palette-row">
+            <span class="char-palette-label">Palette:</span>
+            ${char.palette.map(c => `<span class="char-color-dot" style="background:${c}"></span>`).join('')}
+          </div>
+          <div class="char-lore-quote">„${char.lore}“</div>
+        </div>
+
+        <div class="char-card-actions">
+          <button class="char-btn btn-choose-skin ${isSelected ? 'btn-is-chosen' : ''}" title="Diesen Helden für Spiel & Showroom auswählen">
+            ${isSelected ? '✓ Aktiver Held' : '🎮 Als Held wählen'}
+          </button>
+          <button class="char-btn btn-test-playground" title="Sofort im Playground testen">
+            🕹️ Testen
+          </button>
+        </div>
+      `;
+
+      this.container.appendChild(card);
+
+      const canvas = card.querySelector(`#char-canvas-${char.id}`);
+      if (canvas) {
+        this.canvases[char.id] = canvas;
+      }
+
+      // Wire Modus Toggle (Idle vs Moving)
+      const btnAnim = card.querySelector('.btn-char-anim');
+      const animLabel = card.querySelector('.anim-label');
+      if (btnAnim && animLabel) {
+        btnAnim.addEventListener('click', (e) => {
+          e.stopPropagation();
+          st.isMoving = !st.isMoving;
+          animLabel.textContent = st.isMoving ? 'LAUFEN' : 'STEHEN';
+        });
+      }
+
+      // Wire Direction Cycle (8 directions)
+      const btnDir = card.querySelector('.btn-char-dir');
+      const dirLabel = card.querySelector('.dir-label');
+      const dirs = ['down', 'down-right', 'right', 'up-right', 'up', 'up-left', 'left', 'down-left'];
+      if (btnDir && dirLabel) {
+        btnDir.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const nextIdx = (dirs.indexOf(st.direction) + 1) % dirs.length;
+          st.direction = dirs[nextIdx];
+          dirLabel.textContent = st.direction.toUpperCase();
+        });
+      }
+
+      // Wire Select Hero button
+      const btnSelect = card.querySelector('.btn-choose-skin');
+      if (btnSelect) {
+        btnSelect.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.selectSkin(char.id);
+        });
+      }
+
+      // Wire Test in Playground button
+      const btnTest = card.querySelector('.btn-test-playground');
+      if (btnTest) {
+        btnTest.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.selectSkin(char.id);
+          if (this.app) {
+            this.app.openPlayground('paper_mononoke');
+          }
+        });
+      }
+    });
+  }
+
+  update(dt) {
+    CHARACTERS_DATA.forEach(char => {
+      const st = this.charStates[char.id];
+      if (!st) return;
+      st.animTime += dt;
+      if (st.hitTimer > 0) st.hitTimer -= dt;
+
+      const canvas = this.canvases[char.id];
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = true;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // Render hero centered at py = 52 (ground base) in 80x80 canvas
+        char.render(ctx, 40, 52, st.animTime, st.direction, st.isMoving, Math.max(0, st.hitTimer));
+      }
+    });
+  }
+}
+
+// ============================================================================
 // 9. SHOWROOM MAIN APPLICATION CONTROLLER
 // ============================================================================
 class ShowroomApp {
@@ -2193,7 +2459,9 @@ class ShowroomApp {
       x: 30 * 16,
       y: 42 * 16,
       isMoving: false,
-      speed: 130
+      speed: 130,
+      direction: 'down',
+      skinId: getSelectedSkin()
     };
 
     this.input = {
@@ -2211,9 +2479,11 @@ class ShowroomApp {
     this.galleryView = document.getElementById('gallery-view');
     this.playgroundView = document.getElementById('playground-view');
     this.bestiaryView = document.getElementById('bestiary-view');
+    this.charactersView = document.getElementById('characters-view');
     this.btnModeGallery = document.getElementById('btn-mode-gallery');
     this.btnModePlayground = document.getElementById('btn-mode-playground');
     this.btnModeBestiary = document.getElementById('btn-mode-bestiary');
+    this.btnModeCharacters = document.getElementById('btn-mode-characters');
     this.headerStyleSwitcher = document.getElementById('header-style-switcher');
     this.playgroundCanvas = document.getElementById('playground-canvas');
     this.playgroundCtx = this.playgroundCanvas.getContext('2d');
@@ -2223,6 +2493,16 @@ class ShowroomApp {
     this.bestiaryManager = new BestiaryManager(this.bestiaryGrid || 'bestiary-grid');
     if (this.bestiaryManager) {
       this.bestiaryManager.init();
+    }
+
+    this.charactersManager = new CharacterShowcaseManager(this);
+    if (this.charactersManager) {
+      this.charactersManager.init();
+    }
+
+    const selectSkin = document.getElementById('select-hero-skin');
+    if (selectSkin) {
+      selectSkin.value = this.player.skinId;
     }
 
     // Mini preview canvases in Gallery
@@ -2254,6 +2534,9 @@ class ShowroomApp {
     this.btnModePlayground.addEventListener('click', () => this.setMode('playground'));
     if (this.btnModeBestiary) {
       this.btnModeBestiary.addEventListener('click', () => this.setMode('bestiary'));
+    }
+    if (this.btnModeCharacters) {
+      this.btnModeCharacters.addEventListener('click', () => this.setMode('characters'));
     }
 
     // Quick style pill buttons in header
@@ -2304,29 +2587,48 @@ class ShowroomApp {
       this.galleryView.classList.remove('hidden');
       this.playgroundView.classList.add('hidden');
       if (this.bestiaryView) this.bestiaryView.classList.add('hidden');
+      if (this.charactersView) this.charactersView.classList.add('hidden');
       this.headerStyleSwitcher.classList.add('hidden');
       this.btnModeGallery.classList.add('active');
       this.btnModePlayground.classList.remove('active');
       if (this.btnModeBestiary) this.btnModeBestiary.classList.remove('active');
+      if (this.btnModeCharacters) this.btnModeCharacters.classList.remove('active');
     } else if (mode === 'playground') {
       this.galleryView.classList.add('hidden');
       this.playgroundView.classList.remove('hidden');
       if (this.bestiaryView) this.bestiaryView.classList.add('hidden');
+      if (this.charactersView) this.charactersView.classList.add('hidden');
       this.headerStyleSwitcher.classList.remove('hidden');
       this.btnModeGallery.classList.remove('active');
       this.btnModePlayground.classList.add('active');
       if (this.btnModeBestiary) this.btnModeBestiary.classList.remove('active');
+      if (this.btnModeCharacters) this.btnModeCharacters.classList.remove('active');
       this.resize();
     } else if (mode === 'bestiary') {
       this.galleryView.classList.add('hidden');
       this.playgroundView.classList.add('hidden');
       if (this.bestiaryView) this.bestiaryView.classList.remove('hidden');
+      if (this.charactersView) this.charactersView.classList.add('hidden');
       this.headerStyleSwitcher.classList.add('hidden');
       this.btnModeGallery.classList.remove('active');
       this.btnModePlayground.classList.remove('active');
       if (this.btnModeBestiary) this.btnModeBestiary.classList.add('active');
+      if (this.btnModeCharacters) this.btnModeCharacters.classList.remove('active');
       if (this.bestiaryManager) {
         this.bestiaryManager.init();
+      }
+    } else if (mode === 'characters') {
+      this.galleryView.classList.add('hidden');
+      this.playgroundView.classList.add('hidden');
+      if (this.bestiaryView) this.bestiaryView.classList.add('hidden');
+      if (this.charactersView) this.charactersView.classList.remove('hidden');
+      this.headerStyleSwitcher.classList.add('hidden');
+      this.btnModeGallery.classList.remove('active');
+      this.btnModePlayground.classList.remove('active');
+      if (this.btnModeBestiary) this.btnModeBestiary.classList.remove('active');
+      if (this.btnModeCharacters) this.btnModeCharacters.classList.add('active');
+      if (this.charactersManager) {
+        this.charactersManager.init();
       }
     }
   }
@@ -2416,11 +2718,30 @@ class ShowroomApp {
     this.settings.particles = checked;
   }
 
+  setPlayerSkin(skinId) {
+    if (CHARACTERS_MAP[skinId]) {
+      this.player.skinId = skinId;
+      setSelectedSkin(skinId);
+      if (this.charactersManager) {
+        this.charactersManager.selectSkin(skinId);
+      }
+      const select = document.getElementById('select-hero-skin');
+      if (select && select.value !== skinId) {
+        select.value = skinId;
+      }
+    }
+  }
+
   update(dt) {
     this.animTime += dt;
 
     if (this.currentMode === 'bestiary') {
       if (this.bestiaryManager) this.bestiaryManager.update(dt);
+      return;
+    }
+
+    if (this.currentMode === 'characters') {
+      if (this.charactersManager) this.charactersManager.update(dt);
       return;
     }
 
@@ -2435,6 +2756,15 @@ class ShowroomApp {
       this.player.isMoving = dx !== 0 || dy !== 0;
 
       if (this.player.isMoving) {
+        if (dy < 0 && dx < 0) this.player.direction = 'up-left';
+        else if (dy < 0 && dx > 0) this.player.direction = 'up-right';
+        else if (dy > 0 && dx < 0) this.player.direction = 'down-left';
+        else if (dy > 0 && dx > 0) this.player.direction = 'down-right';
+        else if (dy < 0) this.player.direction = 'up';
+        else if (dy > 0) this.player.direction = 'down';
+        else if (dx < 0) this.player.direction = 'left';
+        else if (dx > 0) this.player.direction = 'right';
+
         const len = Math.hypot(dx, dy);
         dx /= len;
         dy /= len;

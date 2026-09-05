@@ -4,6 +4,7 @@ import path from 'path';
 const files = [
   'js/constants.js',
   'js/noise.js',
+  'js/characters.js',
   'bestiary.js',
   'js/sprites.js',
   'js/caveMap.js',

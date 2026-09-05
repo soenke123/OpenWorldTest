@@ -1,4 +1,5 @@
 import { TILE_SIZE, PLAYER_CONFIG, TILES, OBJECTS, ELEVATION_PIXEL_OFFSET, RAMPS, COMBAT_CONFIG } from './constants.js';
+import { CHARACTERS_MAP, getSelectedSkin, setSelectedSkin } from './characters.js';
 
 export class Player {
   constructor(x, y, map, game = null) {
@@ -24,6 +25,9 @@ export class Player {
     this.isDead = false;
     this.deathTimer = 0;
     this.deathCount = 0;
+
+    // Active Character Skin (15 selectable Dark Ghibli Papercraft heroes)
+    this.skinId = (typeof getSelectedSkin === 'function') ? getSelectedSkin() : 'ren_twilight';
 
     // Health & Damage States
     this.maxHp = PLAYER_CONFIG.MAX_HP || 100;
@@ -1582,73 +1586,18 @@ export class Player {
       this.renderGreenFlameAura(ctx, px, py, animTime, flameAlpha, true);
     }
 
-    // 2. Folded Papercraft Wanderer (Mononoke Cloak + Chihiro Obi)
-    // Dark Indigo/Jade Paper Cloak
-    ctx.fillStyle = '#1e2636';
-    ctx.beginPath();
-    ctx.moveTo(px, py - 20 + bob);
-    ctx.lineTo(px + 7, py - 4 + bob);
-    ctx.lineTo(px - 7, py - 4 + bob);
-    ctx.closePath();
-    ctx.fill();
-
-    // Central Paper Fold Crease
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(px, py - 20 + bob);
-    ctx.lineTo(px, py - 4 + bob);
-    ctx.stroke();
-
-    // Red Obi Sash / Ribbon
-    ctx.fillStyle = '#dc2626';
-    ctx.fillRect(px - 5, py - 11 + bob, 10, 2.5);
-
-    // Fluttering Ribbon End
-    const ribbon = Math.sin(animTime * 6) * 3;
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(px - 2, py - 10 + bob);
-    ctx.lineTo(px - 6 + ribbon, py - 6 + bob);
-    ctx.stroke();
-
-    const fVec = this.getFacingVector();
-
-    // Paper Cutout Mask / Face (Spirit White)
-    ctx.fillStyle = '#f8fafc';
-    ctx.beginPath();
-    const faceX = px + fVec.x * 1.2;
-    const faceY = py - 18 + bob + fVec.y * 0.8;
-    ctx.arc(faceX, faceY, 4.5, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Glowing Cyan Spirit Eyes (subtly shifted toward 8-way facing direction)
-    if (this.direction !== 'up') {
-      ctx.fillStyle = '#2dd4bf';
-      const eyeBaseX = faceX + fVec.x * 1.2;
-      const eyeBaseY = faceY + fVec.y * 0.4;
-      if (this.direction === 'down') {
-        ctx.fillRect(eyeBaseX - 2.2, eyeBaseY - 1, 1.5, 2);
-        ctx.fillRect(eyeBaseX + 0.7, eyeBaseY - 1, 1.5, 2);
-      } else if (this.direction.includes('left')) {
-        ctx.fillRect(eyeBaseX - 2.2, eyeBaseY - 1, 1.5, 2);
-      } else if (this.direction.includes('right')) {
-        ctx.fillRect(eyeBaseX + 0.8, eyeBaseY - 1, 1.5, 2);
-      }
-    }
-
-    // Hit Flash Tint on Player Body
-    if (this.hitFlash > 0) {
-      ctx.save();
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.65)';
+    // 2. Folded Papercraft Hero Skin (15 selectable Dark Ghibli skins)
+    const skin = (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP[this.skinId]) || (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP['ren_twilight']);
+    if (skin && typeof skin.render === 'function') {
+      skin.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+    } else {
+      ctx.fillStyle = '#1e2636';
       ctx.beginPath();
-      ctx.moveTo(px, py - 21 + bob);
-      ctx.lineTo(px + 8, py - 3 + bob);
-      ctx.lineTo(px - 8, py - 3 + bob);
+      ctx.moveTo(px, py - 20 + bob);
+      ctx.lineTo(px + 7, py - 4 + bob);
+      ctx.lineTo(px - 7, py - 4 + bob);
       ctx.closePath();
       ctx.fill();
-      ctx.restore();
     }
 
     // 2b. Level-Up Green Flame Aura (Front Layer)

@@ -1040,3 +1040,357 @@ body {
   margin-top: auto;
   line-height: 1.4;
 }
+
+/* ==========================================================================
+   VIEW 4: CHARACTERS VIEW (15 Playable Ghibli Papercraft Heroes)
+   ========================================================================== */
+#characters-view {
+  padding: 100px 32px 60px;
+  max-width: 1440px;
+  margin: 0 auto;
+  min-height: 100vh;
+}
+
+.characters-hero {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.characters-hero-badge {
+  display: inline-block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.12);
+  padding: 4px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  margin-bottom: 12px;
+}
+
+.characters-hero h1 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.5px;
+  margin-bottom: 10px;
+}
+
+.characters-hero p {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  max-width: 720px;
+  margin: 0 auto 20px;
+  line-height: 1.5;
+}
+
+/* Category Filter Buttons */
+.char-filter-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.char-filter-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.char-filter-btn.active {
+  background: #a78bfa;
+  color: #0f172a;
+  font-weight: 700;
+  box-shadow: 0 0 16px rgba(167, 139, 250, 0.4);
+}
+
+/* Active Hero Banner */
+.active-hero-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(90deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.95));
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  padding: 12px 20px;
+  border-radius: 12px;
+  margin-bottom: 28px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.active-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.active-hero-label {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.active-hero-name {
+  color: #38bdf8;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.active-hero-info {
+  color: #4ade80;
+  font-size: 0.82rem;
+  font-weight: 600;
+  background: rgba(74, 222, 128, 0.12);
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(74, 222, 128, 0.25);
+}
+
+/* Characters Grid */
+.characters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 22px;
+}
+
+/* Character Card */
+.character-card {
+  background: rgba(18, 22, 34, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: transform 0.25s, box-shadow 0.25s, border-color 0.25s;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  position: relative;
+  overflow: hidden;
+}
+
+.character-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.character-card.is-active-skin {
+  border-color: #55e6a5;
+  box-shadow: 0 0 20px rgba(85, 230, 165, 0.28);
+  background: rgba(18, 26, 38, 0.94);
+}
+
+.character-card.is-active-skin::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #55e6a5, #38bdf8);
+}
+
+/* Card Header */
+.char-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.char-title-group h3 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.2;
+}
+
+.char-title {
+  font-size: 0.74rem;
+  color: #94a3b8;
+  display: block;
+  margin-top: 3px;
+}
+
+.char-badges-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.char-badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.badge-male { background: rgba(59, 130, 246, 0.16); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+.badge-female { background: rgba(244, 114, 182, 0.16); color: #f472b6; border: 1px solid rgba(244, 114, 182, 0.3); }
+.badge-beast { background: rgba(245, 158, 11, 0.16); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.badge-spirit { background: rgba(167, 139, 250, 0.16); color: #c084fc; border: 1px solid rgba(167, 139, 250, 0.3); }
+
+.char-active-indicator {
+  font-size: 0.68rem;
+  background: rgba(85, 230, 165, 0.2);
+  color: #55e6a5;
+  border: 1px solid rgba(85, 230, 165, 0.4);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+/* Character Preview Stage */
+.char-preview-stage {
+  background: radial-gradient(circle at center, rgba(30, 41, 59, 0.6) 0%, rgba(10, 14, 24, 0.95) 75%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  position: relative;
+  min-height: 125px;
+}
+
+.char-canvas {
+  width: 80px;
+  height: 80px;
+  image-rendering: auto;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
+}
+
+.char-stage-controls {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.char-stage-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.char-stage-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+/* Details Panel */
+.char-details-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.char-desc {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  line-height: 1.45;
+}
+
+.char-lore-quote {
+  font-size: 0.76rem;
+  color: #94a3b8;
+  font-style: italic;
+  border-left: 2px solid #a78bfa;
+  padding-left: 8px;
+  margin-top: auto;
+  line-height: 1.4;
+}
+
+/* Palette Row */
+.char-palette-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.char-palette-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.char-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  display: inline-block;
+}
+
+/* Card Actions */
+.char-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.char-btn {
+  flex: 1;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1px solid transparent;
+}
+
+.btn-choose-skin {
+  background: #2563eb;
+  color: #fff;
+}
+
+.btn-choose-skin:hover {
+  background: #1d4ed8;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.4);
+}
+
+.btn-choose-skin.btn-is-chosen {
+  background: rgba(85, 230, 165, 0.2);
+  color: #55e6a5;
+  border-color: rgba(85, 230, 165, 0.4);
+  cursor: default;
+}
+
+.btn-test-playground {
+  background: rgba(255, 255, 255, 0.08);
+  color: #cbd5e1;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.btn-test-playground:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
