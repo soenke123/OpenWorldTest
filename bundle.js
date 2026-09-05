@@ -7765,8 +7765,63 @@ const ARTIFACT_TYPES = {
     speed: 360,
     colorTheme: '#ef4444',
     glowColor: 'rgba(239, 68, 68, 0.5)'
+  },
+  DRUID_BEAR: {
+    id: 'druid_bear',
+    name: 'Smaragd-Druide',
+    title: 'Bärengestalt',
+    icon: '🐻',
+    description: 'Entfesselt uralte Druidenmagie mit smaragdgrünem Leuchten. Verwandelt dich für 1 Minute in einen mächtigen Bären mit 50% mehr Leben! Deine Prankenhiebe sind 20% langsamer, aber doppelt so stark mit mehr Rückstoß. Der Vorstoß reicht 20% weiter. Kein Bogen, stattdessen mächtiger Krallenwirbel.',
+    maxCharges: 5,
+    rechargeBonus: 3,
+    cooldown: 2.0,
+    damage: 0,
+    widthTiles: 0,
+    speed: 0,
+    colorTheme: '#22c55e',
+    glowColor: 'rgba(34, 197, 94, 0.6)'
+  },
+  PLASMA_ORBS: {
+    id: 'plasma_orbs',
+    name: 'Rosa Plasmakugeln',
+    title: 'Plasma-Orbit',
+    icon: '🔮',
+    description: 'Beschwört kurz nacheinander 4 pulsierende rosa Plasmakugeln in deine Umlaufbahn. Sie blinken mit ansteigender Frequenz und detonieren nacheinander in verheerenden Plasma-Explosionen mit hohem Schaden und enormem Rückstoß.',
+    maxCharges: 5,
+    rechargeBonus: 3,
+    cooldown: 3.0,
+    damage: 240,
+    widthTiles: 3,
+    speed: 0,
+    colorTheme: '#ec4899',
+    glowColor: 'rgba(236, 72, 153, 0.6)'
+  },
+  VOID_TELEPORT: {
+    id: 'void_teleport',
+    name: 'Leeren-Teleport',
+    title: 'Schatten-Riss',
+    icon: '🌌',
+    description: 'Nutzt die dimensionale Teleportation der Schattenmonster. Öffnet eine taktische Karte aller aufgedeckten Gebiete. Wähle ein begehbares Ziel auf der Karte, um dich mit violetter Leeren-Implosion sofort dorthin zu teleportieren.',
+    maxCharges: 5,
+    rechargeBonus: 3,
+    cooldown: 1.0,
+    damage: 0,
+    widthTiles: 0,
+    speed: 0,
+    colorTheme: '#a855f7',
+    glowColor: 'rgba(168, 85, 247, 0.6)'
   }
 };
+
+function getArtifactDef(typeId) {
+  if (!typeId) return ARTIFACT_TYPES.PHOENIX;
+  const key = String(typeId).toUpperCase();
+  if (ARTIFACT_TYPES[key]) return ARTIFACT_TYPES[key];
+  for (const def of Object.values(ARTIFACT_TYPES)) {
+    if (def.id === typeId) return def;
+  }
+  return ARTIFACT_TYPES.PHOENIX;
+}
 
 const getElement = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
 
@@ -7775,11 +7830,16 @@ class MagicManager {
     this.game = game;
     this.groundArtifacts = [];
     this.activeSpells = [];
+    this.activePlasmaSequences = [];
     this.playerGlitterParticles = [];
     this.glitterTimer = 0;
 
     this.isSwapModalOpen = false;
     this.pendingGroundArtifact = null;
+
+    // Teleportation Map State
+    this.isTeleportModalOpen = false;
+    this.teleportHoverTile = null;
 
     // UI elements
     this.magicHudSlot = getElement('magic-hud-slot');
@@ -7791,6 +7851,10 @@ class MagicManager {
     this.btnInfoModalClose = getElement('btn-magic-info-close');
     this.artifactSwapModal = getElement('artifact-swap-modal');
     this.magicPickupBanner = getElement('magic-pickup-banner');
+
+    this.teleportModal = getElement('teleport-map-modal');
+    this.teleportCanvas = getElement('teleportMapCanvas');
+    this.btnTeleportClose = getElement('btn-teleport-map-close');
 
     this.initEvents();
   }
@@ -7868,6 +7932,94 @@ class MagicManager {
         }
       });
     }
+
+    // Teleport Map Modal Listeners
+    if (this.btnTeleportClose) {
+      const handleCloseTeleport = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+        this.closeTeleportModal();
+      };
+      this.btnTeleportClose.addEventListener('click', handleCloseTeleport);
+      this.btnTeleportClose.addEventListener('touchstart', handleCloseTeleport, { passive: false });
+    }
+
+    if (this.teleportModal) {
+      this.teleportModal.addEventListener('click', (e) => {
+        if (e.target === this.teleportModal) {
+          this.closeTeleportModal();
+        }
+      });
+    }
+
+    if (this.teleportCanvas) {
+      const handleMouseMove = (e) => {
+        if (!this.isTeleportModalOpen) return;
+        const rect = this.teleportCanvas.getBoundingClientRect();
+        const map = this.game?.map;
+        if (!map) return;
+
+        const mapW = map.width || MAP_WIDTH;
+        const mapH = map.height || MAP_HEIGHT;
+
+        const clickX = ((e.clientX - rect.left) / rect.width) * this.teleportCanvas.width;
+        const clickY = ((e.clientY - rect.top) / rect.height) * this.teleportCanvas.height;
+
+        const scaleX = this.teleportCanvas.width / mapW;
+        const scaleY = this.teleportCanvas.height / mapH;
+
+        const tx = Math.floor(clickX / scaleX);
+        const ty = Math.floor(clickY / scaleY);
+
+        if (tx >= 0 && tx < mapW && ty >= 0 && ty < mapH) {
+          const isWalkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
+          const isExplored = !map.explored || (map.explored[ty] && map.explored[ty][tx]);
+          this.teleportHoverTile = { tx, ty, valid: Boolean(isWalkable && isExplored) };
+
+          const coordsEl = getElement('teleport-coords-display');
+          if (coordsEl) {
+            coordsEl.textContent = `Ziel: X: ${tx}, Y: ${ty} ${isWalkable && isExplored ? '✅ Begehbar' : '❌ Gesperrt / Dunkel'}`;
+            coordsEl.style.color = isWalkable && isExplored ? '#a855f7' : '#ef4444';
+          }
+          this.renderTeleportMap();
+        }
+      };
+
+      this.teleportCanvas.addEventListener('mousemove', handleMouseMove);
+
+      const handleClick = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+        this.handleTeleportClick(e.clientX, e.clientY);
+      };
+      this.teleportCanvas.addEventListener('click', handleClick);
+
+      this.teleportCanvas.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        if (e.touches && e.touches[0]) {
+          this.handleTeleportClick(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: false });
+    }
+
+    // Dev Quick-Equip buttons
+    const bindDevEquip = (btnId, artDef) => {
+      const btn = getElement(btnId);
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (this.game?.player) {
+            this.equipArtifact(this.game.player, artDef);
+            this.triggerPickupBanner(artDef, `✨ DEV: ${artDef.name.toUpperCase()} AUSGERÜSTET!`);
+          }
+        });
+      }
+    };
+
+    bindDevEquip('dev-equip-phoenix', ARTIFACT_TYPES.PHOENIX);
+    bindDevEquip('dev-equip-bear', ARTIFACT_TYPES.DRUID_BEAR);
+    bindDevEquip('dev-equip-plasma', ARTIFACT_TYPES.PLASMA_ORBS);
+    bindDevEquip('dev-equip-teleport', ARTIFACT_TYPES.VOID_TELEPORT);
   }
 
   toggleInfoModal(forceState = null) {
@@ -7884,7 +8036,7 @@ class MagicManager {
 
   populateInfoModal() {
     const player = this.game?.player;
-    const artifactDef = player?.artifact ? (ARTIFACT_TYPES[player.artifact.id?.toUpperCase()] || ARTIFACT_TYPES.PHOENIX) : ARTIFACT_TYPES.PHOENIX;
+    const artifactDef = player?.artifact ? getArtifactDef(player.artifact.id) : ARTIFACT_TYPES.PHOENIX;
 
     const titleEl = getElement('magic-info-title');
     const iconEl = getElement('magic-info-icon');
@@ -7899,15 +8051,27 @@ class MagicManager {
     if (descEl) descEl.textContent = artifactDef.description;
     if (chargesEl) chargesEl.textContent = player?.artifact ? `${player.artifact.charges} / ${player.artifact.maxCharges}` : `${artifactDef.maxCharges} Aufladungen`;
     if (cdEl) cdEl.textContent = `${artifactDef.cooldown.toFixed(1)}s`;
-    if (widthEl) widthEl.textContent = `${artifactDef.widthTiles} Kacheln (80px)`;
-    if (dmgEl) dmgEl.textContent = `${artifactDef.damage} Feuerschaden`;
+
+    if (artifactDef.id === 'druid_bear') {
+      if (widthEl) widthEl.textContent = 'Pranken & Wirbel';
+      if (dmgEl) dmgEl.textContent = '2x Schaden (+50% HP)';
+    } else if (artifactDef.id === 'plasma_orbs') {
+      if (widthEl) widthEl.textContent = '4 Orbs im Orbit';
+      if (dmgEl) dmgEl.textContent = `${artifactDef.damage} Plasma-Schaden`;
+    } else if (artifactDef.id === 'void_teleport') {
+      if (widthEl) widthEl.textContent = 'Aufgedeckte Weltkarte';
+      if (dmgEl) dmgEl.textContent = 'Sofortige Teleportation';
+    } else {
+      if (widthEl) widthEl.textContent = `${artifactDef.widthTiles} Kacheln (80px)`;
+      if (dmgEl) dmgEl.textContent = `${artifactDef.damage} Feuerschaden`;
+    }
   }
 
   // ---------------------------------------------------------------------------
   // GROUND ARTIFACT MANAGEMENT
   // ---------------------------------------------------------------------------
   spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false) {
-    const artifactDef = ARTIFACT_TYPES[typeId.toUpperCase()] || ARTIFACT_TYPES.PHOENIX;
+    const artifactDef = getArtifactDef(typeId);
     const artifact = {
       id: `art_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       typeId: artifactDef.id,
@@ -7926,46 +8090,58 @@ class MagicManager {
   initShrineArtifacts(caves, cloudMap, overworldMap) {
     this.groundArtifacts = [];
 
-    // 1. Shrines in Cloud World (Himmel)
+    // 1. Shrines in Cloud World (Himmel): Rosa Plasmakugeln & Smaragd-Druide
     if (cloudMap && cloudMap.shrines) {
-      cloudMap.shrines.forEach(shrine => {
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, 'phoenix', true);
+      const cloudTypes = ['plasma_orbs', 'druid_bear', 'phoenix'];
+      cloudMap.shrines.forEach((shrine, idx) => {
+        const type = cloudTypes[idx % cloudTypes.length];
+        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, type, true);
       });
     }
 
-    // 2. Shrines in Cave World (Höhlen) - handles both single CaveMap and caves collection object
+    // 2. Shrines in Cave World (Höhlen): Leeren-Teleport & Rosa Plasmakugeln
+    const caveTypes = ['void_teleport', 'plasma_orbs', 'druid_bear'];
     if (caves) {
       if (Array.isArray(caves.shrines)) {
-        caves.shrines.forEach(shrine => {
-          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, 'phoenix', true);
+        caves.shrines.forEach((shrine, idx) => {
+          const type = caveTypes[idx % caveTypes.length];
+          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true);
         });
       } else if (typeof caves === 'object') {
+        let count = 0;
         Object.values(caves).forEach(cMap => {
           if (cMap && Array.isArray(cMap.shrines)) {
             cMap.shrines.forEach(shrine => {
-              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, 'phoenix', true);
+              const type = caveTypes[count % caveTypes.length];
+              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true);
+              count++;
             });
           }
         });
       }
     }
 
-    // 3. Shrines in Overworld (Ancient Void Shrine in the Abyss)
+    // 3. Shrines in Overworld: Phönix, Smaragd-Druide & Leeren-Teleport
+    const overworldTypes = ['phoenix', 'druid_bear', 'void_teleport'];
     if (overworldMap && Array.isArray(overworldMap.shrines)) {
-      overworldMap.shrines.forEach(shrine => {
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, 'phoenix', true);
+      overworldMap.shrines.forEach((shrine, idx) => {
+        const type = overworldTypes[idx % overworldTypes.length];
+        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true);
       });
     } else {
       this.spawnGroundArtifact(108 * TILE_SIZE + 8, 63 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, 'phoenix', true);
+      this.spawnGroundArtifact(20 * TILE_SIZE + 8, 36 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, 'druid_bear', true);
     }
   }
 
   dropMonsterArtifact(x, y, dimension = DIMENSIONS.OVERWORLD) {
-    const art = this.spawnGroundArtifact(x, y, dimension, 'phoenix', false);
-    // Add glowing burst of embers on monster drop
+    const allTypes = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport'];
+    const chosenType = allTypes[Math.floor(Math.random() * allTypes.length)];
+    const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false);
+
     if (this.game?.combat) {
-      this.game.combat.addFloatingText('✨ MAGISCHES ARTEFAKT!', x, y - 24, '#f59e0b', 1.2);
-      for (let i = 0; i < 20; i++) {
+      this.game.combat.addFloatingText(`✨ ${art.def.icon} ${art.def.name.toUpperCase()}!`, x, y - 24, art.def.colorTheme || '#f59e0b', 1.3);
+      for (let i = 0; i < 22; i++) {
         const ang = Math.random() * Math.PI * 2;
         const sp = Math.random() * 50 + 20;
         this.game.combat.hitSparks.push({
@@ -7973,7 +8149,7 @@ class MagicManager {
           y: y - 10,
           vx: Math.cos(ang) * sp,
           vy: Math.sin(ang) * sp - 15,
-          color: Math.random() > 0.5 ? '#ef4444' : '#facc15',
+          color: Math.random() > 0.4 ? (art.def.colorTheme || '#f59e0b') : '#facc15',
           size: Math.random() * 3 + 1.5,
           life: 0.7,
           maxLife: 0.7
@@ -8013,18 +8189,22 @@ class MagicManager {
   }
 
   equipArtifact(player, artifactDef) {
+    if (!player) return;
+    const def = getArtifactDef(artifactDef.id || artifactDef);
     player.artifact = {
-      id: artifactDef.id,
-      name: artifactDef.name,
-      title: artifactDef.title,
-      icon: artifactDef.icon,
-      charges: artifactDef.maxCharges,
-      maxCharges: artifactDef.maxCharges,
+      id: def.id,
+      name: def.name,
+      title: def.title,
+      icon: def.icon,
+      charges: def.maxCharges,
+      maxCharges: def.maxCharges,
       cooldownTimer: 0,
-      cooldownMax: artifactDef.cooldown,
-      damage: artifactDef.damage,
-      widthTiles: artifactDef.widthTiles,
-      speed: artifactDef.speed
+      cooldownMax: def.cooldown,
+      damage: def.damage,
+      widthTiles: def.widthTiles,
+      speed: def.speed,
+      colorTheme: def.colorTheme,
+      glowColor: def.glowColor
     };
     this.updateHUD();
   }
@@ -8128,7 +8308,7 @@ class MagicManager {
   }
 
   // ---------------------------------------------------------------------------
-  // SPELL CASTING (Phönix)
+  // SPELL CASTING (Phönix, Druiden-Bär, Plasmakugeln, Leeren-Teleport)
   // ---------------------------------------------------------------------------
   castActiveSpell(player, map, combatManager) {
     if (!player || player.isDead) return false;
@@ -8141,7 +8321,33 @@ class MagicManager {
       return false;
     }
 
-    // Determine direction
+    const artId = player.artifact.id;
+
+    // 1. DRUIDEN-BÄR GESTALT (Smaragd-Druide)
+    if (artId === 'druid_bear') {
+      player.activateBearForm(60);
+      player.artifact.charges--;
+      player.artifact.cooldownTimer = player.artifact.cooldownMax || 2.0;
+      this.updateHUD();
+      return true;
+    }
+
+    // 2. ROSA PLASMAKUGELN (4 Kugeln im Orbit)
+    if (artId === 'plasma_orbs') {
+      player.artifact.charges--;
+      player.artifact.cooldownTimer = player.artifact.cooldownMax || 3.0;
+      this.spawnPlasmaOrbSequence(player, combatManager);
+      this.updateHUD();
+      return true;
+    }
+
+    // 3. LEEREN-TELEPORT (Karte zur Zielauswahl öffnen)
+    if (artId === 'void_teleport') {
+      this.openTeleportModal();
+      return true;
+    }
+
+    // 4. RUBIN-PHÖNIX (Flammen-Sturm)
     let dirX = 0, dirY = 1;
     if (player.direction === 'up') { dirX = 0; dirY = -1; }
     else if (player.direction === 'down') { dirX = 0; dirY = 1; }
@@ -8152,12 +8358,10 @@ class MagicManager {
     else if (player.direction === 'down-left') { dirX = -0.7071; dirY = 0.7071; }
     else if (player.direction === 'down-right') { dirX = 0.7071; dirY = 0.7071; }
 
-    // Deduct charge and trigger cooldown
     player.artifact.charges--;
-    player.artifact.cooldownTimer = player.artifact.cooldownMax;
+    player.artifact.cooldownTimer = player.artifact.cooldownMax || 3.0;
 
-    // 5 tiles width = 80px
-    const widthPx = player.artifact.widthTiles * TILE_SIZE;
+    const widthPx = (player.artifact.widthTiles || 5) * TILE_SIZE;
 
     const spell = {
       id: `phoenix_${Date.now()}`,
@@ -8199,6 +8403,371 @@ class MagicManager {
 
     this.updateHUD();
     return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // PLASMA ORBS LOGIC
+  // ---------------------------------------------------------------------------
+  spawnPlasmaOrbSequence(player, combatManager) {
+    const sequence = {
+      id: `plasma_${Date.now()}`,
+      dimension: this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD,
+      timer: 0,
+      orbs: [0, 1, 2, 3].map(i => ({
+        index: i,
+        delay: i * 0.18, // short delay between spawns
+        active: false,
+        life: 1.35,
+        maxLife: 1.35,
+        orbitAngle: (i * Math.PI) / 2,
+        exploded: false,
+        damage: 240,
+        knockback: 220
+      }))
+    };
+    this.activePlasmaSequences.push(sequence);
+
+    if (combatManager) {
+      combatManager.addFloatingText(`🔮 PLASMA-ORBIT! (${player.artifact.charges} übrig)`, player.x, player.y - 28, '#ec4899', 1.2);
+      for (let i = 0; i < 18; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 60 + 20;
+        combatManager.hitSparks.push({
+          x: player.x,
+          y: player.y - 10,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 10,
+          color: Math.random() > 0.4 ? '#ec4899' : '#f472b6',
+          size: Math.random() * 2.5 + 1.5,
+          life: 0.5,
+          maxLife: 0.5
+        });
+      }
+    }
+  }
+
+  updatePlasmaOrbs(dt, player, combatManager, enemyManager) {
+    if (!this.activePlasmaSequences.length) return;
+    const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
+
+    for (let s = this.activePlasmaSequences.length - 1; s >= 0; s--) {
+      const seq = this.activePlasmaSequences[s];
+      if (seq.dimension !== curDim) continue;
+
+      seq.timer += dt;
+      let allExploded = true;
+
+      for (let i = 0; i < seq.orbs.length; i++) {
+        const orb = seq.orbs[i];
+        if (orb.exploded) continue;
+
+        allExploded = false;
+
+        if (seq.timer >= orb.delay) {
+          if (!orb.active) {
+            orb.active = true;
+            if (combatManager && player) {
+              const ox = player.x + Math.cos(orb.orbitAngle) * 34;
+              const oy = (player.y - 10) + Math.sin(orb.orbitAngle) * 34;
+              for (let k = 0; k < 6; k++) {
+                const a = Math.random() * Math.PI * 2;
+                combatManager.hitSparks.push({
+                  x: ox,
+                  y: oy,
+                  vx: Math.cos(a) * 30,
+                  vy: Math.sin(a) * 30,
+                  color: '#f472b6',
+                  size: 2,
+                  life: 0.3,
+                  maxLife: 0.3
+                });
+              }
+            }
+          }
+
+          orb.orbitAngle += dt * 4.2;
+          orb.life -= dt;
+
+          if (combatManager && player && Math.random() < 0.35) {
+            const ox = player.x + Math.cos(orb.orbitAngle) * 34;
+            const oy = (player.y - 10) + Math.sin(orb.orbitAngle) * 34;
+            combatManager.hitSparks.push({
+              x: ox + (Math.random() - 0.5) * 6,
+              y: oy + (Math.random() - 0.5) * 6,
+              vx: (Math.random() - 0.5) * 15,
+              vy: (Math.random() - 0.5) * 15,
+              color: Math.random() > 0.4 ? '#f472b6' : '#ec4899',
+              size: 2,
+              life: 0.25,
+              maxLife: 0.25
+            });
+          }
+
+          if (orb.life <= 0) {
+            orb.exploded = true;
+            if (player && combatManager) {
+              const ox = player.x + Math.cos(orb.orbitAngle) * 34;
+              const oy = (player.y - 10) + Math.sin(orb.orbitAngle) * 34;
+              combatManager.spawnPlasmaExplosion(ox, oy, 48, orb.damage, orb.knockback, enemyManager);
+            }
+          }
+        }
+      }
+
+      if (allExploded) {
+        this.activePlasmaSequences.splice(s, 1);
+      }
+    }
+  }
+
+  renderPlasmaOrbs(ctx, camera) {
+    if (!this.activePlasmaSequences.length) return;
+    const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
+    const player = this.game?.player;
+    if (!player) return;
+
+    const zoom = camera ? camera.zoom : 1;
+    const camX = camera ? camera.x : 0;
+    const camY = camera ? camera.y : 0;
+
+    for (const seq of this.activePlasmaSequences) {
+      if (seq.dimension !== curDim) continue;
+
+      for (const orb of seq.orbs) {
+        if (!orb.active || orb.exploded) continue;
+
+        const worldX = player.x + Math.cos(orb.orbitAngle) * 34;
+        const worldY = (player.y - 10) + Math.sin(orb.orbitAngle) * 34;
+
+        const sx = (worldX - camX) * zoom;
+        const sy = (worldY - camY) * zoom;
+
+        const lifeFraction = Math.max(0, orb.life / orb.maxLife);
+        const blinkFreq = 10 + (1 - lifeFraction) * 28;
+        const blink = Math.sin(seq.timer * blinkFreq) > 0;
+
+        ctx.save();
+
+        const glowRad = (10 + Math.sin(seq.timer * 15) * 3) * zoom;
+        if (typeof ctx.createRadialGradient === 'function') {
+          const grad = ctx.createRadialGradient(sx, sy, 2 * zoom, sx, sy, glowRad);
+          grad.addColorStop(0, blink ? 'rgba(244, 114, 182, 0.85)' : 'rgba(236, 72, 153, 0.45)');
+          grad.addColorStop(0.6, 'rgba(219, 39, 119, 0.3)');
+          grad.addColorStop(1, 'rgba(157, 23, 77, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(sx, sy, glowRad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = blink ? '#fdf2f8' : '#ec4899';
+        ctx.beginPath();
+        ctx.arc(sx, sy, (4 + Math.sin(seq.timer * 20) * 1) * zoom, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#f472b6';
+        ctx.lineWidth = 1.2 * zoom;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 6 * zoom, seq.timer * 8, seq.timer * 8 + Math.PI * 1.3);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // VOID TELEPORT MAP MODAL LOGIC
+  // ---------------------------------------------------------------------------
+  openTeleportModal() {
+    const modal = getElement('teleport-map-modal');
+    if (!modal) return;
+    this.isTeleportModalOpen = true;
+    modal.classList.remove('hidden');
+    this.renderTeleportMap();
+  }
+
+  closeTeleportModal() {
+    const modal = getElement('teleport-map-modal');
+    if (modal) modal.classList.add('hidden');
+    this.isTeleportModalOpen = false;
+    this.teleportHoverTile = null;
+  }
+
+  renderTeleportMap() {
+    const canvas = this.teleportCanvas || getElement('teleportMapCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const player = this.game?.player;
+    const map = this.game?.map;
+    if (!map) return;
+
+    const mapW = map.width || MAP_WIDTH;
+    const mapH = map.height || MAP_HEIGHT;
+
+    ctx.fillStyle = '#090a10';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const scaleX = canvas.width / mapW;
+    const scaleY = canvas.height / mapH;
+
+    // Draw explored tiles / minimap background
+    if (this.game?.minimap && this.game.minimap.bgCanvas) {
+      ctx.drawImage(this.game.minimap.bgCanvas, 0, 0, canvas.width, canvas.height);
+    } else {
+      for (let ty = 0; ty < mapH; ty++) {
+        for (let tx = 0; tx < mapW; tx++) {
+          const isWalkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
+          ctx.fillStyle = isWalkable ? '#1e293b' : '#0f172a';
+          ctx.fillRect(tx * scaleX, ty * scaleY, scaleX + 0.5, scaleY + 0.5);
+        }
+      }
+    }
+
+    // Fog of war: darken unexplored tiles if map.explored exists
+    if (map.explored) {
+      ctx.fillStyle = 'rgba(5, 7, 15, 0.82)';
+      for (let ty = 0; ty < mapH; ty++) {
+        for (let tx = 0; tx < mapW; tx++) {
+          if (!map.explored[ty] || !map.explored[ty][tx]) {
+            ctx.fillRect(tx * scaleX, ty * scaleY, scaleX + 0.5, scaleY + 0.5);
+          }
+        }
+      }
+    }
+
+    // Grid lines for tactical map feel
+    ctx.strokeStyle = 'rgba(147, 51, 234, 0.15)';
+    ctx.lineWidth = 1;
+    const gridStepX = scaleX * 10;
+    for (let gx = 0; gx < canvas.width; gx += gridStepX) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, canvas.height);
+      ctx.stroke();
+    }
+    const gridStepY = scaleY * 10;
+    for (let gy = 0; gy < canvas.height; gy += gridStepY) {
+      ctx.beginPath();
+      ctx.moveTo(0, gy);
+      ctx.lineTo(canvas.width, gy);
+      ctx.stroke();
+    }
+
+    // Player position marker (Pulsing Cyan/Gold Star)
+    if (player) {
+      const pTileX = player.x / TILE_SIZE;
+      const pTileY = player.y / TILE_SIZE;
+      const px = pTileX * scaleX;
+      const py = pTileY * scaleY;
+
+      const time = Date.now() / 1000;
+      const ringR = 6 + Math.sin(time * 5) * 2;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(px, py, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Hovered Target Reticle
+    if (this.teleportHoverTile) {
+      const { tx, ty, valid } = this.teleportHoverTile;
+      const hx = (tx + 0.5) * scaleX;
+      const hy = (ty + 0.5) * scaleY;
+
+      ctx.save();
+      ctx.strokeStyle = valid ? '#c084fc' : '#ef4444';
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+      ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(hx - 14, hy); ctx.lineTo(hx - 6, hy);
+      ctx.moveTo(hx + 6, hy); ctx.lineTo(hx + 14, hy);
+      ctx.moveTo(hx, hy - 14); ctx.lineTo(hx, hy - 6);
+      ctx.moveTo(hx, hy + 6); ctx.lineTo(hx, hy + 14);
+      ctx.stroke();
+
+      ctx.fillStyle = valid ? 'rgba(168, 85, 247, 0.25)' : 'rgba(239, 68, 68, 0.25)';
+      ctx.beginPath();
+      ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  handleTeleportClick(clientX, clientY) {
+    const canvas = this.teleportCanvas || getElement('teleportMapCanvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const map = this.game?.map;
+    const player = this.game?.player;
+    if (!map || !player) return;
+
+    const mapW = map.width || MAP_WIDTH;
+    const mapH = map.height || MAP_HEIGHT;
+
+    const clickX = ((clientX - rect.left) / rect.width) * canvas.width;
+    const clickY = ((clientY - rect.top) / rect.height) * canvas.height;
+
+    const scaleX = canvas.width / mapW;
+    const scaleY = canvas.height / mapH;
+
+    const tx = Math.floor(clickX / scaleX);
+    const ty = Math.floor(clickY / scaleY);
+
+    if (tx < 0 || tx >= mapW || ty < 0 || ty >= mapH) return;
+
+    const isWalkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
+    const isExplored = !map.explored || (map.explored[ty] && map.explored[ty][tx]);
+
+    if (!isWalkable || !isExplored) {
+      const tooltip = getElement('teleport-target-tooltip');
+      if (tooltip) {
+        tooltip.textContent = !isExplored ? '❌ Unerforschter Ort!' : '❌ Nicht begehbar!';
+        tooltip.classList.remove('hidden');
+        setTimeout(() => tooltip?.classList.add('hidden'), 1200);
+      }
+      return;
+    }
+
+    const targetWorldX = tx * TILE_SIZE + TILE_SIZE / 2;
+    const targetWorldY = ty * TILE_SIZE + TILE_SIZE / 2;
+
+    const combat = this.game?.combat;
+    if (combat) {
+      combat.spawnVoidTeleportVFX(player.x, player.y, false);
+    }
+
+    player.x = targetWorldX;
+    player.y = targetWorldY;
+    if (this.game?.camera) {
+      this.game.camera.centerOn(targetWorldX, targetWorldY);
+    }
+
+    if (combat) {
+      combat.spawnVoidTeleportVFX(player.x, player.y, true);
+      combat.addFloatingText('🌌 LEEREN-SPRUNG!', player.x, player.y - 28, '#c084fc', 1.3);
+    }
+
+    if (player.artifact) {
+      player.artifact.charges--;
+      player.artifact.cooldownTimer = player.artifact.cooldownMax || 1.0;
+    }
+
+    this.closeTeleportModal();
+    this.updateHUD();
   }
 
   // ---------------------------------------------------------------------------
@@ -8337,6 +8906,9 @@ class MagicManager {
       }
     }
 
+    // 5. Update Plasma Orbs
+    this.updatePlasmaOrbs(dt, player, combatManager, enemyManager);
+
     this.updateHUD();
   }
 
@@ -8356,6 +8928,20 @@ class MagicManager {
 
     if (this.magicChargesBadge) {
       this.magicChargesBadge.textContent = player.artifact.charges;
+    }
+
+    // Dynamic icon on the spell button
+    const iconEl = this.magicHudSlot.querySelector('.magic-btn-icon');
+    if (iconEl) {
+      iconEl.textContent = player.artifact.icon || '🔥';
+    }
+
+    // Dynamic border & glow based on artifact colorTheme
+    if (this.btnCastMagic) {
+      const col = player.artifact.colorTheme || '#ef4444';
+      const glow = player.artifact.glowColor || 'rgba(239, 68, 68, 0.5)';
+      this.btnCastMagic.style.borderColor = col;
+      this.btnCastMagic.style.boxShadow = `0 0 12px ${glow}`;
     }
 
     if (this.magicCooldownOverlay) {
@@ -8379,13 +8965,16 @@ class MagicManager {
     const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
     const player = this.game?.player;
 
-    // 1. Ground Artifacts
+    // 1. Ground Artifacts with unique themed glow & icons
     this.renderGroundArtifacts(ctx, camera, curDim);
 
     // 2. Active Spell Projectiles (Phönix)
     this.renderActiveSpells(ctx, camera, curDim);
 
-    // 3. Player Glitter Aura
+    // 3. Pink Plasma Orbs in Orbit
+    this.renderPlasmaOrbs(ctx, camera);
+
+    // 4. Player Glitter Aura
     if (player && player.artifact && player.artifact.charges > 0) {
       this.renderPlayerGlitter(ctx, camera);
     }
@@ -8407,13 +8996,15 @@ class MagicManager {
 
       const bobY = Math.sin(art.bobTime) * 4;
       const py = sy + bobY;
+      const themeColor = art.def.colorTheme || '#ef4444';
+      const glowColor = art.def.glowColor || 'rgba(239, 68, 68, 0.5)';
 
       ctx.save();
 
       // Vertical Heavenly Light Pillar
       const grad = ctx.createLinearGradient(sx, py - 45 * zoom, sx, py + 10 * zoom);
-      grad.addColorStop(0, 'rgba(239, 68, 68, 0)');
-      grad.addColorStop(0.6, `rgba(239, 68, 68, ${0.15 + art.lightPulse * 0.15})`);
+      grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      grad.addColorStop(0.6, glowColor);
       grad.addColorStop(1, 'rgba(250, 204, 21, 0.4)');
       ctx.fillStyle = grad;
       ctx.fillRect(sx - 10 * zoom, py - 45 * zoom, 20 * zoom, 55 * zoom);
@@ -8423,35 +9014,35 @@ class MagicManager {
       ctx.translate(sx, sy + 6 * zoom);
       ctx.scale(1, 0.38); // Flattened perspective oval
       ctx.rotate(art.bobTime * 0.5);
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+      ctx.strokeStyle = themeColor;
       ctx.lineWidth = 1.5 * zoom;
       ctx.beginPath();
       ctx.arc(0, 0, 16 * zoom, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.fillStyle = 'rgba(250, 204, 21, 0.3)';
+      ctx.fillStyle = glowColor;
       ctx.beginPath();
       ctx.arc(0, 0, 10 * zoom, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
-      // Floating Papercraft Ruby Orb
+      // Floating Papercraft Gem Orb
       const orbRadius = 7 * zoom;
 
       // Soft outer glow
-      ctx.fillStyle = art.def.glowColor || 'rgba(239, 68, 68, 0.5)';
+      ctx.fillStyle = glowColor;
       ctx.beginPath();
       ctx.arc(sx, py, (orbRadius + 4) * (1 + art.lightPulse * 0.2), 0, Math.PI * 2);
       ctx.fill();
 
-      // Ruby Orb Facets (Dark Ghibli Papercraft)
-      ctx.fillStyle = '#dc2626';
+      // Gem Orb Body
+      ctx.fillStyle = themeColor;
       ctx.beginPath();
       ctx.arc(sx, py, orbRadius, 0, Math.PI * 2);
       ctx.fill();
 
       // Top Highlight fold
-      ctx.fillStyle = '#f87171';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
       ctx.beginPath();
       ctx.moveTo(sx, py - orbRadius);
       ctx.lineTo(sx + orbRadius * 0.7, py);
@@ -8465,6 +9056,14 @@ class MagicManager {
       ctx.beginPath();
       ctx.arc(sx - 2 * zoom, py - 2 * zoom, 1.8 * zoom, 0, Math.PI * 2);
       ctx.fill();
+
+      // Floating Artifact Icon Emoji above Orb
+      if (typeof ctx.fillText === 'function') {
+        ctx.font = `${Math.round(11 * zoom)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(art.def.icon || '✨', sx, py - 12 * zoom);
+      }
 
       // Orbiting Ember Sparks
       for (let s = 0; s < 3; s++) {
@@ -10201,9 +10800,13 @@ class Player {
     this.discoveredShrines = new Set();
     this.shrineMessage = null;
     this.artifact = null; // Active magical artifact { id, name, charges, maxCharges, cooldownTimer, ... }
+    this.isBearForm = false;
+    this.bearFormTimer = 0;
+    this.bearFormMaxTimer = 60;
   }
 
   respawn() {
+    this.revertBearForm();
     this.transition = null;
     this.transitionCooldown = 0.5;
     this.lastTransitionTile = null;
@@ -10323,6 +10926,66 @@ class Player {
     }
   }
 
+  activateBearForm(duration = 60) {
+    this.isBearForm = true;
+    this.bearFormTimer = duration;
+    this.bearFormMaxTimer = duration;
+
+    // 50% mehr Leben während Bärengestalt
+    const baseMax = 100 + (this.skills?.hp || 0) * 15;
+    const targetMax = Math.round(baseMax * 1.5);
+    const hpRatio = this.hp / Math.max(1, this.maxHp);
+    this.maxHp = targetMax;
+    this.hp = Math.round(targetMax * Math.max(0.3, hpRatio));
+
+    if (this.game && this.game.combat) {
+      this.game.combat.addFloatingText('🐻 BÄRENGESTALT! (60s)', this.x, this.y - 28, '#22c55e', 1.4);
+      for (let i = 0; i < 28; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 75 + 25;
+        this.game.combat.hitSparks.push({
+          x: this.x,
+          y: this.y - 12,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 20,
+          color: Math.random() > 0.4 ? '#22c55e' : '#86efac',
+          size: Math.random() * 3.5 + 1.8,
+          life: 0.6,
+          maxLife: 0.6
+        });
+      }
+    }
+  }
+
+  revertBearForm() {
+    if (!this.isBearForm) return;
+    this.isBearForm = false;
+    this.bearFormTimer = 0;
+
+    const baseMax = 100 + (this.skills?.hp || 0) * 15;
+    const hpRatio = this.hp / Math.max(1, this.maxHp);
+    this.maxHp = baseMax;
+    this.hp = Math.max(1, Math.min(this.maxHp, Math.round(baseMax * hpRatio)));
+
+    if (this.game && this.game.combat) {
+      this.game.combat.addFloatingText('🍃 Gestalt gelöst', this.x, this.y - 24, '#a3e635', 1.0);
+      for (let i = 0; i < 18; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 45 + 15;
+        this.game.combat.hitSparks.push({
+          x: this.x,
+          y: this.y - 10,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 15,
+          color: '#4ade80',
+          size: Math.random() * 2.5 + 1.2,
+          life: 0.45,
+          maxLife: 0.45
+        });
+      }
+    }
+  }
+
   getTotalXpEarned() {
     if (this.totalXpEarned && this.totalXpEarned > 0) {
       return this.totalXpEarned;
@@ -10354,10 +11017,13 @@ class Player {
 
     // Apply immediate attribute bonuses
     if (attribute === 'hp') {
-      this.maxHp += 15;
-      this.hp = Math.min(this.maxHp, this.hp + 15);
+      const baseMax = 100 + this.skills.hp * 15;
+      const newMax = this.isBearForm ? Math.round(baseMax * 1.5) : baseMax;
+      const gain = this.isBearForm ? Math.round(15 * 1.5) : 15;
+      this.maxHp = newMax;
+      this.hp = Math.min(this.maxHp, this.hp + gain);
       if (this.game && this.game.combat) {
-        this.game.combat.addFloatingText('❤️ +15 Max HP!', this.x, this.y - 24, '#4ade80', 1.1);
+        this.game.combat.addFloatingText(`❤️ +${gain} Max HP!`, this.x, this.y - 24, '#4ade80', 1.1);
         this.game.combat.addHitSparks(this.x, this.y - 10, '#4ade80', 14);
       }
     } else if (attribute === 'melee') {
@@ -10497,7 +11163,8 @@ class Player {
     if (!this.melee.charging) return;
     this.melee.charging = false;
 
-    if (this.melee.chargeTimer >= COMBAT_CONFIG.SPIN_CHARGE_TIME) {
+    const spinThreshold = COMBAT_CONFIG.SPIN_CHARGE_TIME * (this.isBearForm ? 1.2 : 1.0);
+    if (this.melee.chargeTimer >= spinThreshold) {
       // Execute 360 Spin Attack (Kreisel-Angriff)
       this.executeSpinAttack();
     } else {
@@ -10508,8 +11175,9 @@ class Player {
   }
 
   executeSpinAttack() {
+    const isBear = Boolean(this.isBearForm);
     this.melee.isSpinning = true;
-    this.melee.spinTimer = 0.32;
+    this.melee.spinTimer = 0.32 * (isBear ? 1.2 : 1.0);
     this.melee.swingProgress = 0;
     this.melee.swingType = 'spin';
     this.melee.comboStep = 0;
@@ -10517,14 +11185,17 @@ class Player {
     this.melee.recoveryTimer = 0;
 
     const radius = COMBAT_CONFIG.SPIN_RADIUS;
+    const slashType = isBear ? 'bear_spin' : 'spin';
     if (this.game && this.game.combat) {
-      this.game.combat.addSlashEffect('spin', this.x, this.y - 6, 0, radius);
+      this.game.combat.addSlashEffect(slashType, this.x, this.y - 6, 0, radius);
       this.game.combat.checkMeleeHits({
-        type: 'spin',
+        type: slashType,
         x: this.x,
         y: this.y - 6,
         radius,
-        knockback: COMBAT_CONFIG.SPIN_KNOCKBACK
+        damageMultiplier: isBear ? 2.0 : 1.0,
+        knockbackMultiplier: isBear ? 1.5 : 1.0,
+        knockback: COMBAT_CONFIG.SPIN_KNOCKBACK * (isBear ? 1.5 : 1.0)
       });
     }
   }
@@ -10542,48 +11213,58 @@ class Player {
     this.melee.swingProgress = 0;
 
     const angle = this.getFacingAngle();
+    const isBear = Boolean(this.isBearForm);
+    const speedFactor = isBear ? 1.2 : 1.0;
 
     if (nextStep === 1) {
       this.melee.swingType = 'slash1';
-      this.melee.comboTimer = COMBAT_CONFIG.COMBO_WINDOW;
+      this.melee.comboTimer = COMBAT_CONFIG.COMBO_WINDOW * speedFactor;
       this.melee.recoveryTimer = 0;
-      const radius = COMBAT_CONFIG.COMBO_SLASH_RADIUS;
+      const radius = COMBAT_CONFIG.COMBO_SLASH_RADIUS * (isBear ? 0.8 : 1.0);
+      const slashType = isBear ? 'bear_claw1' : 'slash1';
+      const kb = isBear ? 75 * 1.5 : 75;
       if (this.game && this.game.combat) {
-        this.game.combat.addSlashEffect('slash1', this.x, this.y - 6, angle, radius);
+        this.game.combat.addSlashEffect(slashType, this.x, this.y - 6, angle, radius);
         this.game.combat.checkMeleeHits({
-          type: 'slash1',
+          type: slashType,
           x: this.x,
           y: this.y - 6,
           angle,
           radius,
-          knockback: 75
+          damageMultiplier: isBear ? 2.0 : 1.0,
+          knockbackMultiplier: isBear ? 1.5 : 1.0,
+          knockback: kb
         });
       }
     } else if (nextStep === 2) {
       this.melee.swingType = 'slash2';
-      this.melee.comboTimer = COMBAT_CONFIG.COMBO_WINDOW;
+      this.melee.comboTimer = COMBAT_CONFIG.COMBO_WINDOW * speedFactor;
       this.melee.recoveryTimer = 0;
-      const radius = COMBAT_CONFIG.COMBO_SLASH_RADIUS + 2;
+      const radius = (COMBAT_CONFIG.COMBO_SLASH_RADIUS + 2) * (isBear ? 0.8 : 1.0);
+      const slashType = isBear ? 'bear_claw2' : 'slash2';
+      const kb = isBear ? 95 * 1.5 : 95;
       if (this.game && this.game.combat) {
-        this.game.combat.addSlashEffect('slash2', this.x, this.y - 6, angle, radius);
+        this.game.combat.addSlashEffect(slashType, this.x, this.y - 6, angle, radius);
         this.game.combat.checkMeleeHits({
-          type: 'slash2',
+          type: slashType,
           x: this.x,
           y: this.y - 6,
           angle,
           radius,
-          knockback: 95
+          damageMultiplier: isBear ? 2.0 : 1.0,
+          knockbackMultiplier: isBear ? 1.5 : 1.0,
+          knockback: kb
         });
       }
     } else if (nextStep === 3) {
-      // Kräftiger Stich / Thrust mit spürbarem Vorstoß, Wucht & anschließender Pause
+      // Kräftiger Stich / Beast Lunge mit Vorstoß, Wucht & anschließender Pause
       this.melee.swingType = 'thrust';
       this.melee.comboTimer = 0; // Kombo-Kette endet mit dem Stich
-      this.melee.recoveryTimer = COMBAT_CONFIG.COMBO_RECOVERY_PAUSE; // Pause nach Stich
-      const range = COMBAT_CONFIG.COMBO_THRUST_RANGE;
+      this.melee.recoveryTimer = COMBAT_CONFIG.COMBO_RECOVERY_PAUSE * speedFactor; // Pause nach Stich
+      const range = COMBAT_CONFIG.COMBO_THRUST_RANGE * (isBear ? 1.2 : 1.0);
 
       // Vorwärts-Lunge (kräftiger Ausfallschritt nach vorne)
-      const lungeDist = COMBAT_CONFIG.COMBO_THRUST_LUNGE;
+      const lungeDist = COMBAT_CONFIG.COMBO_THRUST_LUNGE * (isBear ? 1.2 : 1.0);
       const lx = Math.cos(angle) * lungeDist;
       const ly = Math.sin(angle) * lungeDist;
       if (!this.checkCollision(this.x + lx, this.y)) {
@@ -10603,22 +11284,25 @@ class Player {
           vx: -Math.cos(angle + spread) * pSpeed,
           vy: -Math.sin(angle + spread) * pSpeed,
           size: Math.random() * 2.5 + 1.2,
-          color: 'rgba(254, 240, 138, 0.75)',
+          color: isBear ? 'rgba(74, 222, 128, 0.75)' : 'rgba(254, 240, 138, 0.75)',
           life: 0.28,
           maxLife: 0.28
         });
       }
 
+      const slashType = isBear ? 'bear_thrust' : 'thrust';
       if (this.game && this.game.combat) {
-        this.game.combat.addSlashEffect('thrust', this.x, this.y - 6, angle, range);
+        this.game.combat.addSlashEffect(slashType, this.x, this.y - 6, angle, range);
         this.game.combat.checkMeleeHits({
-          type: 'thrust',
+          type: slashType,
           x: this.x,
           y: this.y - 6,
           angle,
           range,
-          width: COMBAT_CONFIG.COMBO_THRUST_WIDTH,
-          knockback: COMBAT_CONFIG.COMBO_THRUST_KNOCKBACK
+          damageMultiplier: isBear ? 2.0 : 1.0,
+          knockbackMultiplier: isBear ? 1.5 : 1.0,
+          width: COMBAT_CONFIG.COMBO_THRUST_WIDTH * (isBear ? 1.2 : 1.0),
+          knockback: COMBAT_CONFIG.COMBO_THRUST_KNOCKBACK * (isBear ? 1.5 : 1.0)
         });
       }
     }
@@ -10641,6 +11325,12 @@ class Player {
   }
 
   startRanged() {
+    if (this.isBearForm) {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('🐾 Ein Bär kann keinen Bogen nutzen!', this.x, this.y - 22, '#4ade80', 0.85);
+      }
+      return;
+    }
     if (this.shield.active || this.shield.stunTimer > 0 || this.isDead || this.transition) return;
     if (this.ranged.charging) return; // Bereits am Laden
     this.syncDirectionFromInput();
@@ -10683,6 +11373,26 @@ class Player {
 
   update(dt, input) {
     this.updateParticles(dt);
+
+    // Druid Bear Form Duration Countdown & Green Forest Aura Emitters
+    if (this.isBearForm) {
+      this.bearFormTimer -= dt;
+      if (Math.random() < 0.3) {
+        this.particles.push({
+          x: this.x + (Math.random() - 0.5) * 22,
+          y: this.y + (Math.random() - 0.5) * 14,
+          vx: (Math.random() - 0.5) * 16,
+          vy: -(Math.random() * 22 + 8),
+          size: Math.random() * 2.5 + 1.2,
+          color: Math.random() > 0.4 ? '#22c55e' : '#86efac',
+          life: 0.45,
+          maxLife: 0.45
+        });
+      }
+      if (this.bearFormTimer <= 0) {
+        this.revertBearForm();
+      }
+    }
 
     // Green Level-Up Flame Aura Timer & Spark Emitters
     if (this.levelUpFlameTimer > 0) {
@@ -10966,7 +11676,8 @@ class Player {
       }
     }
     if (this.melee.swingProgress < 1.0) {
-      const swingSpeed = (this.melee.swingType === 'thrust') ? 2.8 : 5.0;
+      const baseSwingSpeed = (this.melee.swingType === 'thrust') ? 2.8 : 5.0;
+      const swingSpeed = baseSwingSpeed * (this.isBearForm ? 0.8 : 1.0);
       this.melee.swingProgress += dt * swingSpeed;
     }
 
@@ -11732,18 +12443,22 @@ class Player {
       this.renderGreenFlameAura(ctx, px, py, animTime, flameAlpha, true);
     }
 
-    // 2. Folded Papercraft Hero Skin (15 selectable Dark Ghibli skins)
-    const skin = (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP[this.skinId]) || (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP['ren_twilight']);
-    if (skin && typeof skin.render === 'function') {
-      skin.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+    // 2. Folded Papercraft Hero Skin (15 selectable Dark Ghibli skins) OR Druid Bear Form
+    if (this.isBearForm) {
+      this.renderBearForm(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
     } else {
-      ctx.fillStyle = '#1e2636';
-      ctx.beginPath();
-      ctx.moveTo(px, py - 20 + bob);
-      ctx.lineTo(px + 7, py - 4 + bob);
-      ctx.lineTo(px - 7, py - 4 + bob);
-      ctx.closePath();
-      ctx.fill();
+      const skin = (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP[this.skinId]) || (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP['ren_twilight']);
+      if (skin && typeof skin.render === 'function') {
+        skin.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+      } else {
+        ctx.fillStyle = '#1e2636';
+        ctx.beginPath();
+        ctx.moveTo(px, py - 20 + bob);
+        ctx.lineTo(px + 7, py - 4 + bob);
+        ctx.lineTo(px - 7, py - 4 + bob);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
 
     // 2b. Level-Up Green Flame Aura (Front Layer)
@@ -11755,7 +12470,7 @@ class Player {
     // 3. Handheld Paper Lantern on Bamboo Pole (Held during Dusk & Night AND always Underground in Caves)
     const isUnderground = (this.game && this.game.currentDimension === 'caves') ||
       (this.map && this.map.biome && typeof this.map.biome === 'string' && (this.map.biome.includes('Tiefenhöhlen') || this.map.biome.includes('Grotte') || this.map.biome.includes('Höhle')));
-    const showLantern = (nightFactor > 0.1) || isUnderground;
+    const showLantern = ((nightFactor > 0.1) || isUnderground) && !this.isBearForm;
     const effectiveIntensity = isUnderground ? 1.0 : nightFactor;
 
     if (showLantern) {
@@ -11802,8 +12517,8 @@ class Player {
 
     // 4. COMBAT WEAPONS & ABILITY RENDERING
 
-    // 4a. Sword & Melee Attack Rendering
-    if (this.melee.charging) {
+    // 4a. Sword & Melee Attack Rendering (Suppressed in Bear Form)
+    if (!this.isBearForm && this.melee.charging) {
       const facingRight = this.direction.includes('right');
       const swordSide = facingRight ? 1 : -1;
       const hiltX = px + swordSide * 5;
@@ -11829,7 +12544,7 @@ class Player {
       // Gleam spark at blade tip
       ctx.fillStyle = chargeProg >= 1.0 ? '#fef08a' : '#38bdf8';
       ctx.fillRect(hiltX + swordSide * 5 - 1.5, hiltY - 19.5, 3, 3);
-    } else if (this.melee.swingProgress < 1.0 && this.melee.swingType) {
+    } else if (!this.isBearForm && this.melee.swingProgress < 1.0 && this.melee.swingType) {
       const swProg = this.melee.swingProgress;
       const swAngle = this.getFacingAngle();
 
@@ -11891,7 +12606,7 @@ class Player {
     }
 
     // 4a2. 360 Spin Attack Whirling Twin Blades
-    if (this.melee.isSpinning) {
+    if (!this.isBearForm && this.melee.isSpinning) {
       const spinAngle = animTime * 32;
       ctx.save();
       ctx.translate(px, py - 10 + bob);
@@ -11931,7 +12646,7 @@ class Player {
     }
 
     // 4b. Bow & Arrow Aiming
-    if (this.ranged.charging) {
+    if (!this.isBearForm && this.ranged.charging) {
       const bowAngle = this.getFacingAngle();
 
       ctx.save();
@@ -12158,6 +12873,215 @@ class Player {
         ctx.fill();
       }
     }
+    ctx.restore();
+  }
+
+  renderBearForm(ctx, px, py, animTime, direction, isMoving, hitFlash) {
+    const vec = this.getFacingVector();
+    const dx = vec.x;
+    const dy = vec.y;
+    const waddle = isMoving ? Math.sin(animTime * 9) * 2 : Math.sin(animTime * 2.5) * 0.5;
+    const footStep = isMoving ? Math.cos(animTime * 9) * 2.5 : 0;
+
+    const drawBox = (x, y, w, h, rad) => {
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(x, y, w, h, rad);
+      } else {
+        ctx.rect(x, y, w, h);
+      }
+    };
+
+    ctx.save();
+
+    // 1. Bear Paper Drop Shadow
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(px + 1, py + 2, 13, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Druidic Nature Aura Ring (Forest Emerald Glow)
+    const auraPulse = 1.0 + Math.sin(animTime * 4) * 0.12;
+    if (typeof ctx.createRadialGradient === 'function') {
+      const auraGrad = ctx.createRadialGradient(px, py - 8, 4, px, py - 8, 22 * auraPulse);
+      auraGrad.addColorStop(0, 'rgba(34, 197, 94, 0.35)');
+      auraGrad.addColorStop(0.7, 'rgba(22, 163, 74, 0.15)');
+      auraGrad.addColorStop(1, 'rgba(22, 101, 52, 0)');
+      ctx.fillStyle = auraGrad;
+      ctx.beginPath();
+      ctx.arc(px, py - 8, 22 * auraPulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3. Back Paws (Hind Feet)
+    const hindY = py - 2;
+    ctx.fillStyle = '#2e1507';
+    // Left hind paw
+    ctx.beginPath();
+    ctx.ellipse(px - 7, hindY - footStep * 0.5, 4.2, 3, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    // Right hind paw
+    ctx.beginPath();
+    ctx.ellipse(px + 7, hindY + footStep * 0.5, 4.2, 3, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Massive Bear Torso (Chunky Layered Papercraft Fold)
+    const bodyY = py - 13 + waddle;
+    // Darker back/shoulder shadow layer
+    ctx.fillStyle = '#3d1d0a';
+    ctx.beginPath();
+    drawBox(px - 11, bodyY - 11, 22, 20, 7);
+    ctx.fill();
+
+    // Main fur body
+    ctx.fillStyle = '#552a10';
+    ctx.beginPath();
+    drawBox(px - 10, bodyY - 10, 20, 18, 6);
+    ctx.fill();
+
+    // Papercraft Crease lines on fur
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px - 7, bodyY - 9);
+    ctx.lineTo(px, bodyY + 6);
+    ctx.lineTo(px + 7, bodyY - 9);
+    ctx.stroke();
+
+    // Shoulder moss flakes
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(px - 9, bodyY - 8, 3, 2);
+    ctx.fillRect(px + 6, bodyY - 8, 3, 2);
+
+    // 5. Pale Honey Parchment Chest Crest with Druid Runes
+    ctx.fillStyle = '#d4a373';
+    ctx.beginPath();
+    ctx.moveTo(px, bodyY - 7);
+    ctx.lineTo(px + 6 + dx * 1.5, bodyY + 4 + dy);
+    ctx.lineTo(px, bodyY + 7 + dy);
+    ctx.lineTo(px - 6 + dx * 1.5, bodyY + 4 + dy);
+    ctx.closePath();
+    ctx.fill();
+
+    // Glowing Emerald Druid Spiral / Mark on Chest
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.arc(px + dx * 1.2, bodyY + dy * 0.8, 2.8, 0, Math.PI * 1.6);
+    ctx.stroke();
+
+    // 6. Bear Head & Snout
+    const headX = px + dx * 3;
+    const headY = bodyY - 9 + dy * 2;
+
+    // Round Paper Ears
+    // Left ear
+    ctx.fillStyle = '#3d1d0a';
+    ctx.beginPath();
+    ctx.arc(headX - 6.5, headY - 5, 3.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e5a882'; // Inner ear fold
+    ctx.beginPath();
+    ctx.arc(headX - 6.5, headY - 5, 2.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Right ear
+    ctx.fillStyle = '#3d1d0a';
+    ctx.beginPath();
+    ctx.arc(headX + 6.5, headY - 5, 3.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e5a882';
+    ctx.beginPath();
+    ctx.arc(headX + 6.5, headY - 5, 2.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Main Head Fold
+    ctx.fillStyle = '#5c3012';
+    ctx.beginPath();
+    ctx.ellipse(headX, headY, 8.5, 7.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Folded Snout / Muzzle
+    const snoutX = headX + dx * 2.5;
+    const snoutY = headY + 2 + dy * 1.5;
+    ctx.fillStyle = '#783c18';
+    ctx.beginPath();
+    ctx.ellipse(snoutX, snoutY, 4.5, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Black Button Nose with tiny highlight
+    ctx.fillStyle = '#18181b';
+    ctx.beginPath();
+    ctx.arc(snoutX + dx * 0.8, snoutY - 1 + dy * 0.5, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(snoutX + dx * 0.8 - 0.6, snoutY - 1.6 + dy * 0.5, 0.9, 0.9);
+
+    // Glowing Fierce Emerald Eyes
+    if (direction !== 'up') {
+      const eyeY = headY - 1.5 + dy * 0.5;
+      const eyeSpacing = 3.8;
+      // Left eye
+      if (!direction.includes('right')) {
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 0.4, eyeY + 0.4, 1.1, 1.1);
+      }
+      // Right eye
+      if (!direction.includes('left')) {
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 0.4, eyeY + 0.4, 1.1, 1.1);
+      }
+    }
+
+    // 7. Massive Front Paws with Emerald-Tipped Bone Claws
+    const pawRaise = (this.melee.charging || this.melee.swingProgress < 0.6) ? -4 : 0;
+    const lPawX = px - 9 + (dx < 0 ? -2 : 0);
+    const lPawY = bodyY + 5 + footStep + pawRaise;
+    const rPawX = px + 9 + (dx > 0 ? 2 : 0);
+    const rPawY = bodyY + 5 - footStep + pawRaise;
+
+    const drawPawWithClaws = (pawX, pawY, isLeft) => {
+      ctx.fillStyle = '#3d1d0a';
+      ctx.beginPath();
+      ctx.ellipse(pawX, pawY, 4.6, 3.8, isLeft ? -0.15 : 0.15, 0, Math.PI * 2);
+      ctx.fill();
+
+      const clawAngle = Math.atan2(dy || 1, dx || (isLeft ? -0.4 : 0.4));
+      for (let c = -1; c <= 1; c++) {
+        const ca = clawAngle + c * 0.35;
+        const cx = pawX + Math.cos(ca) * 3.5;
+        const cy = pawY + Math.sin(ca) * 3.5;
+        const tipX = pawX + Math.cos(ca) * 6.5;
+        const tipY = pawY + Math.sin(ca) * 6.5;
+
+        // Bone white claw base
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+
+        // Emerald glowing claw tip
+        ctx.fillStyle = '#4ade80';
+        ctx.fillRect(tipX - 0.7, tipY - 0.7, 1.4, 1.4);
+      }
+    };
+
+    drawPawWithClaws(lPawX, lPawY, true);
+    drawPawWithClaws(rPawX, rPawY, false);
+
+    // Hit Flash Tint
+    if (hitFlash > 0) {
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.55)';
+      ctx.beginPath();
+      drawBox(px - 12, bodyY - 15, 24, 26, 7);
+      ctx.fill();
+    }
+
     ctx.restore();
   }
 }
@@ -12918,8 +13842,9 @@ class CombatManager {
 
   addSlashEffect(type, x, y, angle, radius = 28) {
     let duration = 0.22;
-    if (type === 'spin') duration = 0.32;
-    if (type === 'thrust') duration = 0.32; // Longer duration for powerful lingering thrust
+    if (type === 'spin' || type === 'bear_spin') duration = 0.32;
+    if (type === 'thrust' || type === 'bear_thrust') duration = 0.32; // Longer duration for powerful lingering thrust
+    if (type === 'bear_claw1' || type === 'bear_claw2') duration = 0.26;
 
     this.slashEffects.push({
       type,
@@ -12932,27 +13857,37 @@ class CombatManager {
     });
 
     // Air gust & paper spark particles
-    const sparkCount = type === 'spin' ? 24 : (type === 'thrust' ? 22 : 9);
+    const isBear = type.startsWith('bear_');
+    const sparkCount = (type === 'spin' || type === 'bear_spin') ? 24 : ((type === 'thrust' || type === 'bear_thrust') ? 22 : 12);
     for (let i = 0; i < sparkCount; i++) {
       let pAngle;
-      if (type === 'spin') {
+      if (type === 'spin' || type === 'bear_spin') {
         pAngle = (i / sparkCount) * Math.PI * 2;
-      } else if (type === 'thrust') {
+      } else if (type === 'thrust' || type === 'bear_thrust') {
         pAngle = angle + (Math.random() - 0.5) * 0.4;
       } else {
         pAngle = angle + (Math.random() - 0.5) * 1.0;
       }
 
-      const pSpeed = type === 'thrust' ? (Math.random() * 140 + 60) : (Math.random() * 80 + 40);
+      const pSpeed = (type === 'thrust' || type === 'bear_thrust') ? (Math.random() * 150 + 60) : (Math.random() * 90 + 40);
+      let color = '#ffffff';
+      if (isBear) {
+        color = Math.random() > 0.4 ? '#22c55e' : (Math.random() > 0.5 ? '#86efac' : '#facc15');
+      } else if (type === 'spin') {
+        color = '#67e8f9';
+      } else if (type === 'thrust') {
+        color = Math.random() > 0.4 ? '#fef08a' : '#f59e0b';
+      }
+
       this.hitSparks.push({
         x: x + Math.cos(pAngle) * (radius * 0.5),
         y: y + Math.sin(pAngle) * (radius * 0.5),
         vx: Math.cos(pAngle) * pSpeed,
         vy: Math.sin(pAngle) * pSpeed,
-        color: type === 'spin' ? '#67e8f9' : (type === 'thrust' ? (Math.random() > 0.4 ? '#fef08a' : '#f59e0b') : '#ffffff'),
-        size: Math.random() * 2.5 + 1.2,
-        life: 0.32,
-        maxLife: 0.32
+        color,
+        size: Math.random() * 2.8 + 1.2,
+        life: 0.35,
+        maxLife: 0.35
       });
     }
   }
@@ -13095,6 +14030,8 @@ class CombatManager {
 
   checkMeleeHits(hitbox) {
     let hitAny = false;
+    const isSpin = hitbox.type === 'spin' || hitbox.type === 'bear_spin';
+    const isThrust = hitbox.type === 'thrust' || hitbox.type === 'bear_thrust';
 
     // Check collision with training dummies
     for (const dummy of this.dummies) {
@@ -13105,9 +14042,9 @@ class CombatManager {
       const dist = Math.hypot(dx, dy);
 
       let inRange = false;
-      if (hitbox.type === 'spin') {
+      if (isSpin) {
         inRange = dist <= (hitbox.radius + 10);
-      } else if (hitbox.type === 'thrust') {
+      } else if (isThrust) {
         // Forward piercing cone / capsule
         const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
         const sideDist = Math.abs(-dx * Math.sin(hitbox.angle) + dy * Math.cos(hitbox.angle));
@@ -13135,9 +14072,9 @@ class CombatManager {
         const dist = Math.hypot(dx, dy);
 
         let inRange = false;
-        if (hitbox.type === 'spin') {
+        if (isSpin) {
           inRange = dist <= (hitbox.radius + enemy.radius + 4);
-        } else if (hitbox.type === 'thrust') {
+        } else if (isThrust) {
           const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
           const sideDist = Math.abs(-dx * Math.sin(hitbox.angle) + dy * Math.cos(hitbox.angle));
           inRange = (forwardDot > 0 && forwardDot <= hitbox.range + enemy.radius && sideDist <= (hitbox.width || 22) + enemy.radius);
@@ -13151,15 +14088,24 @@ class CombatManager {
         if (inRange) {
           hitAny = true;
           let dmg = 25;
-          if (hitbox.type === 'slash2') dmg = 35;
-          if (hitbox.type === 'thrust') dmg = 52;
-          if (hitbox.type === 'spin') dmg = 68;
+          if (hitbox.type === 'slash2' || hitbox.type === 'bear_claw2') dmg = 35;
+          if (isThrust) dmg = 52;
+          if (isSpin) dmg = 68;
 
           const meleeBonus = (this.game?.player?.skills?.melee || 0) * 4;
           dmg += meleeBonus;
 
-          const angle = hitbox.type === 'spin' ? Math.atan2(enemy.y - hitbox.y, enemy.x - hitbox.x) : hitbox.angle;
-          const kb = hitbox.knockback || (hitbox.type === 'thrust' ? 120 : (hitbox.type === 'spin' ? 140 : 80));
+          if (hitbox.damageMultiplier) {
+            dmg = Math.round(dmg * hitbox.damageMultiplier);
+          } else if (hitbox.damage) {
+            dmg = hitbox.damage;
+          }
+
+          const angle = isSpin ? Math.atan2(enemy.y - hitbox.y, enemy.x - hitbox.x) : hitbox.angle;
+          let kb = hitbox.knockback || (isThrust ? 120 : (isSpin ? 140 : 80));
+          if (hitbox.knockbackMultiplier) {
+            kb = Math.round(kb * hitbox.knockbackMultiplier);
+          }
           enemy.takeDamage(dmg, angle, kb, this);
         }
       }
@@ -13167,14 +14113,89 @@ class CombatManager {
 
     // Heavy thrust or spin attack camera shake impact
     if (hitAny && this.game && this.game.camera) {
-      if (hitbox.type === 'thrust') {
-        this.game.camera.shake(4.2, 0.16);
-      } else if (hitbox.type === 'spin') {
-        this.game.camera.shake(3.8, 0.15);
+      if (isThrust) {
+        this.game.camera.shake(4.5, 0.18);
+      } else if (isSpin) {
+        this.game.camera.shake(4.0, 0.16);
       }
     }
 
     return hitAny;
+  }
+
+  spawnVoidTeleportVFX(x, y, isArrival = false) {
+    const dim = this.game?.currentDimension || 'overworld';
+    const count = isArrival ? 35 : 28;
+    for (let i = 0; i < count; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = isArrival ? (Math.random() * 90 + 30) : -(Math.random() * 70 + 20);
+      const dist = isArrival ? (Math.random() * 8) : (Math.random() * 25 + 10);
+      this.hitSparks.push({
+        dimension: dim,
+        x: x + Math.cos(ang) * dist,
+        y: (y - 8) + Math.sin(ang) * dist,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp - 5,
+        color: Math.random() > 0.4 ? '#a855f7' : (Math.random() > 0.5 ? '#c084fc' : '#ffffff'),
+        size: Math.random() * 3 + 1.5,
+        life: 0.55,
+        maxLife: 0.55
+      });
+    }
+    this.createShockwave(x, y - 8, isArrival ? 32 : 24, 0, '#a855f7', false, dim);
+  }
+
+  spawnPlasmaExplosion(x, y, radius = 48, damage = 110, knockback = 175) {
+    const dim = this.game?.currentDimension || 'overworld';
+    this.createShockwave(x, y, radius, 0, '#ec4899', false, dim);
+
+    if (this.game?.camera) {
+      this.game.camera.shake(3.8, 0.16);
+    }
+
+    this.addFloatingText('💥 PLASMA!', x, y - 18, '#f472b6', 0.85);
+
+    for (let i = 0; i < 30; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = Math.random() * 140 + 40;
+      this.hitSparks.push({
+        dimension: dim,
+        x,
+        y,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp - 10,
+        color: Math.random() > 0.4 ? '#ec4899' : (Math.random() > 0.5 ? '#f472b6' : '#ffffff'),
+        size: Math.random() * 3.5 + 1.5,
+        life: 0.45,
+        maxLife: 0.45
+      });
+    }
+
+    if (this.game?.enemyManager) {
+      const enemies = this.game.enemyManager.getActiveEnemies();
+      for (const enemy of enemies) {
+        const dx = enemy.x - x;
+        const dy = enemy.y - y;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= radius + (enemy.radius || 12)) {
+          const angle = dist > 1 ? Math.atan2(dy, dx) : Math.random() * Math.PI * 2;
+          enemy.takeDamage(damage, angle, knockback, this);
+        }
+      }
+    }
+
+    for (const dummy of this.dummies) {
+      const dx = dummy.x - x;
+      const dy = dummy.y - 6 - y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= radius + 12) {
+        this.applyHitToDummy(dummy, {
+          type: 'thrust',
+          knockback,
+          angle: Math.atan2(dy, dx)
+        });
+      }
+    }
   }
 
   applyHitToDummy(dummy, hitbox) {
@@ -14149,6 +15170,93 @@ class CombatManager {
         ctx.lineTo(curLen + 9, 3.8);
         ctx.stroke();
       }
+      else if (slash.type === 'bear_spin') {
+        // 360 Degree Savage Bear Claw Cyclone & Nature Spirit Shockwave
+        const curRadius = slash.radius * (0.75 + progress * 0.45);
+
+        // Outer emerald forest vacuum ring
+        ctx.lineWidth = 2.5 * alpha;
+        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.75})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius * 1.25, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner glowing jade blade ring
+        ctx.lineWidth = 4.5 * alpha;
+        ctx.strokeStyle = `rgba(74, 222, 128, ${alpha * 0.95})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 4 swirling savage claw scratches
+        for (let s = 0; s < 4; s++) {
+          const startA = (s * Math.PI / 2) + progress * Math.PI * 4;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
+          ctx.lineWidth = 2.8 * alpha;
+          ctx.beginPath();
+          ctx.arc(0, 0, curRadius * 0.85, startA, startA + 0.85);
+          ctx.stroke();
+
+          ctx.strokeStyle = `rgba(250, 204, 21, ${alpha * 0.85})`;
+          ctx.lineWidth = 2.0 * alpha;
+          ctx.beginPath();
+          ctx.arc(0, 0, curRadius * 0.65, -startA, -startA + 0.85);
+          ctx.stroke();
+        }
+      }
+      else if (slash.type === 'bear_thrust') {
+        // Heavy twin paw gouge / beast lunge shockwave & razor claw trails
+        ctx.rotate(slash.angle);
+        const curLen = slash.radius * (0.7 + progress * 0.5);
+
+        // Emerald shockwave rings
+        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.85})`;
+        ctx.lineWidth = 3.0 * alpha;
+        ctx.beginPath();
+        ctx.arc(curLen * 0.5, 0, 18 * (0.6 + progress * 0.8), -Math.PI * 0.45, Math.PI * 0.45);
+        ctx.stroke();
+
+        // 4 forward razor claw puncture trails
+        for (let c = -1.5; c <= 1.5; c += 1) {
+          const yOff = c * 7;
+          ctx.strokeStyle = `rgba(134, 239, 172, ${alpha * 0.95})`;
+          ctx.lineWidth = 2.5 * alpha;
+          ctx.beginPath();
+          ctx.moveTo(curLen * 0.15, yOff * 0.4);
+          ctx.lineTo(curLen + 10, yOff);
+          ctx.stroke();
+
+          // Star gleam at claw tips
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+          ctx.fillRect(curLen + 9, yOff - 1.5, 3, 3);
+        }
+      }
+      else if (slash.type === 'bear_claw1' || slash.type === 'bear_claw2') {
+        // Savage Bear Claw Swipe (Triple curved lacerations in emerald green & gold)
+        ctx.rotate(slash.angle);
+        const flip = slash.type === 'bear_claw2' ? -1 : 1;
+        const curRadius = slash.radius * (0.8 + progress * 0.35);
+
+        // Draw 3 distinct curved claw lacerations
+        for (let c = -1; c <= 1; c++) {
+          const clawOffset = c * 7.5;
+          const r = curRadius - Math.abs(c) * 2.5;
+
+          // Outer green claw trail
+          ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.95})`;
+          ctx.lineWidth = (3.5 - Math.abs(c) * 0.6) * alpha;
+          ctx.beginPath();
+          ctx.arc(0, clawOffset, r, -0.6 * flip, 0.6 * flip, flip < 0);
+          ctx.stroke();
+
+          // Inner white razor gleam
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.92})`;
+          ctx.lineWidth = 1.4 * alpha;
+          ctx.beginPath();
+          ctx.arc(0, clawOffset, r, -0.45 * flip, 0.45 * flip, flip < 0);
+          ctx.stroke();
+        }
+      }
       else {
         // Radial Slash 1 & 2 (Curved Crescent Paper Blade Swoosh)
         ctx.rotate(slash.angle);
@@ -14526,6 +15634,7 @@ class Game {
         if (this.magicManager) {
           this.magicManager.toggleInfoModal(false);
           this.magicManager.closeSwapModal();
+          this.magicManager.closeTeleportModal();
         }
       }
     });

@@ -18,8 +18,63 @@ export const ARTIFACT_TYPES = {
     speed: 360,
     colorTheme: '#ef4444',
     glowColor: 'rgba(239, 68, 68, 0.5)'
+  },
+  DRUID_BEAR: {
+    id: 'druid_bear',
+    name: 'Smaragd-Druide',
+    title: 'Bärengestalt',
+    icon: '🐻',
+    description: 'Entfesselt uralte Druidenmagie mit smaragdgrünem Leuchten. Verwandelt dich für 1 Minute in einen mächtigen Bären mit 50% mehr Leben! Deine Prankenhiebe sind 20% langsamer, aber doppelt so stark mit mehr Rückstoß. Der Vorstoß reicht 20% weiter. Kein Bogen, stattdessen mächtiger Krallenwirbel.',
+    maxCharges: 5,
+    rechargeBonus: 3,
+    cooldown: 2.0,
+    damage: 0,
+    widthTiles: 0,
+    speed: 0,
+    colorTheme: '#22c55e',
+    glowColor: 'rgba(34, 197, 94, 0.6)'
+  },
+  PLASMA_ORBS: {
+    id: 'plasma_orbs',
+    name: 'Rosa Plasmakugeln',
+    title: 'Plasma-Orbit',
+    icon: '🔮',
+    description: 'Beschwört kurz nacheinander 4 pulsierende rosa Plasmakugeln in deine Umlaufbahn. Sie blinken mit ansteigender Frequenz und detonieren nacheinander in verheerenden Plasma-Explosionen mit hohem Schaden und enormem Rückstoß.',
+    maxCharges: 5,
+    rechargeBonus: 3,
+    cooldown: 3.0,
+    damage: 240,
+    widthTiles: 3,
+    speed: 0,
+    colorTheme: '#ec4899',
+    glowColor: 'rgba(236, 72, 153, 0.6)'
+  },
+  VOID_TELEPORT: {
+    id: 'void_teleport',
+    name: 'Leeren-Teleport',
+    title: 'Schatten-Riss',
+    icon: '🌌',
+    description: 'Nutzt die dimensionale Teleportation der Schattenmonster. Öffnet eine taktische Karte aller aufgedeckten Gebiete. Wähle ein begehbares Ziel auf der Karte, um dich mit violetter Leeren-Implosion sofort dorthin zu teleportieren.',
+    maxCharges: 5,
+    rechargeBonus: 3,
+    cooldown: 1.0,
+    damage: 0,
+    widthTiles: 0,
+    speed: 0,
+    colorTheme: '#a855f7',
+    glowColor: 'rgba(168, 85, 247, 0.6)'
   }
 };
+
+export function getArtifactDef(typeId) {
+  if (!typeId) return ARTIFACT_TYPES.PHOENIX;
+  const key = String(typeId).toUpperCase();
+  if (ARTIFACT_TYPES[key]) return ARTIFACT_TYPES[key];
+  for (const def of Object.values(ARTIFACT_TYPES)) {
+    if (def.id === typeId) return def;
+  }
+  return ARTIFACT_TYPES.PHOENIX;
+}
 
 const getElement = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
 
@@ -28,11 +83,16 @@ export class MagicManager {
     this.game = game;
     this.groundArtifacts = [];
     this.activeSpells = [];
+    this.activePlasmaSequences = [];
     this.playerGlitterParticles = [];
     this.glitterTimer = 0;
 
     this.isSwapModalOpen = false;
     this.pendingGroundArtifact = null;
+
+    // Teleportation Map State
+    this.isTeleportModalOpen = false;
+    this.teleportHoverTile = null;
 
     // UI elements
     this.magicHudSlot = getElement('magic-hud-slot');
@@ -44,6 +104,10 @@ export class MagicManager {
     this.btnInfoModalClose = getElement('btn-magic-info-close');
     this.artifactSwapModal = getElement('artifact-swap-modal');
     this.magicPickupBanner = getElement('magic-pickup-banner');
+
+    this.teleportModal = getElement('teleport-map-modal');
+    this.teleportCanvas = getElement('teleportMapCanvas');
+    this.btnTeleportClose = getElement('btn-teleport-map-close');
 
     this.initEvents();
   }
@@ -121,6 +185,94 @@ export class MagicManager {
         }
       });
     }
+
+    // Teleport Map Modal Listeners
+    if (this.btnTeleportClose) {
+      const handleCloseTeleport = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+        this.closeTeleportModal();
+      };
+      this.btnTeleportClose.addEventListener('click', handleCloseTeleport);
+      this.btnTeleportClose.addEventListener('touchstart', handleCloseTeleport, { passive: false });
+    }
+
+    if (this.teleportModal) {
+      this.teleportModal.addEventListener('click', (e) => {
+        if (e.target === this.teleportModal) {
+          this.closeTeleportModal();
+        }
+      });
+    }
+
+    if (this.teleportCanvas) {
+      const handleMouseMove = (e) => {
+        if (!this.isTeleportModalOpen) return;
+        const rect = this.teleportCanvas.getBoundingClientRect();
+        const map = this.game?.map;
+        if (!map) return;
+
+        const mapW = map.width || MAP_WIDTH;
+        const mapH = map.height || MAP_HEIGHT;
+
+        const clickX = ((e.clientX - rect.left) / rect.width) * this.teleportCanvas.width;
+        const clickY = ((e.clientY - rect.top) / rect.height) * this.teleportCanvas.height;
+
+        const scaleX = this.teleportCanvas.width / mapW;
+        const scaleY = this.teleportCanvas.height / mapH;
+
+        const tx = Math.floor(clickX / scaleX);
+        const ty = Math.floor(clickY / scaleY);
+
+        if (tx >= 0 && tx < mapW && ty >= 0 && ty < mapH) {
+          const isWalkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
+          const isExplored = !map.explored || (map.explored[ty] && map.explored[ty][tx]);
+          this.teleportHoverTile = { tx, ty, valid: Boolean(isWalkable && isExplored) };
+
+          const coordsEl = getElement('teleport-coords-display');
+          if (coordsEl) {
+            coordsEl.textContent = `Ziel: X: ${tx}, Y: ${ty} ${isWalkable && isExplored ? '✅ Begehbar' : '❌ Gesperrt / Dunkel'}`;
+            coordsEl.style.color = isWalkable && isExplored ? '#a855f7' : '#ef4444';
+          }
+          this.renderTeleportMap();
+        }
+      };
+
+      this.teleportCanvas.addEventListener('mousemove', handleMouseMove);
+
+      const handleClick = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+        this.handleTeleportClick(e.clientX, e.clientY);
+      };
+      this.teleportCanvas.addEventListener('click', handleClick);
+
+      this.teleportCanvas.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        if (e.touches && e.touches[0]) {
+          this.handleTeleportClick(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: false });
+    }
+
+    // Dev Quick-Equip buttons
+    const bindDevEquip = (btnId, artDef) => {
+      const btn = getElement(btnId);
+      if (btn) {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (this.game?.player) {
+            this.equipArtifact(this.game.player, artDef);
+            this.triggerPickupBanner(artDef, `✨ DEV: ${artDef.name.toUpperCase()} AUSGERÜSTET!`);
+          }
+        });
+      }
+    };
+
+    bindDevEquip('dev-equip-phoenix', ARTIFACT_TYPES.PHOENIX);
+    bindDevEquip('dev-equip-bear', ARTIFACT_TYPES.DRUID_BEAR);
+    bindDevEquip('dev-equip-plasma', ARTIFACT_TYPES.PLASMA_ORBS);
+    bindDevEquip('dev-equip-teleport', ARTIFACT_TYPES.VOID_TELEPORT);
   }
 
   toggleInfoModal(forceState = null) {
@@ -137,7 +289,7 @@ export class MagicManager {
 
   populateInfoModal() {
     const player = this.game?.player;
-    const artifactDef = player?.artifact ? (ARTIFACT_TYPES[player.artifact.id?.toUpperCase()] || ARTIFACT_TYPES.PHOENIX) : ARTIFACT_TYPES.PHOENIX;
+    const artifactDef = player?.artifact ? getArtifactDef(player.artifact.id) : ARTIFACT_TYPES.PHOENIX;
 
     const titleEl = getElement('magic-info-title');
     const iconEl = getElement('magic-info-icon');
@@ -152,15 +304,27 @@ export class MagicManager {
     if (descEl) descEl.textContent = artifactDef.description;
     if (chargesEl) chargesEl.textContent = player?.artifact ? `${player.artifact.charges} / ${player.artifact.maxCharges}` : `${artifactDef.maxCharges} Aufladungen`;
     if (cdEl) cdEl.textContent = `${artifactDef.cooldown.toFixed(1)}s`;
-    if (widthEl) widthEl.textContent = `${artifactDef.widthTiles} Kacheln (80px)`;
-    if (dmgEl) dmgEl.textContent = `${artifactDef.damage} Feuerschaden`;
+
+    if (artifactDef.id === 'druid_bear') {
+      if (widthEl) widthEl.textContent = 'Pranken & Wirbel';
+      if (dmgEl) dmgEl.textContent = '2x Schaden (+50% HP)';
+    } else if (artifactDef.id === 'plasma_orbs') {
+      if (widthEl) widthEl.textContent = '4 Orbs im Orbit';
+      if (dmgEl) dmgEl.textContent = `${artifactDef.damage} Plasma-Schaden`;
+    } else if (artifactDef.id === 'void_teleport') {
+      if (widthEl) widthEl.textContent = 'Aufgedeckte Weltkarte';
+      if (dmgEl) dmgEl.textContent = 'Sofortige Teleportation';
+    } else {
+      if (widthEl) widthEl.textContent = `${artifactDef.widthTiles} Kacheln (80px)`;
+      if (dmgEl) dmgEl.textContent = `${artifactDef.damage} Feuerschaden`;
+    }
   }
 
   // ---------------------------------------------------------------------------
   // GROUND ARTIFACT MANAGEMENT
   // ---------------------------------------------------------------------------
   spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false) {
-    const artifactDef = ARTIFACT_TYPES[typeId.toUpperCase()] || ARTIFACT_TYPES.PHOENIX;
+    const artifactDef = getArtifactDef(typeId);
     const artifact = {
       id: `art_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       typeId: artifactDef.id,
@@ -179,46 +343,58 @@ export class MagicManager {
   initShrineArtifacts(caves, cloudMap, overworldMap) {
     this.groundArtifacts = [];
 
-    // 1. Shrines in Cloud World (Himmel)
+    // 1. Shrines in Cloud World (Himmel): Rosa Plasmakugeln & Smaragd-Druide
     if (cloudMap && cloudMap.shrines) {
-      cloudMap.shrines.forEach(shrine => {
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, 'phoenix', true);
+      const cloudTypes = ['plasma_orbs', 'druid_bear', 'phoenix'];
+      cloudMap.shrines.forEach((shrine, idx) => {
+        const type = cloudTypes[idx % cloudTypes.length];
+        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, type, true);
       });
     }
 
-    // 2. Shrines in Cave World (Höhlen) - handles both single CaveMap and caves collection object
+    // 2. Shrines in Cave World (Höhlen): Leeren-Teleport & Rosa Plasmakugeln
+    const caveTypes = ['void_teleport', 'plasma_orbs', 'druid_bear'];
     if (caves) {
       if (Array.isArray(caves.shrines)) {
-        caves.shrines.forEach(shrine => {
-          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, 'phoenix', true);
+        caves.shrines.forEach((shrine, idx) => {
+          const type = caveTypes[idx % caveTypes.length];
+          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true);
         });
       } else if (typeof caves === 'object') {
+        let count = 0;
         Object.values(caves).forEach(cMap => {
           if (cMap && Array.isArray(cMap.shrines)) {
             cMap.shrines.forEach(shrine => {
-              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, 'phoenix', true);
+              const type = caveTypes[count % caveTypes.length];
+              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true);
+              count++;
             });
           }
         });
       }
     }
 
-    // 3. Shrines in Overworld (Ancient Void Shrine in the Abyss)
+    // 3. Shrines in Overworld: Phönix, Smaragd-Druide & Leeren-Teleport
+    const overworldTypes = ['phoenix', 'druid_bear', 'void_teleport'];
     if (overworldMap && Array.isArray(overworldMap.shrines)) {
-      overworldMap.shrines.forEach(shrine => {
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, 'phoenix', true);
+      overworldMap.shrines.forEach((shrine, idx) => {
+        const type = overworldTypes[idx % overworldTypes.length];
+        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true);
       });
     } else {
       this.spawnGroundArtifact(108 * TILE_SIZE + 8, 63 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, 'phoenix', true);
+      this.spawnGroundArtifact(20 * TILE_SIZE + 8, 36 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, 'druid_bear', true);
     }
   }
 
   dropMonsterArtifact(x, y, dimension = DIMENSIONS.OVERWORLD) {
-    const art = this.spawnGroundArtifact(x, y, dimension, 'phoenix', false);
-    // Add glowing burst of embers on monster drop
+    const allTypes = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport'];
+    const chosenType = allTypes[Math.floor(Math.random() * allTypes.length)];
+    const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false);
+
     if (this.game?.combat) {
-      this.game.combat.addFloatingText('✨ MAGISCHES ARTEFAKT!', x, y - 24, '#f59e0b', 1.2);
-      for (let i = 0; i < 20; i++) {
+      this.game.combat.addFloatingText(`✨ ${art.def.icon} ${art.def.name.toUpperCase()}!`, x, y - 24, art.def.colorTheme || '#f59e0b', 1.3);
+      for (let i = 0; i < 22; i++) {
         const ang = Math.random() * Math.PI * 2;
         const sp = Math.random() * 50 + 20;
         this.game.combat.hitSparks.push({
@@ -226,7 +402,7 @@ export class MagicManager {
           y: y - 10,
           vx: Math.cos(ang) * sp,
           vy: Math.sin(ang) * sp - 15,
-          color: Math.random() > 0.5 ? '#ef4444' : '#facc15',
+          color: Math.random() > 0.4 ? (art.def.colorTheme || '#f59e0b') : '#facc15',
           size: Math.random() * 3 + 1.5,
           life: 0.7,
           maxLife: 0.7
@@ -266,18 +442,22 @@ export class MagicManager {
   }
 
   equipArtifact(player, artifactDef) {
+    if (!player) return;
+    const def = getArtifactDef(artifactDef.id || artifactDef);
     player.artifact = {
-      id: artifactDef.id,
-      name: artifactDef.name,
-      title: artifactDef.title,
-      icon: artifactDef.icon,
-      charges: artifactDef.maxCharges,
-      maxCharges: artifactDef.maxCharges,
+      id: def.id,
+      name: def.name,
+      title: def.title,
+      icon: def.icon,
+      charges: def.maxCharges,
+      maxCharges: def.maxCharges,
       cooldownTimer: 0,
-      cooldownMax: artifactDef.cooldown,
-      damage: artifactDef.damage,
-      widthTiles: artifactDef.widthTiles,
-      speed: artifactDef.speed
+      cooldownMax: def.cooldown,
+      damage: def.damage,
+      widthTiles: def.widthTiles,
+      speed: def.speed,
+      colorTheme: def.colorTheme,
+      glowColor: def.glowColor
     };
     this.updateHUD();
   }
@@ -381,7 +561,7 @@ export class MagicManager {
   }
 
   // ---------------------------------------------------------------------------
-  // SPELL CASTING (Phönix)
+  // SPELL CASTING (Phönix, Druiden-Bär, Plasmakugeln, Leeren-Teleport)
   // ---------------------------------------------------------------------------
   castActiveSpell(player, map, combatManager) {
     if (!player || player.isDead) return false;
@@ -394,7 +574,33 @@ export class MagicManager {
       return false;
     }
 
-    // Determine direction
+    const artId = player.artifact.id;
+
+    // 1. DRUIDEN-BÄR GESTALT (Smaragd-Druide)
+    if (artId === 'druid_bear') {
+      player.activateBearForm(60);
+      player.artifact.charges--;
+      player.artifact.cooldownTimer = player.artifact.cooldownMax || 2.0;
+      this.updateHUD();
+      return true;
+    }
+
+    // 2. ROSA PLASMAKUGELN (4 Kugeln im Orbit)
+    if (artId === 'plasma_orbs') {
+      player.artifact.charges--;
+      player.artifact.cooldownTimer = player.artifact.cooldownMax || 3.0;
+      this.spawnPlasmaOrbSequence(player, combatManager);
+      this.updateHUD();
+      return true;
+    }
+
+    // 3. LEEREN-TELEPORT (Karte zur Zielauswahl öffnen)
+    if (artId === 'void_teleport') {
+      this.openTeleportModal();
+      return true;
+    }
+
+    // 4. RUBIN-PHÖNIX (Flammen-Sturm)
     let dirX = 0, dirY = 1;
     if (player.direction === 'up') { dirX = 0; dirY = -1; }
     else if (player.direction === 'down') { dirX = 0; dirY = 1; }
@@ -405,12 +611,10 @@ export class MagicManager {
     else if (player.direction === 'down-left') { dirX = -0.7071; dirY = 0.7071; }
     else if (player.direction === 'down-right') { dirX = 0.7071; dirY = 0.7071; }
 
-    // Deduct charge and trigger cooldown
     player.artifact.charges--;
-    player.artifact.cooldownTimer = player.artifact.cooldownMax;
+    player.artifact.cooldownTimer = player.artifact.cooldownMax || 3.0;
 
-    // 5 tiles width = 80px
-    const widthPx = player.artifact.widthTiles * TILE_SIZE;
+    const widthPx = (player.artifact.widthTiles || 5) * TILE_SIZE;
 
     const spell = {
       id: `phoenix_${Date.now()}`,
@@ -452,6 +656,371 @@ export class MagicManager {
 
     this.updateHUD();
     return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // PLASMA ORBS LOGIC
+  // ---------------------------------------------------------------------------
+  spawnPlasmaOrbSequence(player, combatManager) {
+    const sequence = {
+      id: `plasma_${Date.now()}`,
+      dimension: this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD,
+      timer: 0,
+      orbs: [0, 1, 2, 3].map(i => ({
+        index: i,
+        delay: i * 0.18, // short delay between spawns
+        active: false,
+        life: 1.35,
+        maxLife: 1.35,
+        orbitAngle: (i * Math.PI) / 2,
+        exploded: false,
+        damage: 240,
+        knockback: 220
+      }))
+    };
+    this.activePlasmaSequences.push(sequence);
+
+    if (combatManager) {
+      combatManager.addFloatingText(`🔮 PLASMA-ORBIT! (${player.artifact.charges} übrig)`, player.x, player.y - 28, '#ec4899', 1.2);
+      for (let i = 0; i < 18; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 60 + 20;
+        combatManager.hitSparks.push({
+          x: player.x,
+          y: player.y - 10,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 10,
+          color: Math.random() > 0.4 ? '#ec4899' : '#f472b6',
+          size: Math.random() * 2.5 + 1.5,
+          life: 0.5,
+          maxLife: 0.5
+        });
+      }
+    }
+  }
+
+  updatePlasmaOrbs(dt, player, combatManager, enemyManager) {
+    if (!this.activePlasmaSequences.length) return;
+    const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
+
+    for (let s = this.activePlasmaSequences.length - 1; s >= 0; s--) {
+      const seq = this.activePlasmaSequences[s];
+      if (seq.dimension !== curDim) continue;
+
+      seq.timer += dt;
+      let allExploded = true;
+
+      for (let i = 0; i < seq.orbs.length; i++) {
+        const orb = seq.orbs[i];
+        if (orb.exploded) continue;
+
+        allExploded = false;
+
+        if (seq.timer >= orb.delay) {
+          if (!orb.active) {
+            orb.active = true;
+            if (combatManager && player) {
+              const ox = player.x + Math.cos(orb.orbitAngle) * 34;
+              const oy = (player.y - 10) + Math.sin(orb.orbitAngle) * 34;
+              for (let k = 0; k < 6; k++) {
+                const a = Math.random() * Math.PI * 2;
+                combatManager.hitSparks.push({
+                  x: ox,
+                  y: oy,
+                  vx: Math.cos(a) * 30,
+                  vy: Math.sin(a) * 30,
+                  color: '#f472b6',
+                  size: 2,
+                  life: 0.3,
+                  maxLife: 0.3
+                });
+              }
+            }
+          }
+
+          orb.orbitAngle += dt * 4.2;
+          orb.life -= dt;
+
+          if (combatManager && player && Math.random() < 0.35) {
+            const ox = player.x + Math.cos(orb.orbitAngle) * 34;
+            const oy = (player.y - 10) + Math.sin(orb.orbitAngle) * 34;
+            combatManager.hitSparks.push({
+              x: ox + (Math.random() - 0.5) * 6,
+              y: oy + (Math.random() - 0.5) * 6,
+              vx: (Math.random() - 0.5) * 15,
+              vy: (Math.random() - 0.5) * 15,
+              color: Math.random() > 0.4 ? '#f472b6' : '#ec4899',
+              size: 2,
+              life: 0.25,
+              maxLife: 0.25
+            });
+          }
+
+          if (orb.life <= 0) {
+            orb.exploded = true;
+            if (player && combatManager) {
+              const ox = player.x + Math.cos(orb.orbitAngle) * 34;
+              const oy = (player.y - 10) + Math.sin(orb.orbitAngle) * 34;
+              combatManager.spawnPlasmaExplosion(ox, oy, 48, orb.damage, orb.knockback, enemyManager);
+            }
+          }
+        }
+      }
+
+      if (allExploded) {
+        this.activePlasmaSequences.splice(s, 1);
+      }
+    }
+  }
+
+  renderPlasmaOrbs(ctx, camera) {
+    if (!this.activePlasmaSequences.length) return;
+    const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
+    const player = this.game?.player;
+    if (!player) return;
+
+    const zoom = camera ? camera.zoom : 1;
+    const camX = camera ? camera.x : 0;
+    const camY = camera ? camera.y : 0;
+
+    for (const seq of this.activePlasmaSequences) {
+      if (seq.dimension !== curDim) continue;
+
+      for (const orb of seq.orbs) {
+        if (!orb.active || orb.exploded) continue;
+
+        const worldX = player.x + Math.cos(orb.orbitAngle) * 34;
+        const worldY = (player.y - 10) + Math.sin(orb.orbitAngle) * 34;
+
+        const sx = (worldX - camX) * zoom;
+        const sy = (worldY - camY) * zoom;
+
+        const lifeFraction = Math.max(0, orb.life / orb.maxLife);
+        const blinkFreq = 10 + (1 - lifeFraction) * 28;
+        const blink = Math.sin(seq.timer * blinkFreq) > 0;
+
+        ctx.save();
+
+        const glowRad = (10 + Math.sin(seq.timer * 15) * 3) * zoom;
+        if (typeof ctx.createRadialGradient === 'function') {
+          const grad = ctx.createRadialGradient(sx, sy, 2 * zoom, sx, sy, glowRad);
+          grad.addColorStop(0, blink ? 'rgba(244, 114, 182, 0.85)' : 'rgba(236, 72, 153, 0.45)');
+          grad.addColorStop(0.6, 'rgba(219, 39, 119, 0.3)');
+          grad.addColorStop(1, 'rgba(157, 23, 77, 0)');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(sx, sy, glowRad, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.fillStyle = blink ? '#fdf2f8' : '#ec4899';
+        ctx.beginPath();
+        ctx.arc(sx, sy, (4 + Math.sin(seq.timer * 20) * 1) * zoom, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#f472b6';
+        ctx.lineWidth = 1.2 * zoom;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 6 * zoom, seq.timer * 8, seq.timer * 8 + Math.PI * 1.3);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // VOID TELEPORT MAP MODAL LOGIC
+  // ---------------------------------------------------------------------------
+  openTeleportModal() {
+    const modal = getElement('teleport-map-modal');
+    if (!modal) return;
+    this.isTeleportModalOpen = true;
+    modal.classList.remove('hidden');
+    this.renderTeleportMap();
+  }
+
+  closeTeleportModal() {
+    const modal = getElement('teleport-map-modal');
+    if (modal) modal.classList.add('hidden');
+    this.isTeleportModalOpen = false;
+    this.teleportHoverTile = null;
+  }
+
+  renderTeleportMap() {
+    const canvas = this.teleportCanvas || getElement('teleportMapCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const player = this.game?.player;
+    const map = this.game?.map;
+    if (!map) return;
+
+    const mapW = map.width || MAP_WIDTH;
+    const mapH = map.height || MAP_HEIGHT;
+
+    ctx.fillStyle = '#090a10';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const scaleX = canvas.width / mapW;
+    const scaleY = canvas.height / mapH;
+
+    // Draw explored tiles / minimap background
+    if (this.game?.minimap && this.game.minimap.bgCanvas) {
+      ctx.drawImage(this.game.minimap.bgCanvas, 0, 0, canvas.width, canvas.height);
+    } else {
+      for (let ty = 0; ty < mapH; ty++) {
+        for (let tx = 0; tx < mapW; tx++) {
+          const isWalkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
+          ctx.fillStyle = isWalkable ? '#1e293b' : '#0f172a';
+          ctx.fillRect(tx * scaleX, ty * scaleY, scaleX + 0.5, scaleY + 0.5);
+        }
+      }
+    }
+
+    // Fog of war: darken unexplored tiles if map.explored exists
+    if (map.explored) {
+      ctx.fillStyle = 'rgba(5, 7, 15, 0.82)';
+      for (let ty = 0; ty < mapH; ty++) {
+        for (let tx = 0; tx < mapW; tx++) {
+          if (!map.explored[ty] || !map.explored[ty][tx]) {
+            ctx.fillRect(tx * scaleX, ty * scaleY, scaleX + 0.5, scaleY + 0.5);
+          }
+        }
+      }
+    }
+
+    // Grid lines for tactical map feel
+    ctx.strokeStyle = 'rgba(147, 51, 234, 0.15)';
+    ctx.lineWidth = 1;
+    const gridStepX = scaleX * 10;
+    for (let gx = 0; gx < canvas.width; gx += gridStepX) {
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.lineTo(gx, canvas.height);
+      ctx.stroke();
+    }
+    const gridStepY = scaleY * 10;
+    for (let gy = 0; gy < canvas.height; gy += gridStepY) {
+      ctx.beginPath();
+      ctx.moveTo(0, gy);
+      ctx.lineTo(canvas.width, gy);
+      ctx.stroke();
+    }
+
+    // Player position marker (Pulsing Cyan/Gold Star)
+    if (player) {
+      const pTileX = player.x / TILE_SIZE;
+      const pTileY = player.y / TILE_SIZE;
+      const px = pTileX * scaleX;
+      const py = pTileY * scaleY;
+
+      const time = Date.now() / 1000;
+      const ringR = 6 + Math.sin(time * 5) * 2;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(px, py, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(px, py, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Hovered Target Reticle
+    if (this.teleportHoverTile) {
+      const { tx, ty, valid } = this.teleportHoverTile;
+      const hx = (tx + 0.5) * scaleX;
+      const hy = (ty + 0.5) * scaleY;
+
+      ctx.save();
+      ctx.strokeStyle = valid ? '#c084fc' : '#ef4444';
+      ctx.lineWidth = 2;
+
+      ctx.beginPath();
+      ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(hx - 14, hy); ctx.lineTo(hx - 6, hy);
+      ctx.moveTo(hx + 6, hy); ctx.lineTo(hx + 14, hy);
+      ctx.moveTo(hx, hy - 14); ctx.lineTo(hx, hy - 6);
+      ctx.moveTo(hx, hy + 6); ctx.lineTo(hx, hy + 14);
+      ctx.stroke();
+
+      ctx.fillStyle = valid ? 'rgba(168, 85, 247, 0.25)' : 'rgba(239, 68, 68, 0.25)';
+      ctx.beginPath();
+      ctx.arc(hx, hy, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.restore();
+    }
+  }
+
+  handleTeleportClick(clientX, clientY) {
+    const canvas = this.teleportCanvas || getElement('teleportMapCanvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const map = this.game?.map;
+    const player = this.game?.player;
+    if (!map || !player) return;
+
+    const mapW = map.width || MAP_WIDTH;
+    const mapH = map.height || MAP_HEIGHT;
+
+    const clickX = ((clientX - rect.left) / rect.width) * canvas.width;
+    const clickY = ((clientY - rect.top) / rect.height) * canvas.height;
+
+    const scaleX = canvas.width / mapW;
+    const scaleY = canvas.height / mapH;
+
+    const tx = Math.floor(clickX / scaleX);
+    const ty = Math.floor(clickY / scaleY);
+
+    if (tx < 0 || tx >= mapW || ty < 0 || ty >= mapH) return;
+
+    const isWalkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
+    const isExplored = !map.explored || (map.explored[ty] && map.explored[ty][tx]);
+
+    if (!isWalkable || !isExplored) {
+      const tooltip = getElement('teleport-target-tooltip');
+      if (tooltip) {
+        tooltip.textContent = !isExplored ? '❌ Unerforschter Ort!' : '❌ Nicht begehbar!';
+        tooltip.classList.remove('hidden');
+        setTimeout(() => tooltip?.classList.add('hidden'), 1200);
+      }
+      return;
+    }
+
+    const targetWorldX = tx * TILE_SIZE + TILE_SIZE / 2;
+    const targetWorldY = ty * TILE_SIZE + TILE_SIZE / 2;
+
+    const combat = this.game?.combat;
+    if (combat) {
+      combat.spawnVoidTeleportVFX(player.x, player.y, false);
+    }
+
+    player.x = targetWorldX;
+    player.y = targetWorldY;
+    if (this.game?.camera) {
+      this.game.camera.centerOn(targetWorldX, targetWorldY);
+    }
+
+    if (combat) {
+      combat.spawnVoidTeleportVFX(player.x, player.y, true);
+      combat.addFloatingText('🌌 LEEREN-SPRUNG!', player.x, player.y - 28, '#c084fc', 1.3);
+    }
+
+    if (player.artifact) {
+      player.artifact.charges--;
+      player.artifact.cooldownTimer = player.artifact.cooldownMax || 1.0;
+    }
+
+    this.closeTeleportModal();
+    this.updateHUD();
   }
 
   // ---------------------------------------------------------------------------
@@ -590,6 +1159,9 @@ export class MagicManager {
       }
     }
 
+    // 5. Update Plasma Orbs
+    this.updatePlasmaOrbs(dt, player, combatManager, enemyManager);
+
     this.updateHUD();
   }
 
@@ -609,6 +1181,20 @@ export class MagicManager {
 
     if (this.magicChargesBadge) {
       this.magicChargesBadge.textContent = player.artifact.charges;
+    }
+
+    // Dynamic icon on the spell button
+    const iconEl = this.magicHudSlot.querySelector('.magic-btn-icon');
+    if (iconEl) {
+      iconEl.textContent = player.artifact.icon || '🔥';
+    }
+
+    // Dynamic border & glow based on artifact colorTheme
+    if (this.btnCastMagic) {
+      const col = player.artifact.colorTheme || '#ef4444';
+      const glow = player.artifact.glowColor || 'rgba(239, 68, 68, 0.5)';
+      this.btnCastMagic.style.borderColor = col;
+      this.btnCastMagic.style.boxShadow = `0 0 12px ${glow}`;
     }
 
     if (this.magicCooldownOverlay) {
@@ -632,13 +1218,16 @@ export class MagicManager {
     const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
     const player = this.game?.player;
 
-    // 1. Ground Artifacts
+    // 1. Ground Artifacts with unique themed glow & icons
     this.renderGroundArtifacts(ctx, camera, curDim);
 
     // 2. Active Spell Projectiles (Phönix)
     this.renderActiveSpells(ctx, camera, curDim);
 
-    // 3. Player Glitter Aura
+    // 3. Pink Plasma Orbs in Orbit
+    this.renderPlasmaOrbs(ctx, camera);
+
+    // 4. Player Glitter Aura
     if (player && player.artifact && player.artifact.charges > 0) {
       this.renderPlayerGlitter(ctx, camera);
     }
@@ -660,13 +1249,15 @@ export class MagicManager {
 
       const bobY = Math.sin(art.bobTime) * 4;
       const py = sy + bobY;
+      const themeColor = art.def.colorTheme || '#ef4444';
+      const glowColor = art.def.glowColor || 'rgba(239, 68, 68, 0.5)';
 
       ctx.save();
 
       // Vertical Heavenly Light Pillar
       const grad = ctx.createLinearGradient(sx, py - 45 * zoom, sx, py + 10 * zoom);
-      grad.addColorStop(0, 'rgba(239, 68, 68, 0)');
-      grad.addColorStop(0.6, `rgba(239, 68, 68, ${0.15 + art.lightPulse * 0.15})`);
+      grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      grad.addColorStop(0.6, glowColor);
       grad.addColorStop(1, 'rgba(250, 204, 21, 0.4)');
       ctx.fillStyle = grad;
       ctx.fillRect(sx - 10 * zoom, py - 45 * zoom, 20 * zoom, 55 * zoom);
@@ -676,35 +1267,35 @@ export class MagicManager {
       ctx.translate(sx, sy + 6 * zoom);
       ctx.scale(1, 0.38); // Flattened perspective oval
       ctx.rotate(art.bobTime * 0.5);
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+      ctx.strokeStyle = themeColor;
       ctx.lineWidth = 1.5 * zoom;
       ctx.beginPath();
       ctx.arc(0, 0, 16 * zoom, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.fillStyle = 'rgba(250, 204, 21, 0.3)';
+      ctx.fillStyle = glowColor;
       ctx.beginPath();
       ctx.arc(0, 0, 10 * zoom, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
-      // Floating Papercraft Ruby Orb
+      // Floating Papercraft Gem Orb
       const orbRadius = 7 * zoom;
 
       // Soft outer glow
-      ctx.fillStyle = art.def.glowColor || 'rgba(239, 68, 68, 0.5)';
+      ctx.fillStyle = glowColor;
       ctx.beginPath();
       ctx.arc(sx, py, (orbRadius + 4) * (1 + art.lightPulse * 0.2), 0, Math.PI * 2);
       ctx.fill();
 
-      // Ruby Orb Facets (Dark Ghibli Papercraft)
-      ctx.fillStyle = '#dc2626';
+      // Gem Orb Body
+      ctx.fillStyle = themeColor;
       ctx.beginPath();
       ctx.arc(sx, py, orbRadius, 0, Math.PI * 2);
       ctx.fill();
 
       // Top Highlight fold
-      ctx.fillStyle = '#f87171';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
       ctx.beginPath();
       ctx.moveTo(sx, py - orbRadius);
       ctx.lineTo(sx + orbRadius * 0.7, py);
@@ -718,6 +1309,14 @@ export class MagicManager {
       ctx.beginPath();
       ctx.arc(sx - 2 * zoom, py - 2 * zoom, 1.8 * zoom, 0, Math.PI * 2);
       ctx.fill();
+
+      // Floating Artifact Icon Emoji above Orb
+      if (typeof ctx.fillText === 'function') {
+        ctx.font = `${Math.round(11 * zoom)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(art.def.icon || '✨', sx, py - 12 * zoom);
+      }
 
       // Orbiting Ember Sparks
       for (let s = 0; s < 3; s++) {

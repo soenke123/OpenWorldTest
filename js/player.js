@@ -101,9 +101,13 @@ export class Player {
     this.discoveredShrines = new Set();
     this.shrineMessage = null;
     this.artifact = null; // Active magical artifact { id, name, charges, maxCharges, cooldownTimer, ... }
+    this.isBearForm = false;
+    this.bearFormTimer = 0;
+    this.bearFormMaxTimer = 60;
   }
 
   respawn() {
+    this.revertBearForm();
     this.transition = null;
     this.transitionCooldown = 0.5;
     this.lastTransitionTile = null;
@@ -223,6 +227,66 @@ export class Player {
     }
   }
 
+  activateBearForm(duration = 60) {
+    this.isBearForm = true;
+    this.bearFormTimer = duration;
+    this.bearFormMaxTimer = duration;
+
+    // 50% mehr Leben während Bärengestalt
+    const baseMax = 100 + (this.skills?.hp || 0) * 15;
+    const targetMax = Math.round(baseMax * 1.5);
+    const hpRatio = this.hp / Math.max(1, this.maxHp);
+    this.maxHp = targetMax;
+    this.hp = Math.round(targetMax * Math.max(0.3, hpRatio));
+
+    if (this.game && this.game.combat) {
+      this.game.combat.addFloatingText('🐻 BÄRENGESTALT! (60s)', this.x, this.y - 28, '#22c55e', 1.4);
+      for (let i = 0; i < 28; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 75 + 25;
+        this.game.combat.hitSparks.push({
+          x: this.x,
+          y: this.y - 12,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 20,
+          color: Math.random() > 0.4 ? '#22c55e' : '#86efac',
+          size: Math.random() * 3.5 + 1.8,
+          life: 0.6,
+          maxLife: 0.6
+        });
+      }
+    }
+  }
+
+  revertBearForm() {
+    if (!this.isBearForm) return;
+    this.isBearForm = false;
+    this.bearFormTimer = 0;
+
+    const baseMax = 100 + (this.skills?.hp || 0) * 15;
+    const hpRatio = this.hp / Math.max(1, this.maxHp);
+    this.maxHp = baseMax;
+    this.hp = Math.max(1, Math.min(this.maxHp, Math.round(baseMax * hpRatio)));
+
+    if (this.game && this.game.combat) {
+      this.game.combat.addFloatingText('🍃 Gestalt gelöst', this.x, this.y - 24, '#a3e635', 1.0);
+      for (let i = 0; i < 18; i++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = Math.random() * 45 + 15;
+        this.game.combat.hitSparks.push({
+          x: this.x,
+          y: this.y - 10,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 15,
+          color: '#4ade80',
+          size: Math.random() * 2.5 + 1.2,
+          life: 0.45,
+          maxLife: 0.45
+        });
+      }
+    }
+  }
+
   getTotalXpEarned() {
     if (this.totalXpEarned && this.totalXpEarned > 0) {
       return this.totalXpEarned;
@@ -254,10 +318,13 @@ export class Player {
 
     // Apply immediate attribute bonuses
     if (attribute === 'hp') {
-      this.maxHp += 15;
-      this.hp = Math.min(this.maxHp, this.hp + 15);
+      const baseMax = 100 + this.skills.hp * 15;
+      const newMax = this.isBearForm ? Math.round(baseMax * 1.5) : baseMax;
+      const gain = this.isBearForm ? Math.round(15 * 1.5) : 15;
+      this.maxHp = newMax;
+      this.hp = Math.min(this.maxHp, this.hp + gain);
       if (this.game && this.game.combat) {
-        this.game.combat.addFloatingText('❤️ +15 Max HP!', this.x, this.y - 24, '#4ade80', 1.1);
+        this.game.combat.addFloatingText(`❤️ +${gain} Max HP!`, this.x, this.y - 24, '#4ade80', 1.1);
         this.game.combat.addHitSparks(this.x, this.y - 10, '#4ade80', 14);
       }
     } else if (attribute === 'melee') {
@@ -397,7 +464,8 @@ export class Player {
     if (!this.melee.charging) return;
     this.melee.charging = false;
 
-    if (this.melee.chargeTimer >= COMBAT_CONFIG.SPIN_CHARGE_TIME) {
+    const spinThreshold = COMBAT_CONFIG.SPIN_CHARGE_TIME * (this.isBearForm ? 1.2 : 1.0);
+    if (this.melee.chargeTimer >= spinThreshold) {
       // Execute 360 Spin Attack (Kreisel-Angriff)
       this.executeSpinAttack();
     } else {
@@ -408,8 +476,9 @@ export class Player {
   }
 
   executeSpinAttack() {
+    const isBear = Boolean(this.isBearForm);
     this.melee.isSpinning = true;
-    this.melee.spinTimer = 0.32;
+    this.melee.spinTimer = 0.32 * (isBear ? 1.2 : 1.0);
     this.melee.swingProgress = 0;
     this.melee.swingType = 'spin';
     this.melee.comboStep = 0;
@@ -417,14 +486,17 @@ export class Player {
     this.melee.recoveryTimer = 0;
 
     const radius = COMBAT_CONFIG.SPIN_RADIUS;
+    const slashType = isBear ? 'bear_spin' : 'spin';
     if (this.game && this.game.combat) {
-      this.game.combat.addSlashEffect('spin', this.x, this.y - 6, 0, radius);
+      this.game.combat.addSlashEffect(slashType, this.x, this.y - 6, 0, radius);
       this.game.combat.checkMeleeHits({
-        type: 'spin',
+        type: slashType,
         x: this.x,
         y: this.y - 6,
         radius,
-        knockback: COMBAT_CONFIG.SPIN_KNOCKBACK
+        damageMultiplier: isBear ? 2.0 : 1.0,
+        knockbackMultiplier: isBear ? 1.5 : 1.0,
+        knockback: COMBAT_CONFIG.SPIN_KNOCKBACK * (isBear ? 1.5 : 1.0)
       });
     }
   }
@@ -442,48 +514,58 @@ export class Player {
     this.melee.swingProgress = 0;
 
     const angle = this.getFacingAngle();
+    const isBear = Boolean(this.isBearForm);
+    const speedFactor = isBear ? 1.2 : 1.0;
 
     if (nextStep === 1) {
       this.melee.swingType = 'slash1';
-      this.melee.comboTimer = COMBAT_CONFIG.COMBO_WINDOW;
+      this.melee.comboTimer = COMBAT_CONFIG.COMBO_WINDOW * speedFactor;
       this.melee.recoveryTimer = 0;
-      const radius = COMBAT_CONFIG.COMBO_SLASH_RADIUS;
+      const radius = COMBAT_CONFIG.COMBO_SLASH_RADIUS * (isBear ? 0.8 : 1.0);
+      const slashType = isBear ? 'bear_claw1' : 'slash1';
+      const kb = isBear ? 75 * 1.5 : 75;
       if (this.game && this.game.combat) {
-        this.game.combat.addSlashEffect('slash1', this.x, this.y - 6, angle, radius);
+        this.game.combat.addSlashEffect(slashType, this.x, this.y - 6, angle, radius);
         this.game.combat.checkMeleeHits({
-          type: 'slash1',
+          type: slashType,
           x: this.x,
           y: this.y - 6,
           angle,
           radius,
-          knockback: 75
+          damageMultiplier: isBear ? 2.0 : 1.0,
+          knockbackMultiplier: isBear ? 1.5 : 1.0,
+          knockback: kb
         });
       }
     } else if (nextStep === 2) {
       this.melee.swingType = 'slash2';
-      this.melee.comboTimer = COMBAT_CONFIG.COMBO_WINDOW;
+      this.melee.comboTimer = COMBAT_CONFIG.COMBO_WINDOW * speedFactor;
       this.melee.recoveryTimer = 0;
-      const radius = COMBAT_CONFIG.COMBO_SLASH_RADIUS + 2;
+      const radius = (COMBAT_CONFIG.COMBO_SLASH_RADIUS + 2) * (isBear ? 0.8 : 1.0);
+      const slashType = isBear ? 'bear_claw2' : 'slash2';
+      const kb = isBear ? 95 * 1.5 : 95;
       if (this.game && this.game.combat) {
-        this.game.combat.addSlashEffect('slash2', this.x, this.y - 6, angle, radius);
+        this.game.combat.addSlashEffect(slashType, this.x, this.y - 6, angle, radius);
         this.game.combat.checkMeleeHits({
-          type: 'slash2',
+          type: slashType,
           x: this.x,
           y: this.y - 6,
           angle,
           radius,
-          knockback: 95
+          damageMultiplier: isBear ? 2.0 : 1.0,
+          knockbackMultiplier: isBear ? 1.5 : 1.0,
+          knockback: kb
         });
       }
     } else if (nextStep === 3) {
-      // Kräftiger Stich / Thrust mit spürbarem Vorstoß, Wucht & anschließender Pause
+      // Kräftiger Stich / Beast Lunge mit Vorstoß, Wucht & anschließender Pause
       this.melee.swingType = 'thrust';
       this.melee.comboTimer = 0; // Kombo-Kette endet mit dem Stich
-      this.melee.recoveryTimer = COMBAT_CONFIG.COMBO_RECOVERY_PAUSE; // Pause nach Stich
-      const range = COMBAT_CONFIG.COMBO_THRUST_RANGE;
+      this.melee.recoveryTimer = COMBAT_CONFIG.COMBO_RECOVERY_PAUSE * speedFactor; // Pause nach Stich
+      const range = COMBAT_CONFIG.COMBO_THRUST_RANGE * (isBear ? 1.2 : 1.0);
 
       // Vorwärts-Lunge (kräftiger Ausfallschritt nach vorne)
-      const lungeDist = COMBAT_CONFIG.COMBO_THRUST_LUNGE;
+      const lungeDist = COMBAT_CONFIG.COMBO_THRUST_LUNGE * (isBear ? 1.2 : 1.0);
       const lx = Math.cos(angle) * lungeDist;
       const ly = Math.sin(angle) * lungeDist;
       if (!this.checkCollision(this.x + lx, this.y)) {
@@ -503,22 +585,25 @@ export class Player {
           vx: -Math.cos(angle + spread) * pSpeed,
           vy: -Math.sin(angle + spread) * pSpeed,
           size: Math.random() * 2.5 + 1.2,
-          color: 'rgba(254, 240, 138, 0.75)',
+          color: isBear ? 'rgba(74, 222, 128, 0.75)' : 'rgba(254, 240, 138, 0.75)',
           life: 0.28,
           maxLife: 0.28
         });
       }
 
+      const slashType = isBear ? 'bear_thrust' : 'thrust';
       if (this.game && this.game.combat) {
-        this.game.combat.addSlashEffect('thrust', this.x, this.y - 6, angle, range);
+        this.game.combat.addSlashEffect(slashType, this.x, this.y - 6, angle, range);
         this.game.combat.checkMeleeHits({
-          type: 'thrust',
+          type: slashType,
           x: this.x,
           y: this.y - 6,
           angle,
           range,
-          width: COMBAT_CONFIG.COMBO_THRUST_WIDTH,
-          knockback: COMBAT_CONFIG.COMBO_THRUST_KNOCKBACK
+          damageMultiplier: isBear ? 2.0 : 1.0,
+          knockbackMultiplier: isBear ? 1.5 : 1.0,
+          width: COMBAT_CONFIG.COMBO_THRUST_WIDTH * (isBear ? 1.2 : 1.0),
+          knockback: COMBAT_CONFIG.COMBO_THRUST_KNOCKBACK * (isBear ? 1.5 : 1.0)
         });
       }
     }
@@ -541,6 +626,12 @@ export class Player {
   }
 
   startRanged() {
+    if (this.isBearForm) {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('🐾 Ein Bär kann keinen Bogen nutzen!', this.x, this.y - 22, '#4ade80', 0.85);
+      }
+      return;
+    }
     if (this.shield.active || this.shield.stunTimer > 0 || this.isDead || this.transition) return;
     if (this.ranged.charging) return; // Bereits am Laden
     this.syncDirectionFromInput();
@@ -583,6 +674,26 @@ export class Player {
 
   update(dt, input) {
     this.updateParticles(dt);
+
+    // Druid Bear Form Duration Countdown & Green Forest Aura Emitters
+    if (this.isBearForm) {
+      this.bearFormTimer -= dt;
+      if (Math.random() < 0.3) {
+        this.particles.push({
+          x: this.x + (Math.random() - 0.5) * 22,
+          y: this.y + (Math.random() - 0.5) * 14,
+          vx: (Math.random() - 0.5) * 16,
+          vy: -(Math.random() * 22 + 8),
+          size: Math.random() * 2.5 + 1.2,
+          color: Math.random() > 0.4 ? '#22c55e' : '#86efac',
+          life: 0.45,
+          maxLife: 0.45
+        });
+      }
+      if (this.bearFormTimer <= 0) {
+        this.revertBearForm();
+      }
+    }
 
     // Green Level-Up Flame Aura Timer & Spark Emitters
     if (this.levelUpFlameTimer > 0) {
@@ -866,7 +977,8 @@ export class Player {
       }
     }
     if (this.melee.swingProgress < 1.0) {
-      const swingSpeed = (this.melee.swingType === 'thrust') ? 2.8 : 5.0;
+      const baseSwingSpeed = (this.melee.swingType === 'thrust') ? 2.8 : 5.0;
+      const swingSpeed = baseSwingSpeed * (this.isBearForm ? 0.8 : 1.0);
       this.melee.swingProgress += dt * swingSpeed;
     }
 
@@ -1632,18 +1744,22 @@ export class Player {
       this.renderGreenFlameAura(ctx, px, py, animTime, flameAlpha, true);
     }
 
-    // 2. Folded Papercraft Hero Skin (15 selectable Dark Ghibli skins)
-    const skin = (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP[this.skinId]) || (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP['ren_twilight']);
-    if (skin && typeof skin.render === 'function') {
-      skin.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+    // 2. Folded Papercraft Hero Skin (15 selectable Dark Ghibli skins) OR Druid Bear Form
+    if (this.isBearForm) {
+      this.renderBearForm(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
     } else {
-      ctx.fillStyle = '#1e2636';
-      ctx.beginPath();
-      ctx.moveTo(px, py - 20 + bob);
-      ctx.lineTo(px + 7, py - 4 + bob);
-      ctx.lineTo(px - 7, py - 4 + bob);
-      ctx.closePath();
-      ctx.fill();
+      const skin = (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP[this.skinId]) || (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP['ren_twilight']);
+      if (skin && typeof skin.render === 'function') {
+        skin.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+      } else {
+        ctx.fillStyle = '#1e2636';
+        ctx.beginPath();
+        ctx.moveTo(px, py - 20 + bob);
+        ctx.lineTo(px + 7, py - 4 + bob);
+        ctx.lineTo(px - 7, py - 4 + bob);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
 
     // 2b. Level-Up Green Flame Aura (Front Layer)
@@ -1655,7 +1771,7 @@ export class Player {
     // 3. Handheld Paper Lantern on Bamboo Pole (Held during Dusk & Night AND always Underground in Caves)
     const isUnderground = (this.game && this.game.currentDimension === 'caves') ||
       (this.map && this.map.biome && typeof this.map.biome === 'string' && (this.map.biome.includes('Tiefenhöhlen') || this.map.biome.includes('Grotte') || this.map.biome.includes('Höhle')));
-    const showLantern = (nightFactor > 0.1) || isUnderground;
+    const showLantern = ((nightFactor > 0.1) || isUnderground) && !this.isBearForm;
     const effectiveIntensity = isUnderground ? 1.0 : nightFactor;
 
     if (showLantern) {
@@ -1702,8 +1818,8 @@ export class Player {
 
     // 4. COMBAT WEAPONS & ABILITY RENDERING
 
-    // 4a. Sword & Melee Attack Rendering
-    if (this.melee.charging) {
+    // 4a. Sword & Melee Attack Rendering (Suppressed in Bear Form)
+    if (!this.isBearForm && this.melee.charging) {
       const facingRight = this.direction.includes('right');
       const swordSide = facingRight ? 1 : -1;
       const hiltX = px + swordSide * 5;
@@ -1729,7 +1845,7 @@ export class Player {
       // Gleam spark at blade tip
       ctx.fillStyle = chargeProg >= 1.0 ? '#fef08a' : '#38bdf8';
       ctx.fillRect(hiltX + swordSide * 5 - 1.5, hiltY - 19.5, 3, 3);
-    } else if (this.melee.swingProgress < 1.0 && this.melee.swingType) {
+    } else if (!this.isBearForm && this.melee.swingProgress < 1.0 && this.melee.swingType) {
       const swProg = this.melee.swingProgress;
       const swAngle = this.getFacingAngle();
 
@@ -1791,7 +1907,7 @@ export class Player {
     }
 
     // 4a2. 360 Spin Attack Whirling Twin Blades
-    if (this.melee.isSpinning) {
+    if (!this.isBearForm && this.melee.isSpinning) {
       const spinAngle = animTime * 32;
       ctx.save();
       ctx.translate(px, py - 10 + bob);
@@ -1831,7 +1947,7 @@ export class Player {
     }
 
     // 4b. Bow & Arrow Aiming
-    if (this.ranged.charging) {
+    if (!this.isBearForm && this.ranged.charging) {
       const bowAngle = this.getFacingAngle();
 
       ctx.save();
@@ -2058,6 +2174,215 @@ export class Player {
         ctx.fill();
       }
     }
+    ctx.restore();
+  }
+
+  renderBearForm(ctx, px, py, animTime, direction, isMoving, hitFlash) {
+    const vec = this.getFacingVector();
+    const dx = vec.x;
+    const dy = vec.y;
+    const waddle = isMoving ? Math.sin(animTime * 9) * 2 : Math.sin(animTime * 2.5) * 0.5;
+    const footStep = isMoving ? Math.cos(animTime * 9) * 2.5 : 0;
+
+    const drawBox = (x, y, w, h, rad) => {
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(x, y, w, h, rad);
+      } else {
+        ctx.rect(x, y, w, h);
+      }
+    };
+
+    ctx.save();
+
+    // 1. Bear Paper Drop Shadow
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+    ctx.beginPath();
+    ctx.ellipse(px + 1, py + 2, 13, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Druidic Nature Aura Ring (Forest Emerald Glow)
+    const auraPulse = 1.0 + Math.sin(animTime * 4) * 0.12;
+    if (typeof ctx.createRadialGradient === 'function') {
+      const auraGrad = ctx.createRadialGradient(px, py - 8, 4, px, py - 8, 22 * auraPulse);
+      auraGrad.addColorStop(0, 'rgba(34, 197, 94, 0.35)');
+      auraGrad.addColorStop(0.7, 'rgba(22, 163, 74, 0.15)');
+      auraGrad.addColorStop(1, 'rgba(22, 101, 52, 0)');
+      ctx.fillStyle = auraGrad;
+      ctx.beginPath();
+      ctx.arc(px, py - 8, 22 * auraPulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3. Back Paws (Hind Feet)
+    const hindY = py - 2;
+    ctx.fillStyle = '#2e1507';
+    // Left hind paw
+    ctx.beginPath();
+    ctx.ellipse(px - 7, hindY - footStep * 0.5, 4.2, 3, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    // Right hind paw
+    ctx.beginPath();
+    ctx.ellipse(px + 7, hindY + footStep * 0.5, 4.2, 3, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 4. Massive Bear Torso (Chunky Layered Papercraft Fold)
+    const bodyY = py - 13 + waddle;
+    // Darker back/shoulder shadow layer
+    ctx.fillStyle = '#3d1d0a';
+    ctx.beginPath();
+    drawBox(px - 11, bodyY - 11, 22, 20, 7);
+    ctx.fill();
+
+    // Main fur body
+    ctx.fillStyle = '#552a10';
+    ctx.beginPath();
+    drawBox(px - 10, bodyY - 10, 20, 18, 6);
+    ctx.fill();
+
+    // Papercraft Crease lines on fur
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(px - 7, bodyY - 9);
+    ctx.lineTo(px, bodyY + 6);
+    ctx.lineTo(px + 7, bodyY - 9);
+    ctx.stroke();
+
+    // Shoulder moss flakes
+    ctx.fillStyle = '#15803d';
+    ctx.fillRect(px - 9, bodyY - 8, 3, 2);
+    ctx.fillRect(px + 6, bodyY - 8, 3, 2);
+
+    // 5. Pale Honey Parchment Chest Crest with Druid Runes
+    ctx.fillStyle = '#d4a373';
+    ctx.beginPath();
+    ctx.moveTo(px, bodyY - 7);
+    ctx.lineTo(px + 6 + dx * 1.5, bodyY + 4 + dy);
+    ctx.lineTo(px, bodyY + 7 + dy);
+    ctx.lineTo(px - 6 + dx * 1.5, bodyY + 4 + dy);
+    ctx.closePath();
+    ctx.fill();
+
+    // Glowing Emerald Druid Spiral / Mark on Chest
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.arc(px + dx * 1.2, bodyY + dy * 0.8, 2.8, 0, Math.PI * 1.6);
+    ctx.stroke();
+
+    // 6. Bear Head & Snout
+    const headX = px + dx * 3;
+    const headY = bodyY - 9 + dy * 2;
+
+    // Round Paper Ears
+    // Left ear
+    ctx.fillStyle = '#3d1d0a';
+    ctx.beginPath();
+    ctx.arc(headX - 6.5, headY - 5, 3.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e5a882'; // Inner ear fold
+    ctx.beginPath();
+    ctx.arc(headX - 6.5, headY - 5, 2.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Right ear
+    ctx.fillStyle = '#3d1d0a';
+    ctx.beginPath();
+    ctx.arc(headX + 6.5, headY - 5, 3.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#e5a882';
+    ctx.beginPath();
+    ctx.arc(headX + 6.5, headY - 5, 2.0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Main Head Fold
+    ctx.fillStyle = '#5c3012';
+    ctx.beginPath();
+    ctx.ellipse(headX, headY, 8.5, 7.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Folded Snout / Muzzle
+    const snoutX = headX + dx * 2.5;
+    const snoutY = headY + 2 + dy * 1.5;
+    ctx.fillStyle = '#783c18';
+    ctx.beginPath();
+    ctx.ellipse(snoutX, snoutY, 4.5, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Black Button Nose with tiny highlight
+    ctx.fillStyle = '#18181b';
+    ctx.beginPath();
+    ctx.arc(snoutX + dx * 0.8, snoutY - 1 + dy * 0.5, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(snoutX + dx * 0.8 - 0.6, snoutY - 1.6 + dy * 0.5, 0.9, 0.9);
+
+    // Glowing Fierce Emerald Eyes
+    if (direction !== 'up') {
+      const eyeY = headY - 1.5 + dy * 0.5;
+      const eyeSpacing = 3.8;
+      // Left eye
+      if (!direction.includes('right')) {
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 0.4, eyeY + 0.4, 1.1, 1.1);
+      }
+      // Right eye
+      if (!direction.includes('left')) {
+        ctx.fillStyle = '#22c55e';
+        ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 0.4, eyeY + 0.4, 1.1, 1.1);
+      }
+    }
+
+    // 7. Massive Front Paws with Emerald-Tipped Bone Claws
+    const pawRaise = (this.melee.charging || this.melee.swingProgress < 0.6) ? -4 : 0;
+    const lPawX = px - 9 + (dx < 0 ? -2 : 0);
+    const lPawY = bodyY + 5 + footStep + pawRaise;
+    const rPawX = px + 9 + (dx > 0 ? 2 : 0);
+    const rPawY = bodyY + 5 - footStep + pawRaise;
+
+    const drawPawWithClaws = (pawX, pawY, isLeft) => {
+      ctx.fillStyle = '#3d1d0a';
+      ctx.beginPath();
+      ctx.ellipse(pawX, pawY, 4.6, 3.8, isLeft ? -0.15 : 0.15, 0, Math.PI * 2);
+      ctx.fill();
+
+      const clawAngle = Math.atan2(dy || 1, dx || (isLeft ? -0.4 : 0.4));
+      for (let c = -1; c <= 1; c++) {
+        const ca = clawAngle + c * 0.35;
+        const cx = pawX + Math.cos(ca) * 3.5;
+        const cy = pawY + Math.sin(ca) * 3.5;
+        const tipX = pawX + Math.cos(ca) * 6.5;
+        const tipY = pawY + Math.sin(ca) * 6.5;
+
+        // Bone white claw base
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(tipX, tipY);
+        ctx.stroke();
+
+        // Emerald glowing claw tip
+        ctx.fillStyle = '#4ade80';
+        ctx.fillRect(tipX - 0.7, tipY - 0.7, 1.4, 1.4);
+      }
+    };
+
+    drawPawWithClaws(lPawX, lPawY, true);
+    drawPawWithClaws(rPawX, rPawY, false);
+
+    // Hit Flash Tint
+    if (hitFlash > 0) {
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.55)';
+      ctx.beginPath();
+      drawBox(px - 12, bodyY - 15, 24, 26, 7);
+      ctx.fill();
+    }
+
     ctx.restore();
   }
 }

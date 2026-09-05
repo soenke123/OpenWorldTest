@@ -65,6 +65,12 @@
               <span id="zoom-val-text">1.85x</span>
               <button id="btn-zoom-in" class="zoom-step-btn" title="Heranzoomen">+</button>
             </div>
+            <div class="dev-artifact-switchers" style="display: flex; gap: 4px; margin-top: 6px;">
+              <button id="dev-equip-phoenix" class="dev-action-btn" style="flex: 1; padding: 4px 2px; font-size: 0.72rem; color: #f87171;" title="Rubin-Phönix ausrüsten">🔥 Phönix</button>
+              <button id="dev-equip-bear" class="dev-action-btn" style="flex: 1; padding: 4px 2px; font-size: 0.72rem; color: #4ade80;" title="Smaragd-Druide (Bär) ausrüsten">🐻 Bär</button>
+              <button id="dev-equip-plasma" class="dev-action-btn" style="flex: 1; padding: 4px 2px; font-size: 0.72rem; color: #f472b6;" title="Rosa Plasmakugeln ausrüsten">🔮 Plasma</button>
+              <button id="dev-equip-teleport" class="dev-action-btn" style="flex: 1; padding: 4px 2px; font-size: 0.72rem; color: #c084fc;" title="Leeren-Teleport ausrüsten">🌌 Teleport</button>
+            </div>
           </div>
 
           <div class="hud-panel" id="biome-panel">
@@ -340,6 +346,30 @@
           <button id="btn-artifact-swap-leave" class="btn-swap-secondary" title="Neues Artefakt liegen lassen">
             <span>✕ Liegen lassen</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Void Teleport Map Modal (Leeren-Teleportation) -->
+    <div id="teleport-map-modal" class="teleport-map-backdrop hidden">
+      <div class="teleport-map-dialog">
+        <div class="teleport-map-header">
+          <div class="teleport-map-title-wrap">
+            <span class="teleport-map-icon">🌌</span>
+            <div>
+              <h3 class="teleport-map-title">Leeren-Teleportation</h3>
+              <p class="teleport-map-sub">Klicke einen Zielort auf der aufgedeckten Karte</p>
+            </div>
+          </div>
+          <button id="btn-teleport-map-close" class="teleport-map-close-btn" title="Abbrechen (Esc)">✕</button>
+        </div>
+        <div class="teleport-canvas-wrap">
+          <canvas id="teleportMapCanvas" width="560" height="420"></canvas>
+          <div id="teleport-target-tooltip" class="teleport-tooltip hidden">Klick zum Teleportieren</div>
+        </div>
+        <div class="teleport-map-footer">
+          <span id="teleport-coords-display" class="teleport-coords">Ziel: ---</span>
+          <span class="teleport-hint">Nur aufgedeckte &amp; begehbare Kacheln erlaubt</span>
         </div>
       </div>
     </div>

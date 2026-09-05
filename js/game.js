@@ -274,6 +274,7 @@ class Game {
         if (this.magicManager) {
           this.magicManager.toggleInfoModal(false);
           this.magicManager.closeSwapModal();
+          this.magicManager.closeTeleportModal();
         }
       }
     });

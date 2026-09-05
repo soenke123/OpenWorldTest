@@ -149,8 +149,9 @@ export class CombatManager {
 
   addSlashEffect(type, x, y, angle, radius = 28) {
     let duration = 0.22;
-    if (type === 'spin') duration = 0.32;
-    if (type === 'thrust') duration = 0.32; // Longer duration for powerful lingering thrust
+    if (type === 'spin' || type === 'bear_spin') duration = 0.32;
+    if (type === 'thrust' || type === 'bear_thrust') duration = 0.32; // Longer duration for powerful lingering thrust
+    if (type === 'bear_claw1' || type === 'bear_claw2') duration = 0.26;
 
     this.slashEffects.push({
       type,
@@ -163,27 +164,37 @@ export class CombatManager {
     });
 
     // Air gust & paper spark particles
-    const sparkCount = type === 'spin' ? 24 : (type === 'thrust' ? 22 : 9);
+    const isBear = type.startsWith('bear_');
+    const sparkCount = (type === 'spin' || type === 'bear_spin') ? 24 : ((type === 'thrust' || type === 'bear_thrust') ? 22 : 12);
     for (let i = 0; i < sparkCount; i++) {
       let pAngle;
-      if (type === 'spin') {
+      if (type === 'spin' || type === 'bear_spin') {
         pAngle = (i / sparkCount) * Math.PI * 2;
-      } else if (type === 'thrust') {
+      } else if (type === 'thrust' || type === 'bear_thrust') {
         pAngle = angle + (Math.random() - 0.5) * 0.4;
       } else {
         pAngle = angle + (Math.random() - 0.5) * 1.0;
       }
 
-      const pSpeed = type === 'thrust' ? (Math.random() * 140 + 60) : (Math.random() * 80 + 40);
+      const pSpeed = (type === 'thrust' || type === 'bear_thrust') ? (Math.random() * 150 + 60) : (Math.random() * 90 + 40);
+      let color = '#ffffff';
+      if (isBear) {
+        color = Math.random() > 0.4 ? '#22c55e' : (Math.random() > 0.5 ? '#86efac' : '#facc15');
+      } else if (type === 'spin') {
+        color = '#67e8f9';
+      } else if (type === 'thrust') {
+        color = Math.random() > 0.4 ? '#fef08a' : '#f59e0b';
+      }
+
       this.hitSparks.push({
         x: x + Math.cos(pAngle) * (radius * 0.5),
         y: y + Math.sin(pAngle) * (radius * 0.5),
         vx: Math.cos(pAngle) * pSpeed,
         vy: Math.sin(pAngle) * pSpeed,
-        color: type === 'spin' ? '#67e8f9' : (type === 'thrust' ? (Math.random() > 0.4 ? '#fef08a' : '#f59e0b') : '#ffffff'),
-        size: Math.random() * 2.5 + 1.2,
-        life: 0.32,
-        maxLife: 0.32
+        color,
+        size: Math.random() * 2.8 + 1.2,
+        life: 0.35,
+        maxLife: 0.35
       });
     }
   }
@@ -326,6 +337,8 @@ export class CombatManager {
 
   checkMeleeHits(hitbox) {
     let hitAny = false;
+    const isSpin = hitbox.type === 'spin' || hitbox.type === 'bear_spin';
+    const isThrust = hitbox.type === 'thrust' || hitbox.type === 'bear_thrust';
 
     // Check collision with training dummies
     for (const dummy of this.dummies) {
@@ -336,9 +349,9 @@ export class CombatManager {
       const dist = Math.hypot(dx, dy);
 
       let inRange = false;
-      if (hitbox.type === 'spin') {
+      if (isSpin) {
         inRange = dist <= (hitbox.radius + 10);
-      } else if (hitbox.type === 'thrust') {
+      } else if (isThrust) {
         // Forward piercing cone / capsule
         const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
         const sideDist = Math.abs(-dx * Math.sin(hitbox.angle) + dy * Math.cos(hitbox.angle));
@@ -366,9 +379,9 @@ export class CombatManager {
         const dist = Math.hypot(dx, dy);
 
         let inRange = false;
-        if (hitbox.type === 'spin') {
+        if (isSpin) {
           inRange = dist <= (hitbox.radius + enemy.radius + 4);
-        } else if (hitbox.type === 'thrust') {
+        } else if (isThrust) {
           const forwardDot = (dx * Math.cos(hitbox.angle) + dy * Math.sin(hitbox.angle));
           const sideDist = Math.abs(-dx * Math.sin(hitbox.angle) + dy * Math.cos(hitbox.angle));
           inRange = (forwardDot > 0 && forwardDot <= hitbox.range + enemy.radius && sideDist <= (hitbox.width || 22) + enemy.radius);
@@ -382,15 +395,24 @@ export class CombatManager {
         if (inRange) {
           hitAny = true;
           let dmg = 25;
-          if (hitbox.type === 'slash2') dmg = 35;
-          if (hitbox.type === 'thrust') dmg = 52;
-          if (hitbox.type === 'spin') dmg = 68;
+          if (hitbox.type === 'slash2' || hitbox.type === 'bear_claw2') dmg = 35;
+          if (isThrust) dmg = 52;
+          if (isSpin) dmg = 68;
 
           const meleeBonus = (this.game?.player?.skills?.melee || 0) * 4;
           dmg += meleeBonus;
 
-          const angle = hitbox.type === 'spin' ? Math.atan2(enemy.y - hitbox.y, enemy.x - hitbox.x) : hitbox.angle;
-          const kb = hitbox.knockback || (hitbox.type === 'thrust' ? 120 : (hitbox.type === 'spin' ? 140 : 80));
+          if (hitbox.damageMultiplier) {
+            dmg = Math.round(dmg * hitbox.damageMultiplier);
+          } else if (hitbox.damage) {
+            dmg = hitbox.damage;
+          }
+
+          const angle = isSpin ? Math.atan2(enemy.y - hitbox.y, enemy.x - hitbox.x) : hitbox.angle;
+          let kb = hitbox.knockback || (isThrust ? 120 : (isSpin ? 140 : 80));
+          if (hitbox.knockbackMultiplier) {
+            kb = Math.round(kb * hitbox.knockbackMultiplier);
+          }
           enemy.takeDamage(dmg, angle, kb, this);
         }
       }
@@ -398,14 +420,89 @@ export class CombatManager {
 
     // Heavy thrust or spin attack camera shake impact
     if (hitAny && this.game && this.game.camera) {
-      if (hitbox.type === 'thrust') {
-        this.game.camera.shake(4.2, 0.16);
-      } else if (hitbox.type === 'spin') {
-        this.game.camera.shake(3.8, 0.15);
+      if (isThrust) {
+        this.game.camera.shake(4.5, 0.18);
+      } else if (isSpin) {
+        this.game.camera.shake(4.0, 0.16);
       }
     }
 
     return hitAny;
+  }
+
+  spawnVoidTeleportVFX(x, y, isArrival = false) {
+    const dim = this.game?.currentDimension || 'overworld';
+    const count = isArrival ? 35 : 28;
+    for (let i = 0; i < count; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = isArrival ? (Math.random() * 90 + 30) : -(Math.random() * 70 + 20);
+      const dist = isArrival ? (Math.random() * 8) : (Math.random() * 25 + 10);
+      this.hitSparks.push({
+        dimension: dim,
+        x: x + Math.cos(ang) * dist,
+        y: (y - 8) + Math.sin(ang) * dist,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp - 5,
+        color: Math.random() > 0.4 ? '#a855f7' : (Math.random() > 0.5 ? '#c084fc' : '#ffffff'),
+        size: Math.random() * 3 + 1.5,
+        life: 0.55,
+        maxLife: 0.55
+      });
+    }
+    this.createShockwave(x, y - 8, isArrival ? 32 : 24, 0, '#a855f7', false, dim);
+  }
+
+  spawnPlasmaExplosion(x, y, radius = 48, damage = 110, knockback = 175) {
+    const dim = this.game?.currentDimension || 'overworld';
+    this.createShockwave(x, y, radius, 0, '#ec4899', false, dim);
+
+    if (this.game?.camera) {
+      this.game.camera.shake(3.8, 0.16);
+    }
+
+    this.addFloatingText('💥 PLASMA!', x, y - 18, '#f472b6', 0.85);
+
+    for (let i = 0; i < 30; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = Math.random() * 140 + 40;
+      this.hitSparks.push({
+        dimension: dim,
+        x,
+        y,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp - 10,
+        color: Math.random() > 0.4 ? '#ec4899' : (Math.random() > 0.5 ? '#f472b6' : '#ffffff'),
+        size: Math.random() * 3.5 + 1.5,
+        life: 0.45,
+        maxLife: 0.45
+      });
+    }
+
+    if (this.game?.enemyManager) {
+      const enemies = this.game.enemyManager.getActiveEnemies();
+      for (const enemy of enemies) {
+        const dx = enemy.x - x;
+        const dy = enemy.y - y;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= radius + (enemy.radius || 12)) {
+          const angle = dist > 1 ? Math.atan2(dy, dx) : Math.random() * Math.PI * 2;
+          enemy.takeDamage(damage, angle, knockback, this);
+        }
+      }
+    }
+
+    for (const dummy of this.dummies) {
+      const dx = dummy.x - x;
+      const dy = dummy.y - 6 - y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= radius + 12) {
+        this.applyHitToDummy(dummy, {
+          type: 'thrust',
+          knockback,
+          angle: Math.atan2(dy, dx)
+        });
+      }
+    }
   }
 
   applyHitToDummy(dummy, hitbox) {
@@ -1379,6 +1476,93 @@ export class CombatManager {
         ctx.moveTo(curLen * 0.35, 3.8);
         ctx.lineTo(curLen + 9, 3.8);
         ctx.stroke();
+      }
+      else if (slash.type === 'bear_spin') {
+        // 360 Degree Savage Bear Claw Cyclone & Nature Spirit Shockwave
+        const curRadius = slash.radius * (0.75 + progress * 0.45);
+
+        // Outer emerald forest vacuum ring
+        ctx.lineWidth = 2.5 * alpha;
+        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.75})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius * 1.25, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Inner glowing jade blade ring
+        ctx.lineWidth = 4.5 * alpha;
+        ctx.strokeStyle = `rgba(74, 222, 128, ${alpha * 0.95})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, curRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 4 swirling savage claw scratches
+        for (let s = 0; s < 4; s++) {
+          const startA = (s * Math.PI / 2) + progress * Math.PI * 4;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
+          ctx.lineWidth = 2.8 * alpha;
+          ctx.beginPath();
+          ctx.arc(0, 0, curRadius * 0.85, startA, startA + 0.85);
+          ctx.stroke();
+
+          ctx.strokeStyle = `rgba(250, 204, 21, ${alpha * 0.85})`;
+          ctx.lineWidth = 2.0 * alpha;
+          ctx.beginPath();
+          ctx.arc(0, 0, curRadius * 0.65, -startA, -startA + 0.85);
+          ctx.stroke();
+        }
+      }
+      else if (slash.type === 'bear_thrust') {
+        // Heavy twin paw gouge / beast lunge shockwave & razor claw trails
+        ctx.rotate(slash.angle);
+        const curLen = slash.radius * (0.7 + progress * 0.5);
+
+        // Emerald shockwave rings
+        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.85})`;
+        ctx.lineWidth = 3.0 * alpha;
+        ctx.beginPath();
+        ctx.arc(curLen * 0.5, 0, 18 * (0.6 + progress * 0.8), -Math.PI * 0.45, Math.PI * 0.45);
+        ctx.stroke();
+
+        // 4 forward razor claw puncture trails
+        for (let c = -1.5; c <= 1.5; c += 1) {
+          const yOff = c * 7;
+          ctx.strokeStyle = `rgba(134, 239, 172, ${alpha * 0.95})`;
+          ctx.lineWidth = 2.5 * alpha;
+          ctx.beginPath();
+          ctx.moveTo(curLen * 0.15, yOff * 0.4);
+          ctx.lineTo(curLen + 10, yOff);
+          ctx.stroke();
+
+          // Star gleam at claw tips
+          ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+          ctx.fillRect(curLen + 9, yOff - 1.5, 3, 3);
+        }
+      }
+      else if (slash.type === 'bear_claw1' || slash.type === 'bear_claw2') {
+        // Savage Bear Claw Swipe (Triple curved lacerations in emerald green & gold)
+        ctx.rotate(slash.angle);
+        const flip = slash.type === 'bear_claw2' ? -1 : 1;
+        const curRadius = slash.radius * (0.8 + progress * 0.35);
+
+        // Draw 3 distinct curved claw lacerations
+        for (let c = -1; c <= 1; c++) {
+          const clawOffset = c * 7.5;
+          const r = curRadius - Math.abs(c) * 2.5;
+
+          // Outer green claw trail
+          ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.95})`;
+          ctx.lineWidth = (3.5 - Math.abs(c) * 0.6) * alpha;
+          ctx.beginPath();
+          ctx.arc(0, clawOffset, r, -0.6 * flip, 0.6 * flip, flip < 0);
+          ctx.stroke();
+
+          // Inner white razor gleam
+          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.92})`;
+          ctx.lineWidth = 1.4 * alpha;
+          ctx.beginPath();
+          ctx.arc(0, clawOffset, r, -0.45 * flip, 0.45 * flip, flip < 0);
+          ctx.stroke();
+        }
       }
       else {
         // Radial Slash 1 & 2 (Curved Crescent Paper Blade Swoosh)
