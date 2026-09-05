@@ -392,6 +392,41 @@ export class MagicManager {
   // GROUND ARTIFACT MANAGEMENT
   // ---------------------------------------------------------------------------
   spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false, subCaveId = null) {
+    // Walkable ground verification: ensure artifact is placed on walkable tiles
+    let map = null;
+    if (dimension === DIMENSIONS.OVERWORLD) map = this.game?.overworldMap;
+    else if (dimension === DIMENSIONS.CLOUDS) map = this.game?.cloudMap;
+    else if (dimension === DIMENSIONS.CAVES && this.game?.caves) {
+      map = subCaveId ? this.game.caves[subCaveId] : this.game.caves.main_complex;
+    }
+
+    if (map) {
+      let tx = Math.floor(x / TILE_SIZE);
+      let ty = Math.floor(y / TILE_SIZE);
+      const isSolid = map.isSolid ? map.isSolid(tx, ty) : false;
+      const isWalkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : !isSolid;
+      if (!isWalkable || isSolid) {
+        let found = false;
+        for (let r = 1; r <= 4 && !found; r++) {
+          for (let dy = -r; dy <= r && !found; dy++) {
+            for (let dx = -r; dx <= r && !found; dx++) {
+              const nx = tx + dx;
+              const ny = ty + dy;
+              if (map.isValid && map.isValid(nx, ny)) {
+                const s = map.isSolid ? map.isSolid(nx, ny) : false;
+                const w = map.isTileWalkable ? map.isTileWalkable(nx, ny) : !s;
+                if (w && !s) {
+                  x = nx * TILE_SIZE + 8;
+                  y = ny * TILE_SIZE + 8;
+                  found = true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
     // 5. An jedem Schrein liegt maximal 1 Artefakt!
     const existing = this.groundArtifacts.find(a =>
       a.dimension === dimension &&
@@ -1218,7 +1253,7 @@ export class MagicManager {
     const isValidTile = (tx, ty) => {
       if (tx < 0 || tx >= mapW || ty < 0 || ty >= mapH) return false;
       const walkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
-      const explored = !map.explored || (map.explored[ty] && map.explored[ty][tx]);
+      const explored = this.game?.minimap ? this.game.minimap.isTileExplored(tx, ty) : true;
       return Boolean(walkable && explored);
     };
 
@@ -1245,10 +1280,10 @@ export class MagicManager {
       }
 
       if (!found) {
-        const isExplored = !map.explored || (map.explored[rawTy] && map.explored[rawTy][rawTx]);
+        const isExplored = this.game?.minimap ? this.game.minimap.isTileExplored(rawTx, rawTy) : true;
         const coordsEl = getElement('teleport-coords-display');
         if (coordsEl) {
-          coordsEl.textContent = !isExplored ? '❌ Unerforschter Ort' : '❌ Nicht begehbar';
+          coordsEl.textContent = !isExplored ? '❌ Unerforschter Ort (im Nebel)' : '❌ Nicht begehbar';
           coordsEl.style.color = '#ef4444';
         }
         const confirmBtn = getElement('btn-teleport-confirm');
@@ -1289,6 +1324,9 @@ export class MagicManager {
     const player = this.game?.player;
     if (!player) return;
 
+    // Modal SOFORT schließen, damit der Spieler die volle Animation sieht!
+    this.closeTeleportModal();
+
     const combat = this.game?.combat;
     if (combat) {
       combat.spawnVoidTeleportVFX(player.x, player.y, false);
@@ -1310,7 +1348,6 @@ export class MagicManager {
       player.artifact.cooldownTimer = player.artifact.cooldownMax || 1.0;
     }
 
-    this.closeTeleportModal();
     this.updateHUD();
   }
 
@@ -1351,23 +1388,17 @@ export class MagicManager {
       }
     }
 
-    // 2. Nebel des Krieges (falls Erkundung aktiv)
-    if (map.explored) {
-      ctx.fillStyle = 'rgba(5, 7, 15, 0.85)';
-      for (let ty = 0; ty < mapH; ty++) {
-        for (let tx = 0; tx < mapW; tx++) {
-          if (!map.explored[ty] || !map.explored[ty][tx]) {
-            ctx.fillRect(tx * scaleX, ty * scaleY, scaleX + 0.5, scaleY + 0.5);
-          }
-        }
-      }
+    // 2. Nebel des Krieges (Exakt aus der Minimap: nur erforschte Bereiche sichtbar!)
+    const fog = this.game?.minimap?.getFogCanvas();
+    if (fog && fog.canvas) {
+      ctx.drawImage(fog.canvas, 0, 0, canvas.width, canvas.height);
     }
 
-    // 3. Schreine als leuchtende goldene Diamanten hervorheben
+    // 3. Schreine als leuchtende goldene Diamanten hervorheben (nur wenn bereits erforscht!)
     const time = Date.now() / 1000;
     const shrinePulse = 1.0 + Math.sin(time * 4) * 0.2;
     const drawShrine = (sx, sy) => {
-      const isExplored = !map.explored || (map.explored[sy] && map.explored[sy][sx]);
+      const isExplored = this.game?.minimap ? this.game.minimap.isTileExplored(sx, sy) : true;
       if (!isExplored) return;
       const px = (sx + 0.5) * scaleX;
       const py = (sy + 0.5) * scaleY;
@@ -1730,10 +1761,13 @@ export class MagicManager {
   // ---------------------------------------------------------------------------
   render(ctx, camera) {
     const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
-    const player = this.game?.player;
-
-    // 1. Ground Artifacts with unique themed glow & icons
     this.renderGroundArtifacts(ctx, camera, curDim);
+    this.renderSpellsAndAuras(ctx, camera);
+  }
+
+  renderSpellsAndAuras(ctx, camera) {
+    const curDim = this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD;
+    const player = this.game?.player;
 
     // 2. Active Spell Projectiles (Phönix)
     this.renderActiveSpells(ctx, camera, curDim);

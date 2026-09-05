@@ -43,73 +43,89 @@ export class WorldMap {
     const vz = p.voidZone || { x: 268, y: 40, radius: 18 };
 
     // --------------------------------------------------------------------
-    // STEP 1: ORGANIC BIOME ASSIGNMENT WITH DOMAIN WARPING & MAIN BIOME
+    // STEP 1: ORGANIC ROUND BIOME ASSIGNMENT (Radial Distance Fields with Perlin Wobble)
     // --------------------------------------------------------------------
+    const snowCenterX = Math.round(this.width * 0.80);
+    const snowCenterY = Math.round(this.height * 0.20);
+    const desertCenterX = Math.round(this.width * 0.18);
+    const desertCenterY = Math.round(this.height * 0.78);
+    const swampCenterX = Math.round(this.width * 0.64);
+    const swampCenterY = Math.round(this.height * 0.72);
+
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
-        // Domain warping for natural curvy biome borders
-        const warpX = x + n.fbm(x * 0.02, y * 0.02, 3) * 16;
-        const warpY = y + n.fbm((x + 60) * 0.02, (y + 60) * 0.02, 3) * 16;
-
-        const nx = warpX / this.width;
-        const ny = warpY / this.height;
+        // Multi-octave domain warping for natural curvy, rounded contours
+        const warpX = x + n.fbm(x * 0.02, y * 0.02, 3) * 18;
+        const warpY = y + n.fbm((x + 60) * 0.02, (y + 60) * 0.02, 3) * 18;
 
         let tile = TILES.GRASS;
 
         if (mb === 'snow') {
-          // Main Biome: Snow dominates ~70% of the world
+          // Main Biome: Snow covers the realm
           tile = TILES.SNOW;
-          // Thawed central valley around spawn
-          if (nx > 0.12 && nx < 0.48 && ny > 0.32 && ny < 0.70) {
+
+          // Thawed round central grass valley around spawn
+          const distGrass = Math.hypot(warpX - this.spawnPoint.x, warpY - this.spawnPoint.y) + n.noise(x * 0.03, y * 0.03) * 20;
+          if (distGrass < 56) {
             tile = TILES.GRASS;
           }
-          // Far desert plateau in southwest corner
-          else if (nx < 0.22 && ny > 0.72) {
+          // Organic desert basin in southwest
+          const distDesert = Math.hypot((warpX - desertCenterX) * 0.9, (warpY - desertCenterY) * 1.1) + n.noise(x * 0.04, y * 0.04) * 18;
+          if (distDesert < 44) {
             tile = TILES.SAND;
           }
-          // Frosted marsh / swamp pocket
-          else if (nx > 0.55 && nx < 0.75 && ny > 0.68) {
+          // Frosted swamp pocket in southeast
+          const distSwamp = Math.hypot(warpX - swampCenterX, warpY - swampCenterY) + n.noise(x * 0.04, y * 0.04) * 16;
+          if (distSwamp < 36) {
             tile = TILES.SWAMP_GROUND;
           }
         } else if (mb === 'desert') {
-          // Main Biome: Desert dominates ~70% of the world
+          // Main Biome: Desert sea covers the realm
           tile = TILES.SAND;
-          // Green oasis valley around spawn
-          if (nx > 0.14 && nx < 0.46 && ny > 0.34 && ny < 0.68) {
+
+          // Lush round oasis valley around spawn
+          const distGrass = Math.hypot(warpX - this.spawnPoint.x, warpY - this.spawnPoint.y) + n.noise(x * 0.03, y * 0.03) * 20;
+          if (distGrass < 52) {
             tile = TILES.GRASS;
           }
-          // High snow peaks in northeast corner
-          else if (nx > 0.70 && ny < 0.34) {
+          // High snow mountain range in northeast
+          const distSnow = Math.hypot(warpX - snowCenterX, warpY - snowCenterY) + n.noise(x * 0.04, y * 0.04) * 18;
+          if (distSnow < 48) {
             tile = TILES.SNOW;
           }
-          // Mud oasis / swamp in southeast
-          else if (nx > 0.52 && nx < 0.72 && ny > 0.62) {
+          // Mud oasis in southeast
+          const distSwamp = Math.hypot(warpX - swampCenterX, warpY - swampCenterY) + n.noise(x * 0.04, y * 0.04) * 16;
+          if (distSwamp < 34) {
             tile = TILES.SWAMP_GROUND;
           }
         } else {
-          // Main Biome: Grassland dominates ~70% of the world
+          // Main Biome: Grassland dominates the world
           tile = TILES.GRASS;
-          // Snow & Ice in Northeast
-          if (nx > 0.64 && ny < 0.42) {
+
+          // Round Snow Realm in Northeast
+          const distSnow = Math.hypot((warpX - snowCenterX) * 0.95, (warpY - snowCenterY) * 1.05) + n.noise(x * 0.035, y * 0.035) * 22;
+          if (distSnow < 62) {
             tile = TILES.SNOW;
           }
-          // Desert & Quicksand in Southwest
-          else if (nx < 0.36 && ny > 0.60) {
+          // Round Desert Dunes in Southwest
+          const distDesert = Math.hypot((warpX - desertCenterX) * 0.95, (warpY - desertCenterY) * 1.05) + n.noise(x * 0.035, y * 0.035) * 22;
+          if (distDesert < 58) {
             tile = TILES.SAND;
           }
-          // Swamp in Southeast
-          else if (nx > 0.48 && nx < 0.78 && ny > 0.62) {
+          // Organic Swamp Basin in Southeast
+          const distSwamp = Math.hypot(warpX - swampCenterX, warpY - swampCenterY) + n.noise(x * 0.04, y * 0.04) * 18;
+          if (distSwamp < 46) {
             tile = TILES.SWAMP_GROUND;
           }
         }
 
-        // Void Zone: Strictly 1 Single edge rift
-        const distVoid = Math.hypot(x - vz.x, y - vz.y);
+        // Void Zone: Strictly 1 Single edge rift with circular boundary
+        const distVoid = Math.hypot(x - vz.x, y - vz.y) + n.noise(x * 0.25, y * 0.25) * 4;
         if (distVoid < vz.radius) {
           tile = TILES.VOID_GROUND;
         }
 
-        // Spawn Clearing: Dedicated large open flat area around spawn
+        // Spawn Clearing: Dedicated large open flat area around spawn (100% round clearing)
         const distSpawn = Math.hypot(x - this.spawnPoint.x, y - this.spawnPoint.y);
         if (distSpawn < p.spawnClearingRadius) {
           tile = (mb === 'snow' ? TILES.SNOW : (mb === 'desert' ? TILES.SAND : TILES.GRASS));
@@ -257,12 +273,17 @@ export class WorldMap {
     this.placeCaveEntrances();
 
     // --------------------------------------------------------------------
-    // STEP 12: RAMPEN & TREPPEN FREIHALTEN
+    // STEP 12: DICHTE DEKO & INTERAKTIVE WELT-OBJEKTE (Kristalle, Laternen, Tore, Dummies)
+    // --------------------------------------------------------------------
+    this.populateEnvironmentalDecor();
+
+    // --------------------------------------------------------------------
+    // STEP 13: RAMPEN & TREPPEN FREIHALTEN
     // --------------------------------------------------------------------
     this.clearRampsAndAccessCorridors();
 
     // --------------------------------------------------------------------
-    // STEP 13: OUTER 2-TILE WATER BORDER
+    // STEP 14: OUTER 2-TILE WATER BORDER
     // --------------------------------------------------------------------
     for (let x = 0; x < this.width; x++) {
       this.ground[0][x] = TILES.WATER;
@@ -467,26 +488,59 @@ export class WorldMap {
   placeOverworldShrines() {
     this.shrines = [];
     const p = this.preset;
-    const count = p.shrineCount || 7;
+    const count = p.shrineCount || 8;
 
     const shrineCandidates = [
-      { x: this.spawnPoint.x + 18, y: this.spawnPoint.y - 12, name: 'Schrein des Erwachens' },
+      { x: this.spawnPoint.x + 22, y: this.spawnPoint.y - 10, name: 'Schrein des Erwachens' },
       { x: Math.round(this.width * 0.38), y: Math.round(this.height * 0.26), name: 'Schrein der Waldgeister' },
       { x: Math.round(this.width * 0.55), y: Math.round(this.height * 0.38), name: 'Schrein des Binnensees' },
-      { x: Math.round(this.width * 0.72), y: Math.round(this.height * 0.24), name: 'Schrein des Ewigen Eises' },
+      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.22), name: 'Schrein des Ewigen Eises' },
       { x: Math.round(this.width * 0.25), y: Math.round(this.height * 0.70), name: 'Schrein der Sonnendüne' },
       { x: Math.round(this.width * 0.70), y: Math.round(this.height * 0.72), name: 'Schrein der Nebelmoore' },
-      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.44), name: 'Schrein der Morgendämmerung' },
+      { x: Math.round(this.width * 0.84), y: Math.round(this.height * 0.54), name: 'Schrein der Morgendämmerung' },
       { x: Math.round(this.width * 0.45), y: Math.round(this.height * 0.84), name: 'Schrein der Blütentäler' }
     ].slice(0, count);
 
     for (const sc of shrineCandidates) {
       if (this.isValid(sc.x, sc.y)) {
-        // Clear obstacles around shrine
-        this.ground[sc.y][sc.x] = (this.preset.mainBiome === 'snow' ? TILES.SNOW : (this.preset.mainBiome === 'desert' ? TILES.SAND : TILES.GRASS));
+        this.ground[sc.y][sc.x] = TILES.DIRT;
         this.objects[sc.y][sc.x] = OBJECTS.SHRINE;
         this.canopy[sc.y][sc.x] = CANOPY.NONE;
         this.shrines.push({ x: sc.x, y: sc.y, name: sc.name });
+
+        // Ensure surrounding 3x3 tiles are cleared and walkable dirt path
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            const nx = sc.x + dx;
+            const ny = sc.y + dy;
+            if (!this.isValid(nx, ny)) continue;
+            this.canopy[ny][nx] = CANOPY.NONE;
+            if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && !(dx === 0 && dy === 0)) {
+              this.ground[ny][nx] = TILES.DIRT;
+              this.objects[ny][nx] = OBJECTS.NONE;
+            }
+          }
+        }
+
+        // Clear tree trunks and crowns in 44px radius around shrine
+        const shrinePx = sc.x * TILE_SIZE + 8;
+        const shrinePy = sc.y * TILE_SIZE + 8;
+        this.trees = this.trees.filter(t => Math.hypot(t.x - shrinePx, t.y - shrinePy) > 38);
+        this.canopyCrowns = this.canopyCrowns.filter(c => Math.hypot(c.x - shrinePx, c.y - shrinePy) > 42);
+
+        // Torii Gate on approach and flanking stone lanterns
+        if (this.isValid(sc.x, sc.y + 2)) {
+          this.objects[sc.y + 2][sc.x] = OBJECTS.TORII_GATE;
+          this.ground[sc.y + 2][sc.x] = TILES.DIRT;
+        }
+        if (this.isValid(sc.x - 2, sc.y + 1)) {
+          this.objects[sc.y + 1][sc.x - 2] = OBJECTS.STONE_TORO;
+          this.ground[sc.y + 1][sc.x - 2] = TILES.DIRT;
+        }
+        if (this.isValid(sc.x + 2, sc.y + 1)) {
+          this.objects[sc.y + 1][sc.x + 2] = OBJECTS.STONE_TORO;
+          this.ground[sc.y + 1][sc.x + 2] = TILES.DIRT;
+        }
       }
     }
 
@@ -497,7 +551,20 @@ export class WorldMap {
     if (this.isValid(vx, vy)) {
       this.ground[vy][vx] = TILES.VOID_GROUND;
       this.objects[vy][vx] = OBJECTS.SHRINE;
+      this.canopy[vy][vx] = CANOPY.NONE;
       this.shrines.push({ x: vx, y: vy, name: 'Schrein des Ewigen Abgrunds' });
+
+      // Clear walkable spot directly in front
+      if (this.isValid(vx, vy + 1)) {
+        this.ground[vy + 1][vx] = TILES.VOID_GROUND;
+        this.objects[vy + 1][vx] = OBJECTS.NONE;
+      }
+      if (this.isValid(vx - 2, vy + 1)) {
+        this.objects[vy + 1][vx - 2] = OBJECTS.GLOW_CRYSTAL;
+      }
+      if (this.isValid(vx + 2, vy + 1)) {
+        this.objects[vy + 1][vx + 2] = OBJECTS.GLOW_CRYSTAL;
+      }
     }
   }
 
@@ -533,16 +600,123 @@ export class WorldMap {
     this.holeEntrances = [
       { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Loch (Tiefenhöhlen)' },
       { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 11, name: 'Wald-Loch (Moosige Grotte)' },
-      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.82), targetCave: 'main_complex', targetX: 20, targetY: 53, name: 'Wüsten-Trichter (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.20), targetCave: 'snow_grotto', targetX: 11, targetY: 11, name: 'Schnee-Eisspalte (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.84), targetCave: 'main_complex', targetX: 20, targetY: 53, name: 'Wüsten-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.16), targetCave: 'snow_grotto', targetX: 11, targetY: 11, name: 'Schnee-Eisspalte (Eis-Grotte)' },
       { x: this.preset.voidZone.x - 6, y: this.preset.voidZone.y + 4, targetCave: 'void_grotto', targetX: 12, targetY: 11, name: 'Leeren-Riss (Astrale Kluft)' },
-      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.70), targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' }
+      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.72), targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' }
     ];
 
     for (const entrance of this.holeEntrances) {
       if (this.isValid(entrance.x, entrance.y)) {
         this.objects[entrance.y][entrance.x] = OBJECTS.CAVE_ENTRANCE;
         this.canopy[entrance.y][entrance.x] = CANOPY.NONE;
+        // Make sure entrance is walkable ground
+        const g = this.ground[entrance.y][entrance.x];
+        if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE) {
+          this.ground[entrance.y][entrance.x] = TILES.DIRT;
+        }
+      }
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // DICHTE DEKO: Kristalle, Steinlaternen, Torii-Tore, Trainingspuppen & Kodamas
+  // --------------------------------------------------------------------------
+  populateEnvironmentalDecor() {
+    const n = this.noise;
+
+    // 1. Trainingspuppen am Spawn-Rand (Kante der Lichtung) für Kampfübungen
+    const sp = this.spawnPoint;
+    const dummySpots = [
+      { x: sp.x + 16, y: sp.y - 2 },
+      { x: sp.x + 16, y: sp.y + 2 }
+    ];
+    for (const d of dummySpots) {
+      if (this.isValid(d.x, d.y)) {
+        this.objects[d.y][d.x] = OBJECTS.TRAINING_DUMMY;
+      }
+    }
+
+    // 2. Leuchtkristalle um Höhleneingänge & Felsformationen
+    for (const entrance of this.holeEntrances) {
+      const crystalOffsets = [
+        { dx: -2, dy: -1 },
+        { dx: 2, dy: 1 }
+      ];
+      for (const off of crystalOffsets) {
+        const cx = entrance.x + off.dx;
+        const cy = entrance.y + off.dy;
+        if (this.isValid(cx, cy) && this.objects[cy][cx] === OBJECTS.NONE) {
+          const g = this.ground[cy][cx];
+          if (g !== TILES.WATER && g !== TILES.SWAMP_WATER && g !== TILES.VOID_LAKE && g !== TILES.BRIDGE_H) {
+            this.objects[cy][cx] = OBJECTS.GLOW_CRYSTAL;
+          }
+        }
+      }
+    }
+
+    // 3. Kodama Waldgeister in Wäldern & Hainen
+    this.kodamas = [];
+    for (let ty = 10; ty < this.height - 10; ty += 7) {
+      for (let tx = 10; tx < this.width - 10; tx += 7) {
+        if (!this.isValid(tx, ty)) continue;
+        if (Math.hypot(tx - sp.x, ty - sp.y) < this.preset.spawnClearingRadius) continue;
+
+        const isForest = (this.canopy[ty][tx] === CANOPY.TREE_CROWN);
+        const kNoise = n.noise(tx * 0.45, ty * 0.45);
+        if (isForest && kNoise > 0.45) {
+          const kx = tx * TILE_SIZE + 8 + n.noise(tx * 1.8, ty * 1.8) * 5;
+          const ky = ty * TILE_SIZE + 8 + n.noise(tx * 2.8, ty * 2.8) * 5;
+          this.kodamas.push({
+            x: kx,
+            y: ky,
+            floatOffset: Math.random() * Math.PI * 2,
+            tiltSpeed: 1.8 + Math.random() * 0.8,
+            tiltOffset: Math.random() * Math.PI * 2
+          });
+        }
+      }
+    }
+
+    // 4. Naturdeko (Pilze, Farne, Blumen, Baumstämme, Laternen)
+    for (let ty = 4; ty < this.height - 4; ty += 3) {
+      for (let tx = 4; tx < this.width - 4; tx += 3) {
+        if (!this.isValid(tx, ty)) continue;
+        if (this.objects[ty][tx] !== OBJECTS.NONE) continue;
+        if (this.ramps[ty] && this.ramps[ty][tx] !== RAMPS.NONE) continue;
+        if (Math.hypot(tx - sp.x, ty - sp.y) < this.preset.spawnClearingRadius) continue;
+
+        const g = this.ground[ty][tx];
+        if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.BRIDGE_H || g === TILES.BRIDGE_V) continue;
+
+        const jx = tx + Math.round(n.noise(tx * 1.6, ty * 1.6) * 1.2);
+        const jy = ty + Math.round(n.noise(tx * 2.3, ty * 2.3) * 1.2);
+        if (!this.isValid(jx, jy)) continue;
+        if (this.objects[jy][jx] !== OBJECTS.NONE) continue;
+
+        const val = n.noise(jx * 0.22, jy * 0.22);
+        const sub = n.noise(jx * 1.45, jy * 1.45);
+
+        // Fels-Kristalle
+        if (val > 0.72 && sub > 0.35) {
+          this.objects[jy][jx] = OBJECTS.GLOW_CRYSTAL;
+        }
+        // Steinlaternen an Wegen / Lichtungen
+        else if (g === TILES.DIRT && sub > 0.65) {
+          this.objects[jy][jx] = OBJECTS.STONE_TORO;
+        }
+        // Blumenwiesen
+        else if (g === TILES.GRASS && val > 0.45 && sub > 0.1) {
+          this.objects[jy][jx] = OBJECTS.FOREST_FLOWERS;
+        }
+        // Pilze & Farne im Schatten / Sumpf
+        else if ((g === TILES.GRASS || g === TILES.SWAMP_GROUND) && val < -0.45) {
+          this.objects[jy][jx] = sub > 0 ? OBJECTS.MUSHROOM : OBJECTS.MUSHROOM_BROWN;
+        }
+        // Baumstamm / Totholz
+        else if (sub < -0.68 && this.canopy[jy][jx] !== CANOPY.TREE_CROWN) {
+          this.objects[jy][jx] = OBJECTS.FALLEN_LOG;
+        }
       }
     }
   }
@@ -790,23 +964,54 @@ export class WorldMap {
   }
 
   // ==========================================================================
-  // HÖHENEBENEN-SYSTEM (Plateaus & Löcher über 290x200 verteilt)
+  // HÖHENEBENEN-SYSTEM (14 Plateaus & 7 Löcher/Senken über die 290x200 Welt)
   // ==========================================================================
   generateElevationsAndRamps() {
-    // Plateaus distributed across the large world
-    this.createPlateau(Math.round(this.width * 0.16), Math.round(this.height * 0.35), 10, 7, ELEVATION.LEVEL_1, ['S', 'E']);
+    // 1. Malerischer Hügel direkt am Spawn (Level 1 & Level 2 mit Rampe Richtung Spawn)
+    this.createPlateau(this.spawnPoint.x + 22, this.spawnPoint.y - 10, 9, 6, ELEVATION.LEVEL_1, ['W', 'S']);
+    this.createPlateau(this.spawnPoint.x + 22, this.spawnPoint.y - 10, 4, 3, ELEVATION.LEVEL_2, ['W']);
+    this.createHole(this.spawnPoint.x + 14, this.spawnPoint.y + 16, 5, 4, 'N');
+
+    // 2. Nordwest-Wald hügelige Plateaus & Moos-Senke
+    this.createPlateau(Math.round(this.width * 0.16), Math.round(this.height * 0.35), 11, 8, ELEVATION.LEVEL_1, ['S', 'E']);
     this.createPlateau(Math.round(this.width * 0.16), Math.round(this.height * 0.35), 5, 4, ELEVATION.LEVEL_2, ['S']);
-    this.createHole(Math.round(this.width * 0.24), Math.round(this.height * 0.36), 4, 3, 'S');
+    this.createHole(Math.round(this.width * 0.24), Math.round(this.height * 0.36), 5, 4, 'S');
 
-    this.createPlateau(Math.round(this.width * 0.72), Math.round(this.height * 0.28), 12, 8, ELEVATION.LEVEL_1, ['S', 'W']);
-    this.createPlateau(Math.round(this.width * 0.72), Math.round(this.height * 0.28), 6, 4, ELEVATION.LEVEL_2, ['S']);
-    this.createHole(Math.round(this.width * 0.78), Math.round(this.height * 0.20), 4, 3, 'S');
+    // 3. Nordost-Schneegebirge (Hohe 2-Stufen-Gipfel & tiefe Eisspalte)
+    this.createPlateau(Math.round(this.width * 0.74), Math.round(this.height * 0.22), 14, 10, ELEVATION.LEVEL_1, ['S', 'W']);
+    this.createPlateau(Math.round(this.width * 0.74), Math.round(this.height * 0.22), 7, 5, ELEVATION.LEVEL_2, ['S']);
+    this.createHole(Math.round(this.width * 0.78), Math.round(this.height * 0.16), 5, 4, 'S');
 
-    this.createPlateau(Math.round(this.width * 0.20), Math.round(this.height * 0.78), 11, 7, ELEVATION.LEVEL_1, ['N', 'E']);
-    this.createHole(Math.round(this.width * 0.22), Math.round(this.height * 0.82), 4, 4, 'N');
+    // 4. Nordost-Rand Felsplateau
+    this.createPlateau(Math.round(this.width * 0.88), Math.round(this.height * 0.26), 10, 7, ELEVATION.LEVEL_1, ['W', 'S']);
+    this.createPlateau(Math.round(this.width * 0.88), Math.round(this.height * 0.26), 5, 3, ELEVATION.LEVEL_2, ['W']);
 
-    this.createPlateau(Math.round(this.width * 0.82), Math.round(this.height * 0.68), 10, 7, ELEVATION.LEVEL_1, ['W', 'N']);
-    this.createHole(Math.round(this.width * 0.68), Math.round(this.height * 0.70), 4, 3, 'S');
+    // 5. Zentrales Flussufer-Plateau & Klippen-Aussichtspunkt
+    this.createPlateau(Math.round(this.width * 0.36), Math.round(this.height * 0.52), 10, 6, ELEVATION.LEVEL_1, ['N', 'E']);
+    this.createHole(Math.round(this.width * 0.46), Math.round(this.height * 0.58), 5, 4, 'W');
+
+    // 6. Südwest-Wüstenmesas & Treibsand-Krater
+    this.createPlateau(Math.round(this.width * 0.18), Math.round(this.height * 0.74), 13, 8, ELEVATION.LEVEL_1, ['N', 'E']);
+    this.createPlateau(Math.round(this.width * 0.18), Math.round(this.height * 0.74), 6, 4, ELEVATION.LEVEL_2, ['N']);
+    this.createHole(Math.round(this.width * 0.24), Math.round(this.height * 0.84), 6, 4, 'N');
+
+    // 7. Südliche Dünen-Tafelberge
+    this.createPlateau(Math.round(this.width * 0.10), Math.round(this.height * 0.86), 9, 6, ELEVATION.LEVEL_1, ['E']);
+    this.createHole(Math.round(this.width * 0.14), Math.round(this.height * 0.66), 5, 4, 'S');
+
+    // 8. Südost-Sumpfgrate & Schlamm-Kuhlen
+    this.createPlateau(Math.round(this.width * 0.58), Math.round(this.height * 0.78), 10, 7, ELEVATION.LEVEL_1, ['N', 'W']);
+    this.createHole(Math.round(this.width * 0.66), Math.round(this.height * 0.72), 6, 5, 'S');
+    this.createPlateau(Math.round(this.width * 0.76), Math.round(this.height * 0.82), 11, 7, ELEVATION.LEVEL_1, ['N', 'W']);
+
+    // 9. Ostgipfel & Sonnenaufgangs-Hochebene
+    this.createPlateau(Math.round(this.width * 0.84), Math.round(this.height * 0.54), 12, 8, ELEVATION.LEVEL_1, ['W', 'S']);
+    this.createPlateau(Math.round(this.width * 0.84), Math.round(this.height * 0.54), 6, 4, ELEVATION.LEVEL_2, ['W']);
+    this.createHole(Math.round(this.width * 0.90), Math.round(this.height * 0.68), 5, 4, 'W');
+
+    // 10. Leeren-Plateau (Void Rift Edge Rim)
+    const vz = this.preset.voidZone;
+    this.createPlateau(vz.x - 14, vz.y + 10, 9, 6, ELEVATION.LEVEL_1, ['W', 'S']);
   }
 
   createPlateau(cx, cy, rx, ry, level = 1, rampDirections = ['S']) {

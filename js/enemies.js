@@ -1056,6 +1056,42 @@ export class EnemyManager {
       scale: 0.75, hp: 25, atk: 12, xpValue: 4
     });
 
+    // 9. Ausgewogene zusätzliche Patrouillen in den weiten Gefilden der 290x200 Welt
+    // Ostwald-Wolfsrudel (Goldblätterwald)
+    this.spawnPack('dire_wolf', Math.round(w * 0.78) * TILE_SIZE, Math.round(h * 0.52) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_wolves_east', {
+      scale: 0.85, hp: 45, atk: 16, xpValue: 8
+    });
+
+    // Südliche Wildschwein-Familie im Blütendickicht
+    this.spawnPack('tusk_boar', Math.round(w * 0.48) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_boars_south', {
+      scale: 0.88, hp: 55, atk: 18, xpValue: 10
+    });
+
+    // Brücken-Wächter am großen Binnensee
+    this.spawnPack('moss_archer', Math.round(w * 0.42) * TILE_SIZE, Math.round(h * 0.48) * TILE_SIZE, 2, 24, DIMENSIONS.OVERWORLD, 'pack_lake_archers', {
+      scale: 0.95, hp: 65, atk: 18, xpValue: 15
+    });
+
+    // Plateau-Hügelwache am Spawn
+    this.spawnPack('green_slime', (sp.x + 22) * TILE_SIZE, (sp.y - 12) * TILE_SIZE, 4, 22, DIMENSIONS.OVERWORLD, 'pack_hill_slimes', {
+      scale: 0.55, hp: 16, atk: 6, xpValue: 3, elevation: 1
+    });
+
+    // Wachen auf dem Ostplateau (+1)
+    this.spawnPack('cursed_knight', Math.round(w * 0.84) * TILE_SIZE, Math.round(h * 0.58) * TILE_SIZE, 2, 26, DIMENSIONS.OVERWORLD, 'pack_highland_knights', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
+    });
+
+    // Wüstendünen-Vipern
+    this.spawnPack('slithering_viper', Math.round(w * 0.12) * TILE_SIZE, Math.round(h * 0.88) * TILE_SIZE, 3, 26, DIMENSIONS.OVERWORLD, 'pack_dune_vipers', {
+      scale: 0.9, hp: 55, atk: 18, xpValue: 12
+    });
+
+    // Nordhang-Patrouille (Kiefernforst)
+    this.spawnPack('cursed_knight', Math.round(w * 0.62) * TILE_SIZE, Math.round(h * 0.20) * TILE_SIZE, 2, 26, DIMENSIONS.OVERWORLD, 'pack_north_knights', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25
+    });
+
     // =========================================================================
     // HÖHLEN-SPAWNS (CAVES DIMENSION)
     // =========================================================================

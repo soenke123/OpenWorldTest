@@ -1129,6 +1129,11 @@ class Game {
       // 7. LAYER 5: Ground Props (Origami Boulders, Stone Lanterns, Paper Mushrooms, Trampolines, Cave Entrances, Shrines)
       this.renderGroundProps(bounds, t, night);
 
+      // Magic Ground Artifacts (unter dem Blätterdach gerendert, damit sie im dichten Wald von außen verdeckt bleiben!)
+      if (this.magicManager) {
+        this.magicManager.renderGroundArtifacts(this.ctx, this.camera, this.currentDimension);
+      }
+
       // 8. LAYER 6: Y-Sorted Entities (Scalloped Paper Trees, Kodama Spirits, Player)
       this.renderYSortedEntities(bounds, t, night);
 
@@ -1149,9 +1154,12 @@ class Game {
       this.renderGlobalLightingWash(sunlight, sunset, night);
     }
 
-    // 11.5. Magic Layer: Ground Artifacts, Phoenix Spells & Player Sparkle Aura
+    // 11.5. Magic Layer: Spells, Plasma Orbs & Player Sparkle Aura
     if (this.magicManager) {
-      this.magicManager.render(this.ctx, this.camera);
+      if (this.currentDimension !== DIMENSIONS.OVERWORLD) {
+        this.magicManager.renderGroundArtifacts(this.ctx, this.camera, this.currentDimension);
+      }
+      this.magicManager.renderSpellsAndAuras(this.ctx, this.camera);
     }
 
     // 12. Screen Overlay: Floating Shrine Discovery Banner
@@ -2022,6 +2030,90 @@ class Game {
         // 9. Uralter Schrein (Overworld)
         else if (obj === OBJECTS.SHRINE) {
           this.renderShrine(px, py, t, 'overworld');
+        }
+
+        // 10. Fluoreszierende Kristalle (Overworld)
+        else if (obj === OBJECTS.GLOW_CRYSTAL) {
+          const gTile = this.map.getGroundTile(x, y);
+          let theme = 'main';
+          if (gTile === TILES.SNOW) theme = 'snow';
+          else if (gTile === TILES.SAND || gTile === TILES.QUICKSAND) theme = 'desert';
+          else if (gTile === TILES.SWAMP_GROUND || gTile === TILES.SWAMP_WATER) theme = 'forest';
+          else if (gTile === TILES.VOID_GROUND || gTile === TILES.VOID_LAKE) theme = 'void';
+          this.renderGlowCrystal(px, py, t, x, y, theme);
+        }
+
+        // 11. Trainingspuppe (Straw training dummy with target cross)
+        else if (obj === OBJECTS.TRAINING_DUMMY) {
+          // Drop shadow
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+          this.ctx.beginPath();
+          this.ctx.ellipse(px + 8, py + 14, 5, 2.5, 0, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          // Wooden base post
+          this.ctx.fillStyle = '#78350f';
+          this.ctx.fillRect(px + 7, py + 6, 2, 9);
+
+          // Straw woven chest
+          this.ctx.fillStyle = '#d97706';
+          this.ctx.fillRect(px + 5, py + 4, 6, 8);
+
+          // Cross arms
+          this.ctx.fillStyle = '#92400e';
+          this.ctx.fillRect(px + 2, py + 6, 12, 2.5);
+
+          // Head sack with tie
+          this.ctx.fillStyle = '#fef3c7';
+          this.ctx.beginPath();
+          this.ctx.arc(px + 8, py + 3, 3, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          // Red bullseye target cross
+          this.ctx.strokeStyle = '#dc2626';
+          this.ctx.lineWidth = 1;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 6, py + 8); this.ctx.lineTo(px + 10, py + 8);
+          this.ctx.moveTo(px + 8, py + 6); this.ctx.lineTo(px + 8, py + 10);
+          this.ctx.stroke();
+        }
+
+        // 12. Moosiger Holzstamm (Fallen log)
+        else if (obj === OBJECTS.FALLEN_LOG) {
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+          this.ctx.fillRect(px + 1, py + 11, 14, 4);
+
+          this.ctx.fillStyle = '#451a03';
+          this.ctx.fillRect(px + 2, py + 7, 12, 6);
+
+          this.ctx.fillStyle = '#78350f';
+          this.ctx.beginPath();
+          this.ctx.ellipse(px + 2, py + 10, 2, 3, 0, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          this.ctx.fillStyle = '#4ade80';
+          this.ctx.fillRect(px + 5, py + 6, 6, 2);
+        }
+
+        // 13. Baumstumpf (Tree trunk)
+        else if (obj === OBJECTS.TREE_TRUNK) {
+          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
+          this.ctx.beginPath();
+          this.ctx.ellipse(px + 8, py + 12, 6, 3, 0, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          this.ctx.fillStyle = '#5c2d12';
+          this.ctx.fillRect(px + 4, py + 8, 8, 5);
+
+          this.ctx.fillStyle = '#b45309';
+          this.ctx.beginPath();
+          this.ctx.ellipse(px + 8, py + 8, 4, 2.5, 0, 0, Math.PI * 2);
+          this.ctx.fill();
+
+          this.ctx.fillStyle = '#78350f';
+          this.ctx.beginPath();
+          this.ctx.arc(px + 8, py + 8, 1.2, 0, Math.PI * 2);
+          this.ctx.fill();
         }
       }
     }

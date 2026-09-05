@@ -17,8 +17,9 @@ export class Minimap {
     this.bgCtx = this.bgCanvas.getContext('2d');
     this.bgCtx.imageSmoothingEnabled = false;
 
-    // Fog of War Canvases (Nebel des Krieges, persistent pro Dimension)
+    // Fog of War Canvases & Explored Grids (persistent pro Dimension)
     this.fogCanvases = {};
+    this.exploredGrids = {};
 
     this.renderStaticBackground();
   }
@@ -46,6 +47,7 @@ export class Minimap {
 
   resetFog() {
     this.fogCanvases = {};
+    this.exploredGrids = {};
   }
 
   revealFog(playerX, playerY) {
@@ -70,6 +72,38 @@ export class Minimap {
     fctx.fill();
 
     fctx.restore();
+
+    // Track explored tiles in Uint8Array for Teleport validation & discovery checks
+    const key = this.getFogCanvasKey();
+    if (this.map) {
+      if (!this.exploredGrids[key]) {
+        this.exploredGrids[key] = new Uint8Array(this.map.width * this.map.height);
+      }
+      const grid = this.exploredGrids[key];
+      const centerTx = Math.floor(playerX / TILE_SIZE);
+      const centerTy = Math.floor(playerY / TILE_SIZE);
+      const rTiles = 20;
+      const r2 = rTiles * rTiles;
+      for (let dy = -rTiles; dy <= rTiles; dy++) {
+        const ty = centerTy + dy;
+        if (ty < 0 || ty >= this.map.height) continue;
+        for (let dx = -rTiles; dx <= rTiles; dx++) {
+          const tx = centerTx + dx;
+          if (tx < 0 || tx >= this.map.width) continue;
+          if (dx * dx + dy * dy <= r2) {
+            grid[ty * this.map.width + tx] = 1;
+          }
+        }
+      }
+    }
+  }
+
+  isTileExplored(tx, ty, dimensionKey = null) {
+    const key = dimensionKey || this.getFogCanvasKey();
+    const grid = this.exploredGrids[key];
+    if (!grid) return false;
+    if (!this.map || tx < 0 || tx >= this.map.width || ty < 0 || ty >= this.map.height) return false;
+    return grid[ty * this.map.width + tx] === 1;
   }
 
   setMap(map, dimension = 'overworld') {
@@ -112,6 +146,9 @@ export class Minimap {
         <span class="legend-item"><i class="dot snow"></i> Schnee</span>
         <span class="legend-item"><i class="dot swamp"></i> Sumpf</span>
         <span class="legend-item"><i class="dot void"></i> Leere</span>
+        <span class="legend-item"><i class="dot" style="background:#facc15;"></i> Schrein</span>
+        <span class="legend-item"><i class="dot" style="background:#38bdf8;"></i> Höhle</span>
+        <span class="legend-item"><i class="dot" style="background:#f472b6;"></i> Trampolin</span>
       `;
     }
   }
@@ -202,26 +239,68 @@ export class Minimap {
           );
         }
 
-        // Shrine indicator (Golden Diamond)
+        // Shrine indicator (Golden Pagoda Diamond 5x5)
         if (this.map.objects && this.map.objects[y] && this.map.objects[y][x] === 15) {
-          this.bgCtx.fillStyle = '#facc15';
-          this.bgCtx.fillRect(
-            Math.floor(x * this.scaleX) - 1,
-            Math.floor(y * this.scaleY) - 1,
-            3,
-            3
-          );
+          const sx = Math.floor(x * this.scaleX) + 1;
+          const sy = Math.floor(y * this.scaleY) + 1;
+          this.bgCtx.fillStyle = '#b45309'; // Amber outline
+          this.bgCtx.beginPath();
+          this.bgCtx.moveTo(sx, sy - 3.5);
+          this.bgCtx.lineTo(sx + 3.5, sy);
+          this.bgCtx.lineTo(sx, sy + 3.5);
+          this.bgCtx.lineTo(sx - 3.5, sy);
+          this.bgCtx.closePath();
+          this.bgCtx.fill();
+
+          this.bgCtx.fillStyle = '#facc15'; // Bright Gold
+          this.bgCtx.beginPath();
+          this.bgCtx.moveTo(sx, sy - 2.5);
+          this.bgCtx.lineTo(sx + 2.5, sy);
+          this.bgCtx.lineTo(sx, sy + 2.5);
+          this.bgCtx.lineTo(sx - 2.5, sy);
+          this.bgCtx.closePath();
+          this.bgCtx.fill();
+
+          this.bgCtx.fillStyle = '#fef08a'; // Radiant core
+          this.bgCtx.fillRect(sx - 0.5, sy - 0.5, 1.5, 1.5);
         }
 
-        // Trampoline indicator (Pink Dot)
+        // Trampoline indicator (Bright Bouncy Magenta/Pink Disc 3x3)
         if (this.map.objects && this.map.objects[y] && this.map.objects[y][x] === 14) {
-          this.bgCtx.fillStyle = '#f472b6';
-          this.bgCtx.fillRect(
-            Math.floor(x * this.scaleX),
-            Math.floor(y * this.scaleY),
-            2,
-            2
-          );
+          const tx = Math.floor(x * this.scaleX);
+          const ty = Math.floor(y * this.scaleY);
+          this.bgCtx.fillStyle = '#be185d'; // Dark magenta border
+          this.bgCtx.beginPath();
+          this.bgCtx.arc(tx + 1, ty + 1, 3.2, 0, Math.PI * 2);
+          this.bgCtx.fill();
+
+          this.bgCtx.fillStyle = '#f472b6'; // Vibrant pink canvas
+          this.bgCtx.beginPath();
+          this.bgCtx.arc(tx + 1, ty + 1, 2.2, 0, Math.PI * 2);
+          this.bgCtx.fill();
+
+          this.bgCtx.fillStyle = '#ffffff'; // White highlight dot
+          this.bgCtx.fillRect(tx + 0.5, ty + 0.5, 1, 1);
+        }
+
+        // Cave Entrance indicator (Dark Abyss Pit with Cyan Glowing Ring)
+        if (this.map.objects && this.map.objects[y] && this.map.objects[y][x] === 16) {
+          const cx = Math.floor(x * this.scaleX);
+          const cy = Math.floor(y * this.scaleY);
+          this.bgCtx.fillStyle = '#0284c7'; // Deep cyan outer ring
+          this.bgCtx.beginPath();
+          this.bgCtx.arc(cx + 1, cy + 1, 3.5, 0, Math.PI * 2);
+          this.bgCtx.fill();
+
+          this.bgCtx.fillStyle = '#38bdf8'; // Bright cyan glow
+          this.bgCtx.beginPath();
+          this.bgCtx.arc(cx + 1, cy + 1, 2.5, 0, Math.PI * 2);
+          this.bgCtx.fill();
+
+          this.bgCtx.fillStyle = '#020617'; // Pitch dark cave chasm
+          this.bgCtx.beginPath();
+          this.bgCtx.arc(cx + 1, cy + 1, 1.5, 0, Math.PI * 2);
+          this.bgCtx.fill();
         }
 
         // Torch indicator in caves (Fiery Orange Dot)
