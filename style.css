@@ -744,27 +744,25 @@ canvas#gameCanvas {
   transition: transform 0.04s ease-out;
 }
 
-/* --- Action Buttons Zone (Unten Rechts) --- */
+/* --- Ergonomic Action Buttons Arc (Unten Rechts) --- */
 #touch-buttons-zone {
   position: absolute;
-  right: max(24px, env(safe-area-inset-right, 24px));
-  bottom: max(20px, env(safe-area-inset-bottom, 20px));
-  width: 154px;
-  height: 154px;
+  right: max(16px, env(safe-area-inset-right, 16px));
+  bottom: max(12px, env(safe-area-inset-bottom, 12px));
+  width: 210px;
+  height: 200px;
   pointer-events: auto;
   touch-action: none;
 }
 
 .touch-btn {
   position: absolute;
-  width: 52px;
-  height: 52px;
   border-radius: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.18), rgba(20, 28, 48, 0.55));
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.18), rgba(20, 28, 48, 0.65));
   border: 1.5px solid rgba(255, 255, 255, 0.28);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), inset 0 1px 3px rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(8px);
@@ -776,36 +774,65 @@ canvas#gameCanvas {
   touch-action: none;
   outline: none;
   padding: 0;
-  transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.06s ease-out, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* Diamond Gamepad Layout (Y oben, X links, B rechts, A unten) */
-.touch-btn.btn-y {
-  top: 0;
-  left: 51px;
-  border-color: rgba(250, 204, 21, 0.45);
-  color: #fef08a;
-}
-
-.touch-btn.btn-x {
-  top: 51px;
-  left: 0;
-  border-color: rgba(56, 189, 248, 0.45);
-  color: #bae6fd;
-}
-
+/* Ergonomic Thumb Arc (Schwert im Zentrum, Dash unten, Bogen links, Magie oben-links, Schild oben-rechts) */
 .touch-btn.btn-b {
-  top: 51px;
-  right: 0;
-  border-color: rgba(248, 113, 113, 0.45);
+  width: 64px;
+  height: 64px;
+  bottom: 56px;
+  right: 12px;
+  border-color: rgba(248, 113, 113, 0.55);
   color: #fecaca;
+  box-shadow: 0 4px 18px rgba(220, 38, 38, 0.35), inset 0 1px 3px rgba(255, 255, 255, 0.25);
 }
 
 .touch-btn.btn-a {
-  bottom: 0;
-  left: 51px;
-  border-color: rgba(74, 222, 128, 0.45);
+  width: 52px;
+  height: 52px;
+  bottom: 6px;
+  right: 78px;
+  border-color: rgba(74, 222, 128, 0.5);
   color: #bbf7d0;
+}
+
+.touch-btn.btn-x {
+  width: 52px;
+  height: 52px;
+  bottom: 68px;
+  right: 92px;
+  border-color: rgba(56, 189, 248, 0.5);
+  color: #bae6fd;
+}
+
+.touch-btn.btn-magic {
+  width: 52px;
+  height: 52px;
+  bottom: 132px;
+  right: 90px;
+  border-color: rgba(244, 114, 182, 0.55);
+  color: #fbcfe8;
+}
+
+.touch-btn.btn-y {
+  width: 48px;
+  height: 48px;
+  bottom: 136px;
+  right: 20px;
+  border-color: rgba(250, 204, 21, 0.5);
+  color: #fef08a;
+}
+
+.touch-btn.aiming-active {
+  border-color: #ffffff !important;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.8), inset 0 0 8px rgba(255, 255, 255, 0.4) !important;
+}
+
+.touch-btn.cancel-zone {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.85) !important;
+  opacity: 0.6;
 }
 
 .touch-btn .btn-letter {
@@ -907,6 +934,18 @@ canvas#gameCanvas {
   background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.45), rgba(16, 185, 129, 0.8));
   border-color: rgba(74, 222, 128, 0.9);
   box-shadow: 0 0 18px rgba(34, 197, 94, 0.85);
+}
+
+.touch-btn.btn-magic:active, .touch-btn.btn-magic.active {
+  background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.45), rgba(219, 39, 119, 0.8));
+  border-color: rgba(244, 114, 182, 0.9);
+  box-shadow: 0 0 18px rgba(236, 72, 153, 0.85);
+}
+
+/* Hide desktop magic HUD slot when mobile touch controls are visible */
+#touch-controls:not(.hidden) ~ .magic-hud-slot,
+#touch-controls:not(.hidden) + .magic-hud-slot {
+  display: none !important;
 }
 
 /* --- Portrait Orientation Warning Overlay --- */

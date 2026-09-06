@@ -36,7 +36,7 @@ class Game {
       mouseRight: false
     };
 
-    this.touchControls = new TouchControls(this.input, (action, isDown) => this.handleTouchButton(action, isDown));
+    this.touchControls = new TouchControls(this.input, (action, isDown, meta) => this.handleTouchButton(action, isDown, meta));
     this.combat = new CombatManager(this);
 
     // Multi-Dimension Maps & Core Systems
@@ -263,7 +263,8 @@ class Game {
       }
       if (e.code === 'Space') {
         e.preventDefault();
-        this.player.triggerDash();
+        const targetAngle = e.shiftKey ? this.player.getFacingAngle() : null;
+        this.player.triggerDash(targetAngle);
       }
       if (e.code === 'KeyJ') {
         this.player.startMelee();
@@ -368,6 +369,28 @@ class Game {
         if (e.button === 2) {
           this.input.mouseRight = false;
           this.player.setShield(false);
+        }
+      });
+
+      this.canvas.addEventListener('mousemove', (e) => {
+        if (!this.player || this.player.isDead) return;
+        if (this.isCharacterSelectOpen && this.charSelectModal && !this.charSelectModal.classList.contains('hidden')) return;
+
+        const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        const screenX = (e.clientX - rect.left) * scaleX;
+        const screenY = (e.clientY - rect.top) * scaleY;
+        const zoom = this.camera ? this.camera.zoom : 1;
+        const camX = this.camera ? this.camera.x : 0;
+        const camY = this.camera ? this.camera.y : 0;
+        const mWorldX = screenX / zoom + camX;
+        const mWorldY = screenY / zoom + camY;
+        const mdx = mWorldX - this.player.x;
+        const mdy = mWorldY - (this.player.y - 10);
+        if (Math.hypot(mdx, mdy) > 14) {
+          const aimAngle = Math.atan2(mdy, mdx);
+          this.player.setAimAngle(aimAngle);
         }
       });
 
@@ -636,7 +659,7 @@ class Game {
     }, duration);
   }
 
-  handleTouchButton(action, isDown) {
+  handleTouchButton(action, isDown, meta = null) {
     if (this.isCharacterSelectOpen) {
       if (!this.charSelectModal || this.charSelectModal.classList.contains('hidden')) {
         this.isCharacterSelectOpen = false;
@@ -647,19 +670,86 @@ class Game {
     if (this.input.joystick && this.input.joystick.active) {
       this.player.setDirectionFromVector(this.input.joystick.x, this.input.joystick.y);
     }
+
+    // A = Dash (Tippen: in Laufrichtung | Halten & Ziehen: 360° Richtungs-Dash | Zurück: Abbrechen)
     if (action === 'A') {
-      // Dash (Sprung nach vorn)
-      if (isDown) this.player.triggerDash();
-    } else if (action === 'B') {
-      // Schwert (Melee: Kombo & Wirbel)
-      if (isDown) this.player.startMelee();
-      else this.player.releaseMelee();
-    } else if (action === 'X') {
-      // Bogen (Range: Pfeil & Bogen)
-      if (isDown) this.player.startRanged();
-      else this.player.releaseRanged();
-    } else if (action === 'Y') {
-      // Schild (Blaue Schutzblase)
+      if (isDown) {
+        if (meta && meta.drag && typeof meta.angle === 'number') {
+          this.player.setDashAim(true, meta.angle);
+        } else if (meta && meta.cancel) {
+          this.player.setDashAim(false);
+        }
+      } else {
+        this.player.setDashAim(false);
+        if (meta && meta.isCancelled) return;
+        if (meta && meta.isDrag && typeof meta.angle === 'number') {
+          this.player.triggerDash(meta.angle);
+        } else {
+          // Tap: In aktuelle Laufrichtung (oder Blickrichtung wenn stillstehend)
+          this.player.triggerDash(null);
+        }
+      }
+    }
+    // B = Schwert (Gedrückt halten: 3er-Kombo durchballern | Kreis-Geste: 360° Wirbelattacke)
+    else if (action === 'B') {
+      if (isDown) {
+        if (meta && meta.spin) {
+          this.player.executeSpinAttack();
+          if (this.combat) {
+            this.combat.addFloatingText('🌀 WIRBELATTACKE!', this.player.x, this.player.y - 24, '#38bdf8', 0.9);
+          }
+        } else if (meta && meta.drag && typeof meta.angle === 'number') {
+          this.player.setAimAngle(meta.angle);
+        } else if (meta && meta.initial) {
+          this.player.startMelee();
+        }
+      } else {
+        this.player.releaseMelee();
+      }
+    }
+    // X = Bogen (Tippen: Schnellschuss | Ziehen: 360° Zielen mit Flugbahn | Zurück: Abbrechen)
+    else if (action === 'X') {
+      if (isDown) {
+        if (meta && meta.drag && typeof meta.angle === 'number') {
+          this.player.setAimAngle(meta.angle);
+        } else if (meta && meta.cancel) {
+          this.player.cancelRanged();
+        } else if (meta && meta.initial) {
+          this.player.startRanged();
+        }
+      } else {
+        if (meta && meta.isCancelled) {
+          this.player.cancelRanged();
+        } else {
+          const aimAng = (meta && meta.isDrag && typeof meta.angle === 'number') ? meta.angle : null;
+          this.player.releaseRanged(aimAng);
+        }
+      }
+    }
+    // MAGIC = Zauber/Artefakt (Ziehen: 360° Schablone drehen | Loslassen: Wirken | Zurück: Abbrechen)
+    else if (action === 'MAGIC') {
+      if (!this.magicManager) return;
+      if (isDown) {
+        if (meta && meta.drag && typeof meta.angle === 'number') {
+          this.player.setAimAngle(meta.angle);
+        } else if (meta && meta.cancel) {
+          this.magicManager.cancelAiming();
+        } else if (meta && meta.initial) {
+          this.magicManager.startAiming(this.player);
+        }
+      } else {
+        if (meta && meta.isCancelled) {
+          this.magicManager.cancelAiming();
+        } else {
+          if (meta && meta.isDrag && typeof meta.angle === 'number') {
+            this.player.setAimAngle(meta.angle);
+          }
+          this.magicManager.releaseAiming(this.player, this.map, this.combat);
+        }
+      }
+    }
+    // Y = Schild (Einfaches Halten/Blocken)
+    else if (action === 'Y') {
       this.player.setShield(isDown);
     }
   }

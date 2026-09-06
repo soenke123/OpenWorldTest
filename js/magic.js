@@ -834,15 +834,9 @@ export class MagicManager {
     }
 
     // 4. RUBIN-PHÖNIX (Flammen-Sturm)
-    let dirX = 0, dirY = 1;
-    if (player.direction === 'up') { dirX = 0; dirY = -1; }
-    else if (player.direction === 'down') { dirX = 0; dirY = 1; }
-    else if (player.direction === 'left') { dirX = -1; dirY = 0; }
-    else if (player.direction === 'right') { dirX = 1; dirY = 0; }
-    else if (player.direction === 'up-left') { dirX = -0.7071; dirY = -0.7071; }
-    else if (player.direction === 'up-right') { dirX = 0.7071; dirY = -0.7071; }
-    else if (player.direction === 'down-left') { dirX = -0.7071; dirY = 0.7071; }
-    else if (player.direction === 'down-right') { dirX = 0.7071; dirY = 0.7071; }
+    const fVec = (typeof player.getFacingVector === 'function') ? player.getFacingVector() : { x: 1, y: 0 };
+    const dirX = fVec.x;
+    const dirY = fVec.y;
 
     player.artifact.charges--;
     player.artifact.cooldownTimer = player.artifact.cooldownMax || 3.0;
@@ -1809,6 +1803,29 @@ export class MagicManager {
       } else {
         this.magicCooldownOverlay.style.height = '0%';
         this.magicCooldownOverlay.classList.add('hidden');
+      }
+    }
+
+    // Synchronize mobile touch magic button
+    const touchMagicBtn = (typeof document !== 'undefined') ? document.querySelector('.touch-btn.btn-magic') : null;
+    const touchChargesBadge = (typeof document !== 'undefined') ? document.getElementById('touch-magic-charges') : null;
+    const touchSub = (typeof document !== 'undefined') ? document.getElementById('touch-magic-sub') : null;
+    if (touchMagicBtn) {
+      if (!player || !player.artifact || player.artifact.charges <= 0) {
+        touchMagicBtn.style.opacity = '0.4';
+        touchMagicBtn.style.pointerEvents = 'none';
+        if (touchChargesBadge) touchChargesBadge.textContent = '0';
+      } else {
+        touchMagicBtn.style.opacity = '1';
+        touchMagicBtn.style.pointerEvents = 'auto';
+        const col = player.artifact.colorTheme || '#ef4444';
+        const glow = player.artifact.glowColor || 'rgba(239, 68, 68, 0.5)';
+        touchMagicBtn.style.borderColor = col;
+        touchMagicBtn.style.boxShadow = `0 0 12px ${glow}`;
+        const letterEl = touchMagicBtn.querySelector('.btn-letter');
+        if (letterEl) letterEl.textContent = player.artifact.icon || '✨';
+        if (touchChargesBadge) touchChargesBadge.textContent = player.artifact.charges;
+        if (touchSub) touchSub.textContent = player.artifact.title || 'Magie';
       }
     }
   }

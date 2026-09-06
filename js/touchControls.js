@@ -192,37 +192,185 @@ export class TouchControls {
     const buttons = this.buttonsZone.querySelectorAll('.touch-btn');
     if (!buttons || !buttons.forEach) return;
 
+    const activeTouches = new Map(); // touchId -> state
+    let mouseState = null;
+
+    const startButtonInteraction = (action, btn, clientX, clientY) => {
+      const rect = btn.getBoundingClientRect();
+      const originX = rect.left + rect.width / 2;
+      const originY = rect.top + rect.height / 2;
+
+      btn.classList.add('active');
+      this.input.buttons[action] = true;
+
+      const state = {
+        btn,
+        action,
+        originX,
+        originY,
+        startTime: performance.now(),
+        isDragging: false,
+        dragDistance: 0,
+        dragAngle: 0,
+        prevAngle: null,
+        cumulativeAngle: 0,
+        spinFired: false,
+        isCancelled: false
+      };
+
+      if (this.onButtonPress) {
+        this.onButtonPress(action, true, { initial: true });
+      }
+
+      return state;
+    };
+
+    const processButtonMove = (state, clientX, clientY) => {
+      if (!state) return;
+      const dx = clientX - state.originX;
+      const dy = clientY - state.originY;
+      const dist = Math.hypot(dx, dy);
+
+      // Schild (Y) braucht kein Drag-to-Aim
+      if (state.action === 'Y') return;
+
+      if (dist >= 14) {
+        state.isDragging = true;
+        state.dragDistance = dist;
+        state.dragAngle = Math.atan2(dy, dx);
+        state.isCancelled = false;
+
+        state.btn.classList.remove('cancel-zone');
+        state.btn.classList.add('aiming-active');
+
+        // Visuelle Auslenkung des Buttons (virtueller Analog-Stick-Effekt)
+        const clampDist = Math.min(22, dist);
+        const vx = (dx / dist) * clampDist;
+        const vy = (dy / dist) * clampDist;
+        state.btn.style.transform = `translate(${vx}px, ${vy}px)`;
+
+        // Kreis-Geste für Schwert (Button B: Wirbelattacke)
+        if (state.action === 'B' && !state.spinFired) {
+          if (state.prevAngle !== null) {
+            let delta = state.dragAngle - state.prevAngle;
+            while (delta > Math.PI) delta -= Math.PI * 2;
+            while (delta < -Math.PI) delta += Math.PI * 2;
+            state.cumulativeAngle += delta;
+
+            const elapsed = (performance.now() - state.startTime) / 1000;
+            // Schnelle Kreisbewegung (~290° bis 360°) innerhalb von 0.85s
+            if (Math.abs(state.cumulativeAngle) >= Math.PI * 1.6 && elapsed <= 0.85) {
+              state.spinFired = true;
+              state.btn.classList.add('anim-pop-glow');
+              setTimeout(() => state.btn.classList.remove('anim-pop-glow'), 400);
+              if (this.onButtonPress) {
+                this.onButtonPress('B', true, { spin: true });
+              }
+            }
+          }
+          state.prevAngle = state.dragAngle;
+        }
+
+        if (this.onButtonPress && !state.spinFired) {
+          this.onButtonPress(state.action, true, {
+            drag: true,
+            angle: state.dragAngle,
+            dist,
+            isCancelled: false
+          });
+        }
+      } else if (state.isDragging && dist < 12) {
+        // Finger zurück ins Zentrum gezogen -> Abbrechen (Cancel Deadzone)
+        state.isCancelled = true;
+        state.btn.classList.add('cancel-zone');
+        state.btn.classList.remove('aiming-active');
+        state.btn.style.transform = 'translate(0px, 0px)';
+        if (this.onButtonPress) {
+          this.onButtonPress(state.action, true, { cancel: true });
+        }
+      }
+    };
+
+    const finishButtonInteraction = (state) => {
+      if (!state) return;
+      state.btn.classList.remove('active', 'aiming-active', 'cancel-zone');
+      state.btn.style.transform = 'translate(0px, 0px)';
+      this.input.buttons[state.action] = false;
+
+      const wasDrag = state.isDragging && !state.isCancelled;
+      const finalAngle = wasDrag ? state.dragAngle : null;
+
+      if (this.onButtonPress) {
+        this.onButtonPress(state.action, false, {
+          isDrag: wasDrag,
+          angle: finalAngle,
+          isCancelled: state.isCancelled,
+          spinTriggered: state.spinFired
+        });
+      }
+    };
+
     buttons.forEach((btn) => {
       const action = btn.getAttribute('data-action');
       if (!btn.addEventListener) return;
 
-      const press = (e) => {
-        if (e) e.preventDefault();
-        if (btn.classList && btn.classList.add) btn.classList.add('active');
-        this.input.buttons[action] = true;
-        if (this.onButtonPress) {
-          this.onButtonPress(action, true);
+      // Touch Events
+      btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          const state = startButtonInteraction(action, btn, touch.clientX, touch.clientY);
+          activeTouches.set(touch.identifier, state);
         }
-      };
+      }, { passive: false });
 
-      const release = (e) => {
-        if (e) e.preventDefault();
-        if (btn.classList && btn.classList.remove) btn.classList.remove('active');
-        this.input.buttons[action] = false;
-        if (this.onButtonPress) {
-          this.onButtonPress(action, false);
-        }
-      };
-
-      btn.addEventListener('touchstart', press, { passive: false });
-      btn.addEventListener('touchend', release, { passive: false });
-      btn.addEventListener('touchcancel', release, { passive: false });
-
-      // Mouse support for testing
-      btn.addEventListener('mousedown', press);
-      btn.addEventListener('mouseup', release);
-      btn.addEventListener('mouseleave', release);
+      // Mouse Events (Desktop-Testing)
+      btn.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        mouseState = startButtonInteraction(action, btn, e.clientX, e.clientY);
+      });
     });
+
+    // Window-level move and release listeners so dragging outside the button works smoothly
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('touchmove', (e) => {
+        if (activeTouches.size === 0) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          const state = activeTouches.get(touch.identifier);
+          if (state) {
+            e.preventDefault();
+            processButtonMove(state, touch.clientX, touch.clientY);
+          }
+        }
+      }, { passive: false });
+
+      const handleTouchEnd = (e) => {
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const touch = e.changedTouches[i];
+          const state = activeTouches.get(touch.identifier);
+          if (state) {
+            finishButtonInteraction(state);
+            activeTouches.delete(touch.identifier);
+          }
+        }
+      };
+
+      window.addEventListener('touchend', handleTouchEnd, { passive: true });
+      window.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+
+      // Desktop Mouse Fallback
+      window.addEventListener('mousemove', (e) => {
+        if (!mouseState) return;
+        processButtonMove(mouseState, e.clientX, e.clientY);
+      });
+
+      window.addEventListener('mouseup', () => {
+        if (!mouseState) return;
+        finishButtonInteraction(mouseState);
+        mouseState = null;
+      });
+    }
   }
 
   initOrientationCheck() {

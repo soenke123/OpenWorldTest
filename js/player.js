@@ -64,7 +64,9 @@ export class Player {
       cooldown: 0,
       vx: 0,
       vy: 0,
-      ghosts: []
+      ghosts: [],
+      aiming: false,
+      aimAngle: 0
     };
 
     this.melee = {
@@ -73,6 +75,7 @@ export class Player {
       recoveryTimer: 0,   // pause after thrust (schnitt schnitt stich PAUSE)
       charging: false,
       chargeTimer: 0,
+      autoCombo: false,   // continuous combo chain while attack is held
       isSpinning: false,
       spinTimer: 0,
       swingProgress: 1.0, // for visual sword rendering
@@ -91,8 +94,17 @@ export class Player {
     this.ranged = {
       ammo: COMBAT_CONFIG.MAX_AMMO,
       charging: false,
-      chargeTimer: 0
+      chargeTimer: 0,
+      aiming: false,
+      aimAngle: 0
     };
+
+    // Decoupled Aiming & Movement State
+    this.aimAngle = 0;
+    this.aimDirection = 'right';
+    this.isAiming = false;
+    this.moveVector = { x: 0, y: 0 };
+    this.moveAngle = 0;
 
     // Dimensions-Transitionen (Trampolin, Wolkenfall, Höhleneinstieg)
     this.transition = null; // { type, timer, duration, targetDim, targetX, targetY, switched }
@@ -415,7 +427,28 @@ export class Player {
   // DIRECTION & VECTOR HELPERS (8-Directional Support)
   // ==========================================================================
 
+  setAimAngle(angle) {
+    if (typeof angle !== 'number' || isNaN(angle)) return;
+    this.aimAngle = angle;
+    this.isAiming = true;
+    const step = Math.PI / 4;
+    const offset = Math.PI / 8;
+    let a = angle;
+    if (a < 0) a += Math.PI * 2;
+    const index = Math.floor((a + offset) / step) % 8;
+    const dirs = ['right', 'down-right', 'down', 'down-left', 'left', 'up-left', 'up', 'up-right'];
+    this.aimDirection = dirs[index];
+    this.direction = this.aimDirection;
+  }
+
+  resetAim() {
+    this.isAiming = false;
+  }
+
   getFacingAngle() {
+    if (this.isAiming && typeof this.aimAngle === 'number') {
+      return this.aimAngle;
+    }
     switch (this.direction) {
       case 'right': return 0;
       case 'down-right': return Math.PI / 4;
@@ -430,17 +463,16 @@ export class Player {
   }
 
   getFacingVector() {
-    switch (this.direction) {
-      case 'right': return { x: 1, y: 0 };
-      case 'down-right': return { x: Math.SQRT1_2, y: Math.SQRT1_2 };
-      case 'down': return { x: 0, y: 1 };
-      case 'down-left': return { x: -Math.SQRT1_2, y: Math.SQRT1_2 };
-      case 'left': return { x: -1, y: 0 };
-      case 'up-left': return { x: -Math.SQRT1_2, y: -Math.SQRT1_2 };
-      case 'up': return { x: 0, y: -1 };
-      case 'up-right': return { x: Math.SQRT1_2, y: -Math.SQRT1_2 };
-      default: return { x: 1, y: 0 };
+    const a = this.getFacingAngle();
+    return { x: Math.cos(a), y: Math.sin(a) };
+  }
+
+  getMoveVector() {
+    if (this.moveVector && (this.moveVector.x !== 0 || this.moveVector.y !== 0)) {
+      const len = Math.hypot(this.moveVector.x, this.moveVector.y);
+      return { x: this.moveVector.x / len, y: this.moveVector.y / len };
     }
+    return this.getFacingVector();
   }
 
   setDirectionFromVector(dx, dy) {
@@ -468,8 +500,14 @@ export class Player {
         dx += this.game.input.joystick.x;
         dy += this.game.input.joystick.y;
       }
+      this.moveVector = { x: dx, y: dy };
       if (dx !== 0 || dy !== 0) {
-        this.setDirectionFromVector(dx, dy);
+        this.moveAngle = Math.atan2(dy, dx);
+        if (!this.isAiming) {
+          this.setDirectionFromVector(dx, dy);
+          this.aimAngle = this.moveAngle;
+          this.aimDirection = this.direction;
+        }
       }
     }
   }
@@ -478,16 +516,25 @@ export class Player {
   // COMBAT ACTIONS (Zelda & Smash Bros Mechanics)
   // ==========================================================================
 
-  triggerDash() {
+  triggerDash(targetAngle = null) {
     if (this.dash.cooldown > 0 || this.dash.active || this.shield.active || this.shield.stunTimer > 0 || this.isDead || this.transition) {
       return;
     }
 
     this.syncDirectionFromInput();
 
-    const vec = this.getFacingVector();
-    const dirX = vec.x;
-    const dirY = vec.y;
+    let dirX = 0;
+    let dirY = 0;
+
+    if (typeof targetAngle === 'number' && !isNaN(targetAngle)) {
+      dirX = Math.cos(targetAngle);
+      dirY = Math.sin(targetAngle);
+      this.setAimAngle(targetAngle);
+    } else {
+      const moveVec = this.getMoveVector();
+      dirX = moveVec.x;
+      dirY = moveVec.y;
+    }
 
     const speed = COMBAT_CONFIG.DASH_SPEED;
     this.dash.active = true;
@@ -512,27 +559,24 @@ export class Player {
     }
   }
 
-  startMelee() {
+  startMelee(targetAngle = null) {
     if (this.shield.active || this.shield.stunTimer > 0 || this.isDead || this.transition) return;
     if (this.melee.recoveryTimer > 0) return; // Pause nach Stich einhalten!
-    if (this.melee.charging) return; // Bereits am Laden: chargeTimer nicht zurücksetzen!
-    this.syncDirectionFromInput();
+    if (typeof targetAngle === 'number') {
+      this.setAimAngle(targetAngle);
+    }
+    this.melee.autoCombo = true;
     this.melee.charging = true;
     this.melee.chargeTimer = 0;
+
+    if (this.melee.comboStep === 0) {
+      this.executeComboStep(targetAngle);
+    }
   }
 
   releaseMelee() {
-    if (!this.melee.charging) return;
+    this.melee.autoCombo = false;
     this.melee.charging = false;
-
-    const spinThreshold = COMBAT_CONFIG.SPIN_CHARGE_TIME * (this.isBearForm ? 1.2 : 1.0);
-    if (this.melee.chargeTimer >= spinThreshold) {
-      // Execute 360 Spin Attack (Kreisel-Angriff)
-      this.executeSpinAttack();
-    } else {
-      // Execute Next Combo Step (1 = Schnitt 1, 2 = Schnitt 2, 3 = Stich)
-      this.executeComboStep();
-    }
     this.melee.chargeTimer = 0;
   }
 
@@ -562,7 +606,10 @@ export class Player {
     }
   }
 
-  executeComboStep() {
+  executeComboStep(targetAngle = null) {
+    if (typeof targetAngle === 'number' && !isNaN(targetAngle)) {
+      this.setAimAngle(targetAngle);
+    }
     let nextStep = 1;
     if (this.melee.comboStep === 1 && this.melee.comboTimer > 0) {
       nextStep = 2;
@@ -686,7 +733,7 @@ export class Player {
     }
   }
 
-  startRanged() {
+  startRanged(targetAngle = null) {
     if (this.isBearForm) {
       if (this.game && this.game.combat) {
         this.game.combat.addFloatingText('🐾 Ein Bär kann keinen Bogen nutzen!', this.x, this.y - 22, '#4ade80', 0.85);
@@ -694,8 +741,12 @@ export class Player {
       return;
     }
     if (this.shield.active || this.shield.stunTimer > 0 || this.isDead || this.transition) return;
-    if (this.ranged.charging) return; // Bereits am Laden
-    this.syncDirectionFromInput();
+    if (typeof targetAngle === 'number' && !isNaN(targetAngle)) {
+      this.setAimAngle(targetAngle);
+    }
+    this.ranged.charging = true;
+    this.ranged.aiming = true;
+    this.ranged.chargeTimer = 0;
     if (this.ranged.ammo <= 0) {
       if (this.game && this.game.combat) {
         this.game.combat.floatingTexts.push({
@@ -707,15 +758,16 @@ export class Player {
           color: '#ef4444'
         });
       }
-      return;
     }
-    this.ranged.charging = true;
-    this.ranged.chargeTimer = 0;
   }
 
-  releaseRanged() {
-    if (!this.ranged.charging) return;
+  releaseRanged(targetAngle = null) {
+    if (!this.ranged.charging && !this.ranged.aiming) return;
     this.ranged.charging = false;
+    this.ranged.aiming = false;
+    if (typeof targetAngle === 'number' && !isNaN(targetAngle)) {
+      this.setAimAngle(targetAngle);
+    }
 
     if (this.ranged.ammo > 0) {
       this.syncDirectionFromInput();
@@ -731,6 +783,20 @@ export class Player {
       }
     }
     this.ranged.chargeTimer = 0;
+  }
+
+  cancelRanged() {
+    this.ranged.charging = false;
+    this.ranged.aiming = false;
+    this.ranged.chargeTimer = 0;
+  }
+
+  setDashAim(active, angle = null) {
+    this.dash.aiming = Boolean(active);
+    if (typeof angle === 'number' && !isNaN(angle)) {
+      this.dash.aimAngle = angle;
+      this.setAimAngle(angle);
+    }
   }
 
   update(dt, input) {
@@ -906,14 +972,15 @@ export class Player {
     // ==========================================================================
 
     if (input) {
-      // Dash (Button A on Mobile/Touch, Space on PC)
-      if ((input.keys && input.keys['Space']) || (input.buttons && input.buttons['A'])) {
-        this.triggerDash();
+      // Dash (Space on PC - mobile touch dash handled via handleTouchButton for drag-to-aim)
+      if (input.keys && input.keys['Space']) {
+        const targetAngle = (input.keys['ShiftLeft'] || input.keys['ShiftRight']) ? this.getFacingAngle() : null;
+        this.triggerDash(targetAngle);
       }
 
       // Melee (Button B on Mobile/Touch, KeyJ or Left Click on PC)
       const meleeDown = Boolean((input.keys && input.keys['KeyJ']) || input.mouseLeft || (input.buttons && input.buttons['B']));
-      if (meleeDown && !this.melee.charging) {
+      if (meleeDown && !this.melee.charging && this.melee.recoveryTimer <= 0) {
         this.startMelee();
       } else if (!meleeDown && this.melee.charging) {
         this.releaseMelee();
@@ -923,11 +990,11 @@ export class Player {
       const shieldDown = Boolean((input.keys && input.keys['KeyK']) || input.mouseRight || (input.buttons && input.buttons['Y']));
       this.setShield(shieldDown);
 
-      // Ranged (Button X on Mobile/Touch, KeyL or KeyF on PC)
-      const rangedDown = Boolean((input.keys && (input.keys['KeyL'] || input.keys['KeyF'])) || (input.buttons && input.buttons['X']));
+      // Ranged (KeyL or KeyF on PC - mobile touch bow handled via handleTouchButton)
+      const rangedDown = Boolean(input.keys && (input.keys['KeyL'] || input.keys['KeyF']));
       if (rangedDown && !this.ranged.charging) {
         this.startRanged();
-      } else if (!rangedDown && this.ranged.charging) {
+      } else if (!rangedDown && this.ranged.charging && !this.ranged.aiming) {
         this.releaseRanged();
       }
 
@@ -1081,6 +1148,17 @@ export class Player {
       const baseSwingSpeed = (this.melee.swingType === 'thrust') ? 2.8 : 5.0;
       const swingSpeed = baseSwingSpeed * (this.isBearForm ? 0.8 : 1.0);
       this.melee.swingProgress += dt * swingSpeed;
+    }
+
+    // Auto-combo progression while holding attack
+    if (this.melee.autoCombo && !this.melee.isSpinning && !this.shield.active && !this.isDead && !this.transition) {
+      if (this.melee.recoveryTimer <= 0) {
+        if (this.melee.comboStep === 0) {
+          this.executeComboStep(this.isAiming ? this.aimAngle : null);
+        } else if ((this.melee.comboStep === 1 || this.melee.comboStep === 2) && this.melee.swingProgress >= 0.78) {
+          this.executeComboStep(this.isAiming ? this.aimAngle : null);
+        }
+      }
     }
 
     // 4. Ranged charge timer
@@ -2334,7 +2412,117 @@ export class Player {
       ctx.restore();
     }
 
+    // Aiming Trajectory Previews (Dash & Bow)
+    this.renderAimPreviews(ctx, px, py, animTime);
+
     ctx.restore();
+  }
+
+  renderAimPreviews(ctx, px, py, animTime) {
+    if (this.isDead || this.transition) return;
+
+    // 1. Dash Trajectory Preview (glowing emerald arrow)
+    if (this.dash && this.dash.aiming) {
+      const angle = this.dash.aimAngle;
+      const startX = px;
+      const startY = py - 6;
+      const dashDist = 80;
+      const endX = startX + Math.cos(angle) * dashDist;
+      const endY = startY + Math.sin(angle) * dashDist;
+
+      ctx.save();
+      // Translucent landing indicator shadow
+      ctx.fillStyle = 'rgba(74, 222, 128, 0.25)';
+      ctx.beginPath();
+      ctx.ellipse(endX, endY + 6, 12, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pulsing destination landing ring
+      const ringPulse = 1.0 + Math.sin(animTime * 8) * 0.18;
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.ellipse(endX, endY + 6, 9 * ringPulse, 4.5 * ringPulse, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Glowing dashed trajectory line
+      ctx.strokeStyle = 'rgba(74, 222, 128, 0.85)';
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([7, 5]);
+      ctx.lineDashOffset = -animTime * 28;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Animated forward chevron indicators along dash path
+      const chevrons = 3;
+      for (let c = 1; c <= chevrons; c++) {
+        const frac = ((animTime * 1.8 + c / chevrons) % 1.0);
+        const cx = startX + Math.cos(angle) * (frac * dashDist);
+        const cy = startY + Math.sin(angle) * (frac * dashDist);
+        const perpX = -Math.sin(angle) * 4.5;
+        const perpY = Math.cos(angle) * 4.5;
+        const tipX = Math.cos(angle) * 3.5;
+        const tipY = Math.sin(angle) * 3.5;
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${Math.sin(frac * Math.PI) * 0.9})`;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(cx - perpX - tipX, cy - perpY - tipY);
+        ctx.lineTo(cx + tipX, cy + tipY);
+        ctx.lineTo(cx + perpX - tipX, cy + perpY - tipY);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 2. Bow Aim Trajectory Preview (sky-blue dashed line with reticle)
+    if (this.ranged && (this.ranged.aiming || (this.ranged.charging && this.isAiming))) {
+      const angle = this.getFacingAngle();
+      const startX = px;
+      const startY = py - 8;
+      const range = 200 + (this.skills?.range || 0) * 35;
+      const endX = startX + Math.cos(angle) * range;
+      const endY = startY + Math.sin(angle) * range;
+
+      ctx.save();
+      // Outer faint aim guide
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+
+      // Inner crisp dashed trajectory
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([6, 5]);
+      ctx.lineDashOffset = -animTime * 35;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+      ctx.lineTo(endX, endY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Crosshair Reticle at end of range
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(endX, endY, 5.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(endX - 8, endY);
+      ctx.lineTo(endX + 8, endY);
+      ctx.moveTo(endX, endY - 8);
+      ctx.lineTo(endX, endY + 8);
+      ctx.stroke();
+
+      ctx.restore();
+    }
   }
 
   renderGreenFlameAura(ctx, px, py, animTime, alpha, behind = false) {
