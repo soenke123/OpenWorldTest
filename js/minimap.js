@@ -159,13 +159,19 @@ export class Minimap {
   initTabsDOM() {
     const buttons = document.querySelectorAll('.layer-tab-btn');
     buttons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      const selectLayer = (e) => {
         e.stopPropagation();
+        if (e.type === 'touchstart' && e.cancelable) {
+          e.preventDefault();
+        }
         const layer = btn.getAttribute('data-layer');
         if (layer) {
           this.setViewingDimension(layer);
         }
-      });
+      };
+      btn.addEventListener('pointerdown', selectLayer);
+      btn.addEventListener('touchstart', selectLayer, { passive: false });
+      btn.addEventListener('click', selectLayer);
     });
   }
 

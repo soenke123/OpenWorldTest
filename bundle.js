@@ -16333,13 +16333,19 @@ class Minimap {
   initTabsDOM() {
     const buttons = document.querySelectorAll('.layer-tab-btn');
     buttons.forEach(btn => {
-      btn.addEventListener('click', (e) => {
+      const selectLayer = (e) => {
         e.stopPropagation();
+        if (e.type === 'touchstart' && e.cancelable) {
+          e.preventDefault();
+        }
         const layer = btn.getAttribute('data-layer');
         if (layer) {
           this.setViewingDimension(layer);
         }
-      });
+      };
+      btn.addEventListener('pointerdown', selectLayer);
+      btn.addEventListener('touchstart', selectLayer, { passive: false });
+      btn.addEventListener('click', selectLayer);
     });
   }
 
@@ -20389,7 +20395,9 @@ class Game {
       }
 
       if (e.code === 'KeyM') {
-        this.toggleLargeMap();
+        if (!e.repeat) {
+          this.openLargeMap();
+        }
         return;
       }
 
@@ -20472,6 +20480,9 @@ class Game {
         if (this.magicManager) {
           this.magicManager.releaseAiming(this.player, this.map, this.combat);
         }
+      }
+      if (e.code === 'KeyM') {
+        this.closeLargeMap();
       }
     });
 
@@ -20684,32 +20695,100 @@ class Game {
       }, { passive: false });
     }
 
-    // 4. Minimalist Minimap (Klick / M für große Karte mit 4 Kacheln)
+    // 4. Minimalist Minimap (Gedrückt halten für große Karte, Multi-Touch Ebenen-Auswahl)
     const minimapContainer = document.getElementById('minimap-container');
-    const closeBtn = document.getElementById('minimap-close-btn');
-
     if (minimapContainer) {
-      minimapContainer.addEventListener('click', (e) => {
-        if (!minimapContainer.classList.contains('expanded')) {
-          this.openLargeMap();
+      let isHoldingMap = false;
+      let holdingPointerId = null;
+      let holdingTouchId = null;
+
+      const expandMap = (e) => {
+        // Ignoriere, falls direkt ein Ebenen-Button angetippt wurde
+        if (e.target && e.target.closest && e.target.closest('.layer-tab-btn')) {
+          return;
         }
-      });
+        if (e && e.cancelable) e.preventDefault();
+        isHoldingMap = true;
+        minimapContainer.classList.add('pressing');
+        this.openLargeMap();
 
-      if (closeBtn) {
-        closeBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this.closeLargeMap();
-        });
-      }
+        if (e && e.pointerId !== undefined) {
+          holdingPointerId = e.pointerId;
+        }
+      };
 
-      // Klick außerhalb schließt die vergrößerte Karte
-      window.addEventListener('pointerdown', (e) => {
-        if (minimapContainer.classList.contains('expanded')) {
-          if (!minimapContainer.contains(e.target)) {
-            this.closeLargeMap();
+      const collapseMap = (e) => {
+        if (!isHoldingMap) return;
+
+        // Multi-touch Schutz: Nur schließen, wenn der HALTENDE Finger losgelassen wird!
+        if (e && e.pointerId !== undefined && holdingPointerId !== null) {
+          if (e.pointerId !== holdingPointerId) {
+            // Ein anderer Finger (z.B. der die Ebene gewählt hat) wurde gehoben -> Karte BLEIBT OFFEN!
+            return;
           }
         }
-      });
+
+        isHoldingMap = false;
+        holdingPointerId = null;
+        holdingTouchId = null;
+        minimapContainer.classList.remove('pressing');
+        this.closeLargeMap();
+      };
+
+      // Pointer Events (Maus & Touch)
+      minimapContainer.addEventListener('pointerdown', expandMap);
+      window.addEventListener('pointerup', collapseMap);
+      window.addEventListener('pointercancel', collapseMap);
+
+      // Touch Events für native Multi-Touch Geräte
+      minimapContainer.addEventListener('touchstart', (e) => {
+        if (e.target && e.target.closest && e.target.closest('.layer-tab-btn')) {
+          return;
+        }
+        if (e.cancelable) e.preventDefault();
+        if (!isHoldingMap && e.changedTouches && e.changedTouches.length > 0) {
+          isHoldingMap = true;
+          holdingTouchId = e.changedTouches[0].identifier;
+          minimapContainer.classList.add('pressing');
+          this.openLargeMap();
+        }
+      }, { passive: false });
+
+      window.addEventListener('touchend', (e) => {
+        if (!isHoldingMap) return;
+        if (holdingTouchId !== null && e.changedTouches) {
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === holdingTouchId) {
+              isHoldingMap = false;
+              holdingTouchId = null;
+              holdingPointerId = null;
+              minimapContainer.classList.remove('pressing');
+              this.closeLargeMap();
+              return;
+            }
+          }
+        } else if (e.touches && e.touches.length === 0) {
+          isHoldingMap = false;
+          holdingTouchId = null;
+          holdingPointerId = null;
+          minimapContainer.classList.remove('pressing');
+          this.closeLargeMap();
+        }
+      }, { passive: true });
+
+      window.addEventListener('touchcancel', () => {
+        if (isHoldingMap) {
+          isHoldingMap = false;
+          holdingTouchId = null;
+          holdingPointerId = null;
+          minimapContainer.classList.remove('pressing');
+          this.closeLargeMap();
+        }
+      }, { passive: true });
+
+      // Maus Events
+      minimapContainer.addEventListener('mousedown', expandMap);
+      window.addEventListener('mouseup', collapseMap);
 
       // Verhindere Kontextmenü bei langem Drücken
       minimapContainer.addEventListener('contextmenu', (e) => e.preventDefault());

@@ -175,50 +175,36 @@
         </a>
       </div>
 
-      <!-- Minimalist Corner Minimap (Klick / M für große Karte) -->
+      <!-- Minimalist Corner Minimap (Gedrückt halten für große Karte) -->
       <div id="minimap-wrapper">
-        <div id="minimap-container" class="minimap-compact" title="Karte öffnen (M / Klick)">
-          <button id="minimap-close-btn" class="minimap-close-btn" title="Karte schließen (M / ESC)">✕</button>
+        <div id="minimap-container" class="minimap-compact" title="Gedrückt halten für große Karte (M / Halten)">
           <div id="minimap-layer-tabs" class="minimap-layer-tabs">
             <button class="layer-tab-btn" data-layer="clouds" title="Wolkenreich (+1)">
               <span class="layer-icon">☁️</span>
-              <div class="layer-info">
-                <span class="layer-title">Wolke (+1)</span>
-                <span class="layer-status" id="layer-status-clouds">0%</span>
-              </div>
+              <span class="layer-num">+1</span>
               <span class="active-indicator" id="indicator-clouds" title="Dein Standort">📍</span>
             </button>
 
             <button class="layer-tab-btn active" data-layer="overworld" title="Oberwelt (0)">
               <span class="layer-icon">🌲</span>
-              <div class="layer-info">
-                <span class="layer-title">Ground (0)</span>
-                <span class="layer-status" id="layer-status-overworld">0%</span>
-              </div>
+              <span class="layer-num">0</span>
               <span class="active-indicator" id="indicator-overworld" title="Dein Standort">📍</span>
             </button>
 
-            <button class="layer-tab-btn" data-layer="caves_l1" title="Höhlen Ebene 1 (-1)">
+            <button class="layer-tab-btn" data-layer="caves_l1" title="Höhle Ebene 1 (-1)">
               <span class="layer-icon">🪨</span>
-              <div class="layer-info">
-                <span class="layer-title">Höhle (-1)</span>
-                <span class="layer-status" id="layer-status-caves_l1">0%</span>
-              </div>
+              <span class="layer-num">-1</span>
               <span class="active-indicator" id="indicator-caves_l1" title="Dein Standort">📍</span>
             </button>
 
-            <button class="layer-tab-btn" data-layer="caves_l2" title="Tiefe Höhlen Ebene 2 (-2)">
+            <button class="layer-tab-btn" data-layer="caves_l2" title="Tiefe Höhle Ebene 2 (-2)">
               <span class="layer-icon">💎</span>
-              <div class="layer-info">
-                <span class="layer-title">Höhle (-2)</span>
-                <span class="layer-status" id="layer-status-caves_l2">0%</span>
-              </div>
+              <span class="layer-num">-2</span>
               <span class="active-indicator" id="indicator-caves_l2" title="Dein Standort">📍</span>
             </button>
           </div>
           <div id="minimap-canvas-wrapper">
             <canvas id="minimapCanvas" width="200" height="150"></canvas>
-            <div id="minimap-viewing-header"><span id="minimap-viewing-title">Ground (0)</span></div>
           </div>
           <span class="minimap-hint-badge">🗺️</span>
         </div>
