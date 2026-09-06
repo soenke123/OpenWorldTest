@@ -1514,7 +1514,12 @@ export class Player {
         } else if (this.map.getHoleEntrance) {
           const entrance = this.map.getHoleEntrance(curTileX, curTileY);
           if (entrance) {
-            this.lastOverworldCaveEntrance = { x: entrance.x, y: entrance.y, targetCave: entrance.targetCave };
+            this.lastOverworldCaveEntrance = {
+              x: entrance.x,
+              y: entrance.y,
+              targetCave: entrance.targetCave,
+              chamber: entrance.chamber || null
+            };
             this.startTransition('cave_enter', entrance.targetCave, entrance.targetX * TILE_SIZE + 8, entrance.targetY * TILE_SIZE + 8, 0.65);
           }
         }
@@ -1533,10 +1538,14 @@ export class Player {
           if (exit) {
             const tType = exit.targetDim === 'overworld' ? 'cave_exit' : 'ladder';
             let targetX = exit.targetX * TILE_SIZE + 8;
-            let targetY = exit.targetY * TILE_SIZE + 8;
-            if (tType === 'cave_exit' && this.lastOverworldCaveEntrance && this.lastOverworldCaveEntrance.targetCave === this.map.id) {
-              targetX = this.lastOverworldCaveEntrance.x * TILE_SIZE + 8;
-              targetY = (this.lastOverworldCaveEntrance.y + 1) * TILE_SIZE + 8;
+            let targetY = (exit.targetY + 1) * TILE_SIZE + 8;
+            if (tType === 'cave_exit') {
+              if (this.lastOverworldCaveEntrance &&
+                  this.lastOverworldCaveEntrance.targetCave === this.map.id &&
+                  (!exit.chamber || !this.lastOverworldCaveEntrance.chamber || this.lastOverworldCaveEntrance.chamber === exit.chamber)) {
+                targetX = this.lastOverworldCaveEntrance.x * TILE_SIZE + 8;
+                targetY = (this.lastOverworldCaveEntrance.y + 1) * TILE_SIZE + 8;
+              }
             }
             this.startTransition(tType, exit.targetDim, targetX, targetY, 0.65);
           }
@@ -1788,7 +1797,7 @@ export class Player {
     return 'hit';
   }
 
-  takePvPDamage(amount, kbX = 0, kbY = 0, attackerId = null) {
+  takePvPDamage(amount, kbX = 0, kbY = 0, attackerId = null, attackerName = null) {
     if (this.isDead) return 'dead';
 
     // 1. Dash-I-Frames
@@ -1844,7 +1853,7 @@ export class Player {
     }
 
     if (this.hp <= 0) {
-      this.die('pvp');
+      this.die('pvp', { killerId: attackerId, killerName: attackerName });
     }
 
     return 'hit';
@@ -1858,7 +1867,7 @@ export class Player {
     }
   }
 
-  die(cause = 'void') {
+  die(cause = 'void', extraInfo = null) {
     if (this.isDead) return;
     this.isDead = true;
     this.deathTimer = 0;
@@ -1930,6 +1939,8 @@ export class Player {
     // 4. Record death info for UI overlay
     this.lastDeathInfo = {
       cause,
+      killerName: extraInfo?.killerName || (extraInfo?.killerId && this.game?.remotePlayers?.get(extraInfo.killerId)?.name) || 'Ein Spieler',
+      killerId: extraInfo?.killerId || null,
       oldExactLevel,
       newExactLevel,
       dropXp,

@@ -1028,8 +1028,21 @@ class Game {
         const skillsEl = document.getElementById('death-penalty-skills');
 
         if (info) {
-          if (titleEl) titleEl.textContent = info.cause === 'enemy' ? 'IM KAMPF GEFALLEN!' : 'IN DIE LEERE GESTÜRZT!';
-          if (descEl) descEl.textContent = info.cause === 'enemy' ? `${this.player.name || 'Held'} wurde von einem Monster überwältigt...` : `${this.player.name || 'Held'} stürzte in den ewigen Abgrund...`;
+          if (info.cause === 'pvp') {
+            const killer = info.killerName || 'Ein Spieler';
+            const killerStr = (!killer.toLowerCase().startsWith('spieler')) ? `Spieler ${killer}` : killer;
+            if (titleEl) titleEl.textContent = `${killerStr} hat dich besiegt.`;
+            if (descEl) descEl.textContent = 'Im Spieler-Duell gefallen.';
+          } else if (info.cause === 'enemy') {
+            if (titleEl) titleEl.textContent = 'IM KAMPF GEFALLEN!';
+            if (descEl) descEl.textContent = `${this.player.name || 'Held'} wurde von einem Monster überwältigt...`;
+          } else if (info.cause === 'drown') {
+            if (titleEl) titleEl.textContent = 'ERTRUNKEN!';
+            if (descEl) descEl.textContent = `${this.player.name || 'Held'} ging im tiefen Wasser unter...`;
+          } else {
+            if (titleEl) titleEl.textContent = 'IN DIE LEERE GESTÜRZT!';
+            if (descEl) descEl.textContent = `${this.player.name || 'Held'} stürzte in den ewigen Abgrund...`;
+          }
           if (detailsEl) detailsEl.classList.remove('hidden');
           if (levelEl) levelEl.textContent = `⚡ Level halbiert: Lv. ${info.oldExactLevel.toFixed(2)} → Lv. ${info.newExactLevel.toFixed(2)}`;
           if (xpEl) xpEl.textContent = `✨ ${info.dropXp} EP als Beute gedroppt`;
@@ -4361,12 +4374,21 @@ class Game {
 
     this.network.on('pvp_hit', (msg) => {
       if (msg.targetId === this.network.clientId) {
-        this.player.takePvPDamage(msg.damage, msg.kbX, msg.kbY, msg.attackerId);
+        const attacker = this.remotePlayers.get(msg.attackerId);
+        const attackerName = msg.attackerName || (attacker ? attacker.name : null) || 'Ein Spieler';
+        this.player.takePvPDamage(msg.damage, msg.kbX, msg.kbY, msg.attackerId, attackerName);
       } else {
         const rp = this.remotePlayers.get(msg.targetId);
         if (rp && typeof msg.targetHp === 'number') {
           rp.hp = msg.targetHp;
         }
+      }
+    });
+
+    this.network.on('player_killed', (msg) => {
+      if (msg.victimId === this.network.clientId && this.player && this.player.lastDeathInfo) {
+        this.player.lastDeathInfo.killerName = msg.killerName;
+        this.updateHUD();
       }
     });
 

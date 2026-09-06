@@ -6494,37 +6494,64 @@ class CaveMap {
     this.ground[roomNE.y + 1][roomNE.x - 2] = TILES.CAVE_FLOOR;
 
     // 4. Ausgänge zur Oberwelt platzieren
-    // Ausgang 1: Grasland-Loch bei (12, 38)
+    // Ausgang 1: Grasland-Loch bei (16, 16)
     this.ground[roomNW.y][roomNW.x] = TILES.CAVE_HOLE_EXIT;
     this.exits.push({
       x: roomNW.x,
       y: roomNW.y,
       targetDim: 'overworld',
-      targetX: 12,
-      targetY: 38,
-      label: 'Aufgang zum Grasland-Loch'
+      targetX: 70,
+      targetY: 72,
+      chamber: 'grasland',
+      label: 'Aufgang zur Grasland-Kluft'
     });
 
-    // Ausgang 2: Wüsten-Loch bei (38, 76)
+    // Ausgang 2: Wüsten-Loch bei (20, 54)
     this.ground[roomSW.y][roomSW.x] = TILES.CAVE_HOLE_EXIT;
     this.exits.push({
       x: roomSW.x,
       y: roomSW.y,
       targetDim: 'overworld',
-      targetX: 38,
-      targetY: 76,
+      targetX: 70,
+      targetY: 168,
+      chamber: 'desert',
       label: 'Aufgang zum Wüsten-Trichter'
     });
 
-    // Ausgang 3: Sumpf-Loch bei (82, 64)
+    // Ausgang 3: Sumpf-Loch bei (74, 52)
     this.ground[roomSE.y][roomSE.x] = TILES.CAVE_HOLE_EXIT;
     this.exits.push({
       x: roomSE.x,
       y: roomSE.y,
       targetDim: 'overworld',
-      targetX: 82,
-      targetY: 64,
+      targetX: 194,
+      targetY: 140,
+      chamber: 'swamp',
       label: 'Aufgang zur Sumpf-Kuhle'
+    });
+
+    // Ausgang 4: Schnee-Loch bei (58, 21)
+    this.ground[21][58] = TILES.CAVE_HOLE_EXIT;
+    this.exits.push({
+      x: 58,
+      y: 21,
+      targetDim: 'overworld',
+      targetX: 197,
+      targetY: 44,
+      chamber: 'snow',
+      label: 'Aufgang zum Eispass-Stollen'
+    });
+
+    // Ausgang 5: Flusstal-Klamm bei (44, 31)
+    this.ground[31][44] = TILES.CAVE_HOLE_EXIT;
+    this.exits.push({
+      x: 44,
+      y: 31,
+      targetDim: 'overworld',
+      targetX: 133,
+      targetY: 68,
+      chamber: 'center',
+      label: 'Aufgang zur Flusstal-Klamm'
     });
 
     // Abgang zur Kristall-Unterhöhle
@@ -6535,6 +6562,7 @@ class CaveMap {
       targetDim: 'sub_crystal',
       targetX: 18,
       targetY: 6,
+      chamber: 'sub_crystal',
       label: 'Abgang in die Kristall-Unterhöhle'
     });
 
@@ -6677,18 +6705,21 @@ class CaveMap {
     const exitY = cy + 4;
     this.ground[exitY][exitX] = TILES.CAVE_HOLE_EXIT;
 
-    let targetX = 34, targetY = 12;
-    let label = 'Aufgang zur Wald-Senke';
+    let targetX = 52, targetY = 32;
+    let label = 'Aufgang zum Mooswald-Loch';
     let shrineName = 'Schrein des Verborgenen Mooses';
+    let chamber = 'forest_grotto';
 
     if (this.id === 'snow_grotto') {
-      targetX = 104; targetY = 16;
-      label = 'Aufgang zur Eisspalte';
+      targetX = 228; targetY = 32;
+      label = 'Aufgang zur Schnee-Eisspalte';
       shrineName = 'Schrein der Ewigen Kälte';
+      chamber = 'snow_grotto';
     } else if (this.id === 'void_grotto') {
-      targetX = 118; targetY = 48;
+      targetX = 259; targetY = 47;
       label = 'Aufgang zum Leeren-Riss';
       shrineName = 'Schrein der Astralen Stille';
+      chamber = 'void_grotto';
     }
 
     this.exits.push({
@@ -6697,6 +6728,7 @@ class CaveMap {
       targetDim: 'overworld',
       targetX,
       targetY,
+      chamber,
       label
     });
 
@@ -7660,43 +7692,43 @@ class WorldMap {
   placeCaveEntrances() {
     // 26 vielfältige Höhleneingänge über die gesamte 290x200 Oberwelt verteilt
     const desiredEntrances = [
-      // 1. West- & Spawn-Region (Grasland & Vorwälder)
-      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Kluft (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 9, name: 'Mooswald-Loch (Moosige Grotte)' },
-      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.30), targetCave: 'forest_grotto', targetX: 12, targetY: 10, name: 'Alteiche-Schacht (Moosige Grotte)' },
-      { x: Math.round(this.width * 0.28), y: Math.round(this.height * 0.18), targetCave: 'main_complex', targetX: 17, targetY: 17, name: 'Nordwest-Stollen (Tiefenhöhlen)' },
-      { x: this.spawnPoint.x + 18, y: this.spawnPoint.y - 14, targetCave: 'main_complex', targetX: 16, targetY: 18, name: 'Spawn-Gipfelspalte (Tiefenhöhlen)' },
-      { x: this.spawnPoint.x - 14, y: this.spawnPoint.y + 24, targetCave: 'main_complex', targetX: 19, targetY: 17, name: 'Lichtungsschacht (Tiefenhöhlen)' },
+      // 1. West- & Spawn-Region (Grasland & Vorwälder) -> main_complex (Grasland) / forest_grotto
+      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, chamber: 'grasland', name: 'Grasland-Kluft (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 9, chamber: 'forest_grotto', name: 'Mooswald-Loch (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.30), targetCave: 'forest_grotto', targetX: 12, targetY: 10, chamber: 'forest_grotto', name: 'Alteiche-Schacht (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.28), y: Math.round(this.height * 0.18), targetCave: 'main_complex', targetX: 17, targetY: 17, chamber: 'grasland', name: 'Nordwest-Stollen (Tiefenhöhlen)' },
+      { x: this.spawnPoint.x + 18, y: this.spawnPoint.y - 14, targetCave: 'main_complex', targetX: 16, targetY: 18, chamber: 'grasland', name: 'Spawn-Gipfelspalte (Tiefenhöhlen)' },
+      { x: this.spawnPoint.x - 14, y: this.spawnPoint.y + 24, targetCave: 'main_complex', targetX: 19, targetY: 17, chamber: 'grasland', name: 'Lichtungsschacht (Tiefenhöhlen)' },
 
-      // 2. Wüsten- & Canyon-Region (Südwesten)
-      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.84), targetCave: 'main_complex', targetX: 20, targetY: 53, name: 'Wüsten-Trichter (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.14), y: Math.round(this.height * 0.74), targetCave: 'main_complex', targetX: 21, targetY: 53, name: 'Dünen-Erdloch (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.78), targetCave: 'main_complex', targetX: 18, targetY: 52, name: 'Sandstein-Riss (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.10), y: Math.round(this.height * 0.86), targetCave: 'main_complex', targetX: 21, targetY: 55, name: 'Oasen-Senke (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.94), targetCave: 'main_complex', targetX: 23, targetY: 52, name: 'Südwest-Schlucht (Tiefenhöhlen)' },
+      // 2. Wüsten- & Canyon-Region (Südwesten) -> main_complex (Desert)
+      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.84), targetCave: 'main_complex', targetX: 20, targetY: 53, chamber: 'desert', name: 'Wüsten-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.14), y: Math.round(this.height * 0.74), targetCave: 'main_complex', targetX: 21, targetY: 53, chamber: 'desert', name: 'Dünen-Erdloch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.78), targetCave: 'main_complex', targetX: 18, targetY: 52, chamber: 'desert', name: 'Sandstein-Riss (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.10), y: Math.round(this.height * 0.86), targetCave: 'main_complex', targetX: 21, targetY: 55, chamber: 'desert', name: 'Oasen-Senke (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.94), targetCave: 'main_complex', targetX: 23, targetY: 52, chamber: 'desert', name: 'Südwest-Schlucht (Tiefenhöhlen)' },
 
-      // 3. Schnee- & Gletscher-Region (Nordosten)
-      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.16), targetCave: 'snow_grotto', targetX: 11, targetY: 9, name: 'Schnee-Eisspalte (Eis-Grotte)' },
-      { x: Math.round(this.width * 0.86), y: Math.round(this.height * 0.24), targetCave: 'snow_grotto', targetX: 12, targetY: 10, name: 'Gletscher-Höhle (Eis-Grotte)' },
-      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.22), targetCave: 'main_complex', targetX: 58, targetY: 22, name: 'Eispass-Stollen (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.32), targetCave: 'main_complex', targetX: 76, targetY: 22, name: 'Frostkamm-Einsturz (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.92), y: Math.round(this.height * 0.14), targetCave: 'snow_grotto', targetX: 10, targetY: 9, name: 'Nordkap-Kluft (Eis-Grotte)' },
+      // 3. Schnee- & Gletscher-Region (Nordosten) -> snow_grotto / main_complex (Snow)
+      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.16), targetCave: 'snow_grotto', targetX: 11, targetY: 9, chamber: 'snow_grotto', name: 'Schnee-Eisspalte (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.86), y: Math.round(this.height * 0.24), targetCave: 'snow_grotto', targetX: 12, targetY: 10, chamber: 'snow_grotto', name: 'Gletscher-Höhle (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.22), targetCave: 'main_complex', targetX: 58, targetY: 22, chamber: 'snow', name: 'Eispass-Stollen (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.32), targetCave: 'main_complex', targetX: 59, targetY: 22, chamber: 'snow', name: 'Frostkamm-Einsturz (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.92), y: Math.round(this.height * 0.14), targetCave: 'snow_grotto', targetX: 10, targetY: 9, chamber: 'snow_grotto', name: 'Nordkap-Kluft (Eis-Grotte)' },
 
-      // 4. Sumpf- & Nebelmoor-Region (Südosten)
-      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.72), targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.72), y: Math.round(this.height * 0.80), targetCave: 'main_complex', targetX: 72, targetY: 53, name: 'Schilf-Trichter (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.58), y: Math.round(this.height * 0.76), targetCave: 'main_complex', targetX: 75, targetY: 51, name: 'Moorloch (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.80), y: Math.round(this.height * 0.88), targetCave: 'main_complex', targetX: 75, targetY: 54, name: 'Teerpfuhl-Grotte (Tiefenhöhlen)' },
+      // 4. Sumpf- & Nebelmoor-Region (Südosten) -> main_complex (Swamp)
+      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.72), targetCave: 'main_complex', targetX: 74, targetY: 51, chamber: 'swamp', name: 'Sumpf-Kuhle (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.72), y: Math.round(this.height * 0.80), targetCave: 'main_complex', targetX: 72, targetY: 53, chamber: 'swamp', name: 'Schilf-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.58), y: Math.round(this.height * 0.76), targetCave: 'main_complex', targetX: 75, targetY: 51, chamber: 'swamp', name: 'Moorloch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.80), y: Math.round(this.height * 0.88), targetCave: 'main_complex', targetX: 75, targetY: 54, chamber: 'swamp', name: 'Teerpfuhl-Grotte (Tiefenhöhlen)' },
 
-      // 5. Void-Zone & Umfeld
-      { x: this.preset.voidZone.x - 7, y: this.preset.voidZone.y + 6, targetCave: 'void_grotto', targetX: 12, targetY: 9, name: 'Leeren-Riss (Astrale Kluft)' },
-      { x: this.preset.voidZone.x + 7, y: this.preset.voidZone.y - 6, targetCave: 'void_grotto', targetX: 13, targetY: 10, name: 'Schatten-Schlund (Astrale Kluft)' },
+      // 5. Void-Zone & Umfeld -> void_grotto
+      { x: this.preset.voidZone.x - 7, y: this.preset.voidZone.y + 6, targetCave: 'void_grotto', targetX: 12, targetY: 9, chamber: 'void_grotto', name: 'Leeren-Riss (Astrale Kluft)' },
+      { x: this.preset.voidZone.x + 7, y: this.preset.voidZone.y - 6, targetCave: 'void_grotto', targetX: 13, targetY: 10, chamber: 'void_grotto', name: 'Schatten-Schlund (Astrale Kluft)' },
 
-      // 6. Zentrales Tal, Seenplatte & Hochebenen
-      { x: Math.round(this.width * 0.46), y: Math.round(this.height * 0.34), targetCave: 'main_complex', targetX: 44, targetY: 32, name: 'Flusstal-Klamm (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.56), y: Math.round(this.height * 0.40), targetCave: 'main_complex', targetX: 42, targetY: 34, name: 'Seeterrassen-Schacht (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.46), targetCave: 'main_complex', targetX: 46, targetY: 30, name: 'Ostplateau-Grotte (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.40), y: Math.round(this.height * 0.68), targetCave: 'main_complex', targetX: 46, targetY: 54, name: 'Südübergang-Höhle (Tiefenhöhlen)' }
+      // 6. Zentrales Tal, Seenplatte & Hochebenen -> main_complex (Center)
+      { x: Math.round(this.width * 0.46), y: Math.round(this.height * 0.34), targetCave: 'main_complex', targetX: 44, targetY: 33, chamber: 'center', name: 'Flusstal-Klamm (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.56), y: Math.round(this.height * 0.40), targetCave: 'main_complex', targetX: 42, targetY: 34, chamber: 'center', name: 'Seeterrassen-Schacht (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.46), targetCave: 'main_complex', targetX: 46, targetY: 31, chamber: 'center', name: 'Ostplateau-Grotte (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.40), y: Math.round(this.height * 0.68), targetCave: 'main_complex', targetX: 45, targetY: 54, chamber: 'center', name: 'Südübergang-Höhle (Tiefenhöhlen)' }
     ];
 
     this.holeEntrances = [];
@@ -14186,7 +14218,12 @@ class Player {
         } else if (this.map.getHoleEntrance) {
           const entrance = this.map.getHoleEntrance(curTileX, curTileY);
           if (entrance) {
-            this.lastOverworldCaveEntrance = { x: entrance.x, y: entrance.y, targetCave: entrance.targetCave };
+            this.lastOverworldCaveEntrance = {
+              x: entrance.x,
+              y: entrance.y,
+              targetCave: entrance.targetCave,
+              chamber: entrance.chamber || null
+            };
             this.startTransition('cave_enter', entrance.targetCave, entrance.targetX * TILE_SIZE + 8, entrance.targetY * TILE_SIZE + 8, 0.65);
           }
         }
@@ -14205,10 +14242,14 @@ class Player {
           if (exit) {
             const tType = exit.targetDim === 'overworld' ? 'cave_exit' : 'ladder';
             let targetX = exit.targetX * TILE_SIZE + 8;
-            let targetY = exit.targetY * TILE_SIZE + 8;
-            if (tType === 'cave_exit' && this.lastOverworldCaveEntrance && this.lastOverworldCaveEntrance.targetCave === this.map.id) {
-              targetX = this.lastOverworldCaveEntrance.x * TILE_SIZE + 8;
-              targetY = (this.lastOverworldCaveEntrance.y + 1) * TILE_SIZE + 8;
+            let targetY = (exit.targetY + 1) * TILE_SIZE + 8;
+            if (tType === 'cave_exit') {
+              if (this.lastOverworldCaveEntrance &&
+                  this.lastOverworldCaveEntrance.targetCave === this.map.id &&
+                  (!exit.chamber || !this.lastOverworldCaveEntrance.chamber || this.lastOverworldCaveEntrance.chamber === exit.chamber)) {
+                targetX = this.lastOverworldCaveEntrance.x * TILE_SIZE + 8;
+                targetY = (this.lastOverworldCaveEntrance.y + 1) * TILE_SIZE + 8;
+              }
             }
             this.startTransition(tType, exit.targetDim, targetX, targetY, 0.65);
           }
@@ -14460,7 +14501,7 @@ class Player {
     return 'hit';
   }
 
-  takePvPDamage(amount, kbX = 0, kbY = 0, attackerId = null) {
+  takePvPDamage(amount, kbX = 0, kbY = 0, attackerId = null, attackerName = null) {
     if (this.isDead) return 'dead';
 
     // 1. Dash-I-Frames
@@ -14516,7 +14557,7 @@ class Player {
     }
 
     if (this.hp <= 0) {
-      this.die('pvp');
+      this.die('pvp', { killerId: attackerId, killerName: attackerName });
     }
 
     return 'hit';
@@ -14530,7 +14571,7 @@ class Player {
     }
   }
 
-  die(cause = 'void') {
+  die(cause = 'void', extraInfo = null) {
     if (this.isDead) return;
     this.isDead = true;
     this.deathTimer = 0;
@@ -14602,6 +14643,8 @@ class Player {
     // 4. Record death info for UI overlay
     this.lastDeathInfo = {
       cause,
+      killerName: extraInfo?.killerName || (extraInfo?.killerId && this.game?.remotePlayers?.get(extraInfo.killerId)?.name) || 'Ein Spieler',
+      killerId: extraInfo?.killerId || null,
       oldExactLevel,
       newExactLevel,
       dropXp,
@@ -20547,8 +20590,21 @@ class Game {
         const skillsEl = document.getElementById('death-penalty-skills');
 
         if (info) {
-          if (titleEl) titleEl.textContent = info.cause === 'enemy' ? 'IM KAMPF GEFALLEN!' : 'IN DIE LEERE GESTÜRZT!';
-          if (descEl) descEl.textContent = info.cause === 'enemy' ? `${this.player.name || 'Held'} wurde von einem Monster überwältigt...` : `${this.player.name || 'Held'} stürzte in den ewigen Abgrund...`;
+          if (info.cause === 'pvp') {
+            const killer = info.killerName || 'Ein Spieler';
+            const killerStr = (!killer.toLowerCase().startsWith('spieler')) ? `Spieler ${killer}` : killer;
+            if (titleEl) titleEl.textContent = `${killerStr} hat dich besiegt.`;
+            if (descEl) descEl.textContent = 'Im Spieler-Duell gefallen.';
+          } else if (info.cause === 'enemy') {
+            if (titleEl) titleEl.textContent = 'IM KAMPF GEFALLEN!';
+            if (descEl) descEl.textContent = `${this.player.name || 'Held'} wurde von einem Monster überwältigt...`;
+          } else if (info.cause === 'drown') {
+            if (titleEl) titleEl.textContent = 'ERTRUNKEN!';
+            if (descEl) descEl.textContent = `${this.player.name || 'Held'} ging im tiefen Wasser unter...`;
+          } else {
+            if (titleEl) titleEl.textContent = 'IN DIE LEERE GESTÜRZT!';
+            if (descEl) descEl.textContent = `${this.player.name || 'Held'} stürzte in den ewigen Abgrund...`;
+          }
           if (detailsEl) detailsEl.classList.remove('hidden');
           if (levelEl) levelEl.textContent = `⚡ Level halbiert: Lv. ${info.oldExactLevel.toFixed(2)} → Lv. ${info.newExactLevel.toFixed(2)}`;
           if (xpEl) xpEl.textContent = `✨ ${info.dropXp} EP als Beute gedroppt`;
@@ -23880,12 +23936,21 @@ class Game {
 
     this.network.on('pvp_hit', (msg) => {
       if (msg.targetId === this.network.clientId) {
-        this.player.takePvPDamage(msg.damage, msg.kbX, msg.kbY, msg.attackerId);
+        const attacker = this.remotePlayers.get(msg.attackerId);
+        const attackerName = msg.attackerName || (attacker ? attacker.name : null) || 'Ein Spieler';
+        this.player.takePvPDamage(msg.damage, msg.kbX, msg.kbY, msg.attackerId, attackerName);
       } else {
         const rp = this.remotePlayers.get(msg.targetId);
         if (rp && typeof msg.targetHp === 'number') {
           rp.hp = msg.targetHp;
         }
+      }
+    });
+
+    this.network.on('player_killed', (msg) => {
+      if (msg.victimId === this.network.clientId && this.player && this.player.lastDeathInfo) {
+        this.player.lastDeathInfo.killerName = msg.killerName;
+        this.updateHUD();
       }
     });
 

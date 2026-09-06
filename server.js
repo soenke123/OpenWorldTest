@@ -324,6 +324,7 @@ wss.on('connection', (ws) => {
         broadcast({
           type: 'pvp_hit',
           attackerId: clientId,
+          attackerName: attacker.name,
           targetId: target.id,
           damage: dmg,
           kbX: msg.kbX || 0,

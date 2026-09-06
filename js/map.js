@@ -662,43 +662,43 @@ export class WorldMap {
   placeCaveEntrances() {
     // 26 vielfältige Höhleneingänge über die gesamte 290x200 Oberwelt verteilt
     const desiredEntrances = [
-      // 1. West- & Spawn-Region (Grasland & Vorwälder)
-      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Kluft (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 9, name: 'Mooswald-Loch (Moosige Grotte)' },
-      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.30), targetCave: 'forest_grotto', targetX: 12, targetY: 10, name: 'Alteiche-Schacht (Moosige Grotte)' },
-      { x: Math.round(this.width * 0.28), y: Math.round(this.height * 0.18), targetCave: 'main_complex', targetX: 17, targetY: 17, name: 'Nordwest-Stollen (Tiefenhöhlen)' },
-      { x: this.spawnPoint.x + 18, y: this.spawnPoint.y - 14, targetCave: 'main_complex', targetX: 16, targetY: 18, name: 'Spawn-Gipfelspalte (Tiefenhöhlen)' },
-      { x: this.spawnPoint.x - 14, y: this.spawnPoint.y + 24, targetCave: 'main_complex', targetX: 19, targetY: 17, name: 'Lichtungsschacht (Tiefenhöhlen)' },
+      // 1. West- & Spawn-Region (Grasland & Vorwälder) -> main_complex (Grasland) / forest_grotto
+      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, chamber: 'grasland', name: 'Grasland-Kluft (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 9, chamber: 'forest_grotto', name: 'Mooswald-Loch (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.30), targetCave: 'forest_grotto', targetX: 12, targetY: 10, chamber: 'forest_grotto', name: 'Alteiche-Schacht (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.28), y: Math.round(this.height * 0.18), targetCave: 'main_complex', targetX: 17, targetY: 17, chamber: 'grasland', name: 'Nordwest-Stollen (Tiefenhöhlen)' },
+      { x: this.spawnPoint.x + 18, y: this.spawnPoint.y - 14, targetCave: 'main_complex', targetX: 16, targetY: 18, chamber: 'grasland', name: 'Spawn-Gipfelspalte (Tiefenhöhlen)' },
+      { x: this.spawnPoint.x - 14, y: this.spawnPoint.y + 24, targetCave: 'main_complex', targetX: 19, targetY: 17, chamber: 'grasland', name: 'Lichtungsschacht (Tiefenhöhlen)' },
 
-      // 2. Wüsten- & Canyon-Region (Südwesten)
-      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.84), targetCave: 'main_complex', targetX: 20, targetY: 53, name: 'Wüsten-Trichter (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.14), y: Math.round(this.height * 0.74), targetCave: 'main_complex', targetX: 21, targetY: 53, name: 'Dünen-Erdloch (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.78), targetCave: 'main_complex', targetX: 18, targetY: 52, name: 'Sandstein-Riss (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.10), y: Math.round(this.height * 0.86), targetCave: 'main_complex', targetX: 21, targetY: 55, name: 'Oasen-Senke (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.94), targetCave: 'main_complex', targetX: 23, targetY: 52, name: 'Südwest-Schlucht (Tiefenhöhlen)' },
+      // 2. Wüsten- & Canyon-Region (Südwesten) -> main_complex (Desert)
+      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.84), targetCave: 'main_complex', targetX: 20, targetY: 53, chamber: 'desert', name: 'Wüsten-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.14), y: Math.round(this.height * 0.74), targetCave: 'main_complex', targetX: 21, targetY: 53, chamber: 'desert', name: 'Dünen-Erdloch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.78), targetCave: 'main_complex', targetX: 18, targetY: 52, chamber: 'desert', name: 'Sandstein-Riss (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.10), y: Math.round(this.height * 0.86), targetCave: 'main_complex', targetX: 21, targetY: 55, chamber: 'desert', name: 'Oasen-Senke (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.94), targetCave: 'main_complex', targetX: 23, targetY: 52, chamber: 'desert', name: 'Südwest-Schlucht (Tiefenhöhlen)' },
 
-      // 3. Schnee- & Gletscher-Region (Nordosten)
-      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.16), targetCave: 'snow_grotto', targetX: 11, targetY: 9, name: 'Schnee-Eisspalte (Eis-Grotte)' },
-      { x: Math.round(this.width * 0.86), y: Math.round(this.height * 0.24), targetCave: 'snow_grotto', targetX: 12, targetY: 10, name: 'Gletscher-Höhle (Eis-Grotte)' },
-      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.22), targetCave: 'main_complex', targetX: 58, targetY: 22, name: 'Eispass-Stollen (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.32), targetCave: 'main_complex', targetX: 76, targetY: 22, name: 'Frostkamm-Einsturz (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.92), y: Math.round(this.height * 0.14), targetCave: 'snow_grotto', targetX: 10, targetY: 9, name: 'Nordkap-Kluft (Eis-Grotte)' },
+      // 3. Schnee- & Gletscher-Region (Nordosten) -> snow_grotto / main_complex (Snow)
+      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.16), targetCave: 'snow_grotto', targetX: 11, targetY: 9, chamber: 'snow_grotto', name: 'Schnee-Eisspalte (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.86), y: Math.round(this.height * 0.24), targetCave: 'snow_grotto', targetX: 12, targetY: 10, chamber: 'snow_grotto', name: 'Gletscher-Höhle (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.22), targetCave: 'main_complex', targetX: 58, targetY: 22, chamber: 'snow', name: 'Eispass-Stollen (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.32), targetCave: 'main_complex', targetX: 59, targetY: 22, chamber: 'snow', name: 'Frostkamm-Einsturz (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.92), y: Math.round(this.height * 0.14), targetCave: 'snow_grotto', targetX: 10, targetY: 9, chamber: 'snow_grotto', name: 'Nordkap-Kluft (Eis-Grotte)' },
 
-      // 4. Sumpf- & Nebelmoor-Region (Südosten)
-      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.72), targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.72), y: Math.round(this.height * 0.80), targetCave: 'main_complex', targetX: 72, targetY: 53, name: 'Schilf-Trichter (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.58), y: Math.round(this.height * 0.76), targetCave: 'main_complex', targetX: 75, targetY: 51, name: 'Moorloch (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.80), y: Math.round(this.height * 0.88), targetCave: 'main_complex', targetX: 75, targetY: 54, name: 'Teerpfuhl-Grotte (Tiefenhöhlen)' },
+      // 4. Sumpf- & Nebelmoor-Region (Südosten) -> main_complex (Swamp)
+      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.72), targetCave: 'main_complex', targetX: 74, targetY: 51, chamber: 'swamp', name: 'Sumpf-Kuhle (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.72), y: Math.round(this.height * 0.80), targetCave: 'main_complex', targetX: 72, targetY: 53, chamber: 'swamp', name: 'Schilf-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.58), y: Math.round(this.height * 0.76), targetCave: 'main_complex', targetX: 75, targetY: 51, chamber: 'swamp', name: 'Moorloch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.80), y: Math.round(this.height * 0.88), targetCave: 'main_complex', targetX: 75, targetY: 54, chamber: 'swamp', name: 'Teerpfuhl-Grotte (Tiefenhöhlen)' },
 
-      // 5. Void-Zone & Umfeld
-      { x: this.preset.voidZone.x - 7, y: this.preset.voidZone.y + 6, targetCave: 'void_grotto', targetX: 12, targetY: 9, name: 'Leeren-Riss (Astrale Kluft)' },
-      { x: this.preset.voidZone.x + 7, y: this.preset.voidZone.y - 6, targetCave: 'void_grotto', targetX: 13, targetY: 10, name: 'Schatten-Schlund (Astrale Kluft)' },
+      // 5. Void-Zone & Umfeld -> void_grotto
+      { x: this.preset.voidZone.x - 7, y: this.preset.voidZone.y + 6, targetCave: 'void_grotto', targetX: 12, targetY: 9, chamber: 'void_grotto', name: 'Leeren-Riss (Astrale Kluft)' },
+      { x: this.preset.voidZone.x + 7, y: this.preset.voidZone.y - 6, targetCave: 'void_grotto', targetX: 13, targetY: 10, chamber: 'void_grotto', name: 'Schatten-Schlund (Astrale Kluft)' },
 
-      // 6. Zentrales Tal, Seenplatte & Hochebenen
-      { x: Math.round(this.width * 0.46), y: Math.round(this.height * 0.34), targetCave: 'main_complex', targetX: 44, targetY: 32, name: 'Flusstal-Klamm (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.56), y: Math.round(this.height * 0.40), targetCave: 'main_complex', targetX: 42, targetY: 34, name: 'Seeterrassen-Schacht (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.46), targetCave: 'main_complex', targetX: 46, targetY: 30, name: 'Ostplateau-Grotte (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.40), y: Math.round(this.height * 0.68), targetCave: 'main_complex', targetX: 46, targetY: 54, name: 'Südübergang-Höhle (Tiefenhöhlen)' }
+      // 6. Zentrales Tal, Seenplatte & Hochebenen -> main_complex (Center)
+      { x: Math.round(this.width * 0.46), y: Math.round(this.height * 0.34), targetCave: 'main_complex', targetX: 44, targetY: 33, chamber: 'center', name: 'Flusstal-Klamm (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.56), y: Math.round(this.height * 0.40), targetCave: 'main_complex', targetX: 42, targetY: 34, chamber: 'center', name: 'Seeterrassen-Schacht (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.46), targetCave: 'main_complex', targetX: 46, targetY: 31, chamber: 'center', name: 'Ostplateau-Grotte (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.40), y: Math.round(this.height * 0.68), targetCave: 'main_complex', targetX: 45, targetY: 54, chamber: 'center', name: 'Südübergang-Höhle (Tiefenhöhlen)' }
     ];
 
     this.holeEntrances = [];

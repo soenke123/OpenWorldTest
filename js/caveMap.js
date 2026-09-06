@@ -284,37 +284,64 @@ export class CaveMap {
     this.ground[roomNE.y + 1][roomNE.x - 2] = TILES.CAVE_FLOOR;
 
     // 4. Ausgänge zur Oberwelt platzieren
-    // Ausgang 1: Grasland-Loch bei (12, 38)
+    // Ausgang 1: Grasland-Loch bei (16, 16)
     this.ground[roomNW.y][roomNW.x] = TILES.CAVE_HOLE_EXIT;
     this.exits.push({
       x: roomNW.x,
       y: roomNW.y,
       targetDim: 'overworld',
-      targetX: 12,
-      targetY: 38,
-      label: 'Aufgang zum Grasland-Loch'
+      targetX: 70,
+      targetY: 72,
+      chamber: 'grasland',
+      label: 'Aufgang zur Grasland-Kluft'
     });
 
-    // Ausgang 2: Wüsten-Loch bei (38, 76)
+    // Ausgang 2: Wüsten-Loch bei (20, 54)
     this.ground[roomSW.y][roomSW.x] = TILES.CAVE_HOLE_EXIT;
     this.exits.push({
       x: roomSW.x,
       y: roomSW.y,
       targetDim: 'overworld',
-      targetX: 38,
-      targetY: 76,
+      targetX: 70,
+      targetY: 168,
+      chamber: 'desert',
       label: 'Aufgang zum Wüsten-Trichter'
     });
 
-    // Ausgang 3: Sumpf-Loch bei (82, 64)
+    // Ausgang 3: Sumpf-Loch bei (74, 52)
     this.ground[roomSE.y][roomSE.x] = TILES.CAVE_HOLE_EXIT;
     this.exits.push({
       x: roomSE.x,
       y: roomSE.y,
       targetDim: 'overworld',
-      targetX: 82,
-      targetY: 64,
+      targetX: 194,
+      targetY: 140,
+      chamber: 'swamp',
       label: 'Aufgang zur Sumpf-Kuhle'
+    });
+
+    // Ausgang 4: Schnee-Loch bei (58, 21)
+    this.ground[21][58] = TILES.CAVE_HOLE_EXIT;
+    this.exits.push({
+      x: 58,
+      y: 21,
+      targetDim: 'overworld',
+      targetX: 197,
+      targetY: 44,
+      chamber: 'snow',
+      label: 'Aufgang zum Eispass-Stollen'
+    });
+
+    // Ausgang 5: Flusstal-Klamm bei (44, 31)
+    this.ground[31][44] = TILES.CAVE_HOLE_EXIT;
+    this.exits.push({
+      x: 44,
+      y: 31,
+      targetDim: 'overworld',
+      targetX: 133,
+      targetY: 68,
+      chamber: 'center',
+      label: 'Aufgang zur Flusstal-Klamm'
     });
 
     // Abgang zur Kristall-Unterhöhle
@@ -325,6 +352,7 @@ export class CaveMap {
       targetDim: 'sub_crystal',
       targetX: 18,
       targetY: 6,
+      chamber: 'sub_crystal',
       label: 'Abgang in die Kristall-Unterhöhle'
     });
 
@@ -467,18 +495,21 @@ export class CaveMap {
     const exitY = cy + 4;
     this.ground[exitY][exitX] = TILES.CAVE_HOLE_EXIT;
 
-    let targetX = 34, targetY = 12;
-    let label = 'Aufgang zur Wald-Senke';
+    let targetX = 52, targetY = 32;
+    let label = 'Aufgang zum Mooswald-Loch';
     let shrineName = 'Schrein des Verborgenen Mooses';
+    let chamber = 'forest_grotto';
 
     if (this.id === 'snow_grotto') {
-      targetX = 104; targetY = 16;
-      label = 'Aufgang zur Eisspalte';
+      targetX = 228; targetY = 32;
+      label = 'Aufgang zur Schnee-Eisspalte';
       shrineName = 'Schrein der Ewigen Kälte';
+      chamber = 'snow_grotto';
     } else if (this.id === 'void_grotto') {
-      targetX = 118; targetY = 48;
+      targetX = 259; targetY = 47;
       label = 'Aufgang zum Leeren-Riss';
       shrineName = 'Schrein der Astralen Stille';
+      chamber = 'void_grotto';
     }
 
     this.exits.push({
@@ -487,6 +518,7 @@ export class CaveMap {
       targetDim: 'overworld',
       targetX,
       targetY,
+      chamber,
       label
     });
 
