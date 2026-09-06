@@ -18505,7 +18505,28 @@ class Game {
       this.timePanelEl.addEventListener('click', () => this.cycleTime());
     }
 
-    // 1. Dev Tools Toggle (starts collapsed on mobile/touch screens)
+    // 1. Dev Tools Visibility & Toggle
+    // Automatische Erkennung: Auf Vercel (.vercel.app) oder bei ?dev=1 Entwicklertools aktivieren!
+    // Auf dem lokalen LAN-Server / IP (z.B. 192.168.x.x:3000) standardmäßig reine User-Sicht.
+    const isVercel = typeof window !== 'undefined' && window.location && (
+      window.location.hostname.includes('vercel.app') ||
+      window.location.hostname.includes('vercel.dev')
+    );
+    const urlParams = (typeof window !== 'undefined' && window.location) ? new URLSearchParams(window.location.search) : null;
+    const forceDev = Boolean(urlParams && (urlParams.get('dev') === '1' || urlParams.get('dev') === 'true' || urlParams.get('mode') === 'dev'));
+    const forceUser = Boolean(urlParams && (urlParams.get('dev') === '0' || urlParams.get('dev') === 'false' || urlParams.get('mode') === 'user'));
+    const isDevMode = !forceUser && (isVercel || forceDev);
+
+    if (typeof document !== 'undefined') {
+      if (isDevMode) {
+        document.body.classList.add('dev-mode');
+        console.log('[Mode] 🛠️ Entwickler-Modus aktiv (Vercel / ?dev=1: Dev Tools eingeblendet)');
+      } else {
+        document.body.classList.remove('dev-mode');
+        console.log('[Mode] 🎮 Spieler-Modus / User-Sicht aktiv (LAN-Server / IP: Dev Tools ausgeblendet)');
+      }
+    }
+
     const devToolsToggleBtn = document.getElementById('dev-tools-toggle');
     const hudDropdown = document.getElementById('hud');
     const isMobile = (typeof window !== 'undefined' && (
@@ -18515,12 +18536,8 @@ class Game {
     ));
 
     if (hudDropdown) {
-      if (isMobile) {
-        hudDropdown.classList.add('collapsed');
-        if (devToolsToggleBtn) devToolsToggleBtn.classList.remove('active');
-      } else {
-        if (devToolsToggleBtn) devToolsToggleBtn.classList.add('active');
-      }
+      hudDropdown.classList.add('collapsed');
+      if (devToolsToggleBtn) devToolsToggleBtn.classList.remove('active');
     }
 
     if (devToolsToggleBtn && hudDropdown) {

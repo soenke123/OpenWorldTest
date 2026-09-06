@@ -3174,11 +3174,22 @@ canvas#gameCanvas {
 }
 
 /* =======================================================
-   MULTIPLAYER CLEANUP: DevTools & Showroom ausblenden
+   DEV TOOLS vs. USER VIEW:
+   Standardmäßig für reguläre Spieler ausgeblendet.
+   Nur im Entwicklermodus (Vercel oder ?dev=1) aktiv!
    ======================================================= */
 #dev-tools-wrapper,
 #showroom-btn,
 .dev-showroom-link {
   display: none !important;
+}
+
+body.dev-mode #dev-tools-wrapper {
+  display: flex !important;
+}
+
+body.dev-mode #showroom-btn,
+body.dev-mode .dev-showroom-link {
+  display: block !important;
 }
 
