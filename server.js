@@ -555,18 +555,7 @@ wss.on('connection', (ws) => {
 // -----------------------------------------------------------------------------
 // START SERVER & LOG BANNER
 // -----------------------------------------------------------------------------
-server.on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`\n❌ [FEHLER] Port ${PORT} ist bereits belegt!`);
-    console.error(`   Ein anderer Prozess (oder ein altes Server-Fenster) nutzt Port ${PORT}.`);
-    console.error(`   Starte einfach 'start.bat' erneut, um alte Prozesse automatisch zu beenden,\n   oder schließe andere Fenster.\n`);
-  } else {
-    console.error(`\n❌ [Server-Fehler]:`, err);
-  }
-  process.exit(1);
-});
-
-server.listen(PORT, '0.0.0.0', () => {
+function printServerBanner() {
   console.log('====================================================');
   console.log('       🗡️  OCARINA OF BRAWLS - LAN MULTIPLAYER  🛡️    ');
   console.log('====================================================');
@@ -576,4 +565,28 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('👉 Alle Geräte im selben WLAN oder Handy-Hotspot können');
   console.log(`   direkt über http://${LAN_IP}:${PORT} beitreten!`);
   console.log('====================================================');
+}
+
+let retriedAfterPortConflict = false;
+
+server.on('error', async (err) => {
+  if (err.code === 'EADDRINUSE' && !retriedAfterPortConflict) {
+    retriedAfterPortConflict = true;
+    console.warn(`[Server] ⚠️ Port ${PORT} ist belegt. Bereinige vorherigen Prozess...`);
+    try {
+      if (process.platform === 'win32') {
+        const { execSync } = await import('child_process');
+        execSync(`powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort ${PORT} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"`, { stdio: 'ignore' });
+        setTimeout(() => {
+          server.listen(PORT, '0.0.0.0', printServerBanner);
+        }, 1000);
+        return;
+      }
+    } catch (e) {}
+  }
+  console.error(`\n❌ [Server-Fehler]:`, err);
+  process.exit(1);
 });
+
+server.listen(PORT, '0.0.0.0', printServerBanner);
+
