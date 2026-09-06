@@ -116,6 +116,59 @@ export class CaveMap {
     return this.biome;
   }
 
+  findSafeLandingFloor(preferredX, preferredY, maxRadius = 25) {
+    const isSafe = (tx, ty) => {
+      if (!this.isValid(tx, ty)) return false;
+      const g = this.ground[ty][tx];
+      if (g !== TILES.CAVE_FLOOR && g !== TILES.CAVE_HOLE_EXIT && g !== TILES.CAVE_LADDER_UP && g !== TILES.CAVE_LADDER_DOWN) {
+        return false;
+      }
+      if (this.isSolid(tx, ty)) return false;
+      const obj = this.objects[ty][tx];
+      if (obj !== OBJECTS.NONE && obj !== OBJECTS.CAVE_HOLE_EXIT && obj !== OBJECTS.CAVE_LADDER_UP && obj !== OBJECTS.CAVE_LADDER_DOWN) {
+        return false;
+      }
+      return true;
+    };
+
+    const px = Math.round(preferredX);
+    const py = Math.round(preferredY);
+    if (isSafe(px, py)) {
+      return { x: px, y: py };
+    }
+
+    for (let r = 1; r <= maxRadius; r++) {
+      let best = null;
+      let minD = Infinity;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const tx = px + dx;
+          const ty = py + dy;
+          if (isSafe(tx, ty)) {
+            const d = Math.hypot(tx - px, ty - py);
+            if (d < minD) {
+              minD = d;
+              best = { x: tx, y: ty };
+            }
+          }
+        }
+      }
+      if (best) return best;
+    }
+
+    // Fallback: search whole cave
+    for (let y = 2; y < this.height - 2; y++) {
+      for (let x = 2; x < this.width - 2; x++) {
+        if (isSafe(x, y)) {
+          return { x, y };
+        }
+      }
+    }
+
+    return { x: px, y: py };
+  }
+
   init() {
     for (let y = 0; y < this.height; y++) {
       this.ground[y] = new Uint8Array(this.width);

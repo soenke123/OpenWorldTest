@@ -696,14 +696,32 @@ class Game {
     }
 
     this.player.map = this.map;
-    this.player.x = targetX;
-    this.player.y = targetY;
+
+    let finalX = targetX;
+    let finalY = targetY;
+    const curTx = Math.floor(targetX / TILE_SIZE);
+    const curTy = Math.floor(targetY / TILE_SIZE);
+
+    if (this.map.isSolid && this.map.isSolid(curTx, curTy)) {
+      if (this.map.findSafeLandingFloor) {
+        const safe = this.map.findSafeLandingFloor(curTx, curTy);
+        finalX = safe.x * TILE_SIZE + 8;
+        finalY = safe.y * TILE_SIZE + 8;
+      } else if (this.player.findSafeLandingPosition) {
+        const safe = this.player.findSafeLandingPosition(this.map, targetX, targetY);
+        finalX = safe.x;
+        finalY = safe.y;
+      }
+    }
+
+    this.player.x = finalX;
+    this.player.y = finalY;
     this.player.lastTransitionTile = {
-      x: Math.floor(targetX / TILE_SIZE),
-      y: Math.floor(targetY / TILE_SIZE)
+      x: Math.floor(finalX / TILE_SIZE),
+      y: Math.floor(finalY / TILE_SIZE)
     };
     this.camera.setWorldBounds(this.map.width, this.map.height);
-    this.camera.follow(targetX, targetY);
+    this.camera.follow(finalX, finalY);
     this.minimap.setMap(this.map, this.currentDimension);
     this.updateHUD();
   }

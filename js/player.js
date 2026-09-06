@@ -1312,6 +1312,7 @@ export class Player {
         } else if (this.map.getHoleEntrance) {
           const entrance = this.map.getHoleEntrance(curTileX, curTileY);
           if (entrance) {
+            this.lastOverworldCaveEntrance = { x: entrance.x, y: entrance.y, targetCave: entrance.targetCave };
             this.startTransition('cave_enter', entrance.targetCave, entrance.targetX * TILE_SIZE + 8, entrance.targetY * TILE_SIZE + 8, 0.65);
           }
         }
@@ -1329,7 +1330,13 @@ export class Player {
           const exit = this.map.exits.find(e => e.x === curTileX && e.y === curTileY);
           if (exit) {
             const tType = exit.targetDim === 'overworld' ? 'cave_exit' : 'ladder';
-            this.startTransition(tType, exit.targetDim, exit.targetX * TILE_SIZE + 8, exit.targetY * TILE_SIZE + 8, 0.65);
+            let targetX = exit.targetX * TILE_SIZE + 8;
+            let targetY = exit.targetY * TILE_SIZE + 8;
+            if (tType === 'cave_exit' && this.lastOverworldCaveEntrance && this.lastOverworldCaveEntrance.targetCave === this.map.id) {
+              targetX = this.lastOverworldCaveEntrance.x * TILE_SIZE + 8;
+              targetY = (this.lastOverworldCaveEntrance.y + 1) * TILE_SIZE + 8;
+            }
+            this.startTransition(tType, exit.targetDim, targetX, targetY, 0.65);
           }
         }
       }
@@ -1338,6 +1345,11 @@ export class Player {
 
   findSafeLandingPosition(map, startX, startY) {
     if (!map) return { x: startX, y: startY };
+
+    if (map.findSafeLandingFloor) {
+      const sf = map.findSafeLandingFloor(Math.floor(startX / TILE_SIZE), Math.floor(startY / TILE_SIZE));
+      return { x: sf.x * TILE_SIZE + 8, y: sf.y * TILE_SIZE + 8 };
+    }
 
     const isSafe = (x, y) => {
       const tx = Math.floor(x / TILE_SIZE);
@@ -1401,6 +1413,18 @@ export class Player {
     let destY = targetY;
 
     if (type === 'fall' && targetDim === 'overworld') {
+      const targetMap = (this.game && this.game.overworldMap) ? this.game.overworldMap : this.map;
+      const safe = this.findSafeLandingPosition(targetMap, targetX, targetY);
+      destX = safe.x;
+      destY = safe.y;
+    } else if (type === 'cave_enter') {
+      const targetMap = (this.game && this.game.caves) ? this.game.caves[targetDim] : null;
+      if (targetMap && targetMap.findSafeLandingFloor) {
+        const safeFloor = targetMap.findSafeLandingFloor(Math.floor(targetX / TILE_SIZE), Math.floor(targetY / TILE_SIZE));
+        destX = safeFloor.x * TILE_SIZE + 8;
+        destY = safeFloor.y * TILE_SIZE + 8;
+      }
+    } else if (type === 'cave_exit' && targetDim === 'overworld') {
       const targetMap = (this.game && this.game.overworldMap) ? this.game.overworldMap : this.map;
       const safe = this.findSafeLandingPosition(targetMap, targetX, targetY);
       destX = safe.x;

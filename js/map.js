@@ -283,7 +283,12 @@ export class WorldMap {
     this.clearRampsAndAccessCorridors();
 
     // --------------------------------------------------------------------
-    // STEP 14: OUTER 2-TILE WATER BORDER
+    // STEP 14: BRÜCKEN & WEGE FREIHALTEN (Keine Bäume, Felsen oder Kronen auf Brücken)
+    // --------------------------------------------------------------------
+    this.clearBridgesAndAccessCorridors();
+
+    // --------------------------------------------------------------------
+    // STEP 15: OUTER 2-TILE WATER BORDER
     // --------------------------------------------------------------------
     for (let x = 0; x < this.width; x++) {
       this.ground[0][x] = TILES.WATER;
@@ -426,7 +431,8 @@ export class WorldMap {
         const ry = Math.round(jy);
         if (!this.isValid(rx, ry)) continue;
         const gTile = this.ground[ry][rx];
-        if (gTile === TILES.WATER || gTile === TILES.SWAMP_WATER || gTile === TILES.BRIDGE_H) continue;
+        if (gTile === TILES.WATER || gTile === TILES.SWAMP_WATER || gTile === TILES.BRIDGE_H || gTile === TILES.BRIDGE_V) continue;
+        if (this.isNearBridge(rx, ry, 2)) continue;
         if (Math.hypot(rx - this.spawnPoint.x, ry - this.spawnPoint.y) < this.preset.spawnClearingRadius) continue;
 
         const dist = Math.hypot(rx - cx, ry - cy);
@@ -436,9 +442,9 @@ export class WorldMap {
 
           // Flora & selective obstacles
           const obstRand = n.noise(rx * 1.9, ry * 1.9);
-          if (obstRand > 0.62 && rx + 1 < this.width && this.objects[ry][rx + 1] === OBJECTS.NONE) {
+          if (obstRand > 0.62 && rx + 1 < this.width && this.objects[ry][rx + 1] === OBJECTS.NONE && !this.isNearBridge(rx + 1, ry, 1)) {
             this.objects[ry][rx + 1] = OBJECTS.FALLEN_LOG;
-          } else if (obstRand < -0.62 && ry + 1 < this.height && this.objects[ry + 1][rx] === OBJECTS.NONE) {
+          } else if (obstRand < -0.62 && ry + 1 < this.height && this.objects[ry + 1][rx] === OBJECTS.NONE && !this.isNearBridge(rx, ry + 1, 1)) {
             this.objects[ry + 1][rx] = OBJECTS.ROCK_STONE;
           }
 
@@ -461,7 +467,6 @@ export class WorldMap {
         if (this.canopy[ty][tx] === CANOPY.TREE_CROWN) continue;
         if (Math.hypot(tx - this.spawnPoint.x, ty - this.spawnPoint.y) < this.preset.spawnClearingRadius) continue;
 
-        const g = this.ground[ty][tx];
         const jx = tx + n.noise(tx * 1.4, ty * 1.4) * 1.8;
         const jy = ty + n.noise(tx * 2.2, ty * 2.2) * 1.8;
         const rx = Math.round(jx);
@@ -469,6 +474,10 @@ export class WorldMap {
         if (!this.isValid(rx, ry)) continue;
         if (this.objects[ry][rx] !== OBJECTS.NONE) continue;
         if (this.canopy[ry][rx] === CANOPY.TREE_CROWN) continue;
+        if (this.isNearBridge(rx, ry, 2)) continue;
+
+        const g = this.ground[ry][rx];
+        if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.BRIDGE_H || g === TILES.BRIDGE_V) continue;
 
         const noiseVal = n.fbm(rx * 0.11, ry * 0.11, 2);
 
@@ -589,58 +598,148 @@ export class WorldMap {
     }
   }
 
+  findSafeCaveEntranceSpot(desiredX, desiredY, maxSearchRadius = 35) {
+    const isSuitable = (tx, ty, waterRadius = 2) => {
+      if (tx < 6 || tx >= this.width - 6 || ty < 6 || ty >= this.height - 6) return false;
+      const g = this.ground[ty][tx];
+      if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.QUICKSAND) return false;
+      if (g === TILES.BRIDGE_H || g === TILES.BRIDGE_V) return false;
+      if (this.isNearBridge(tx, ty, 2)) return false;
+      if (this.isNearRamp(tx, ty, 2)) return false;
+      if (waterRadius > 0 && this.isNearWater(tx, ty, waterRadius)) return false;
+      if (Math.hypot(tx - this.spawnPoint.x, ty - this.spawnPoint.y) < this.preset.spawnClearingRadius + 3) return false;
+      if (this.objects[ty][tx] === OBJECTS.TRAMPOLINE || this.objects[ty][tx] === OBJECTS.SHRINE || this.objects[ty][tx] === OBJECTS.CAVE_ENTRANCE) return false;
+      for (const ent of this.holeEntrances) {
+        if (Math.hypot(tx - ent.x, ty - ent.y) < 5) return false;
+      }
+      return true;
+    };
+
+    const px = Math.round(desiredX);
+    const py = Math.round(desiredY);
+    if (isSuitable(px, py, 2)) {
+      return { x: px, y: py };
+    }
+
+    // 1. Search outward with a safe 2-tile land buffer from water
+    for (let r = 1; r <= maxSearchRadius; r++) {
+      let best = null;
+      let minD = Infinity;
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const tx = px + dx;
+          const ty = py + dy;
+          if (isSuitable(tx, ty, 2)) {
+            const d = Math.hypot(tx - px, ty - py);
+            if (d < minD) {
+              minD = d;
+              best = { x: tx, y: ty };
+            }
+          }
+        }
+      }
+      if (best) return best;
+    }
+
+    // 2. Fallback: 1-tile land buffer if deeply landlocked region
+    for (let r = 1; r <= maxSearchRadius; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const tx = px + dx;
+          const ty = py + dy;
+          if (isSuitable(tx, ty, 1)) {
+            return { x: tx, y: ty };
+          }
+        }
+      }
+    }
+
+    return { x: px, y: py };
+  }
+
   placeCaveEntrances() {
     // 26 vielfältige Höhleneingänge über die gesamte 290x200 Oberwelt verteilt
-    this.holeEntrances = [
+    const desiredEntrances = [
       // 1. West- & Spawn-Region (Grasland & Vorwälder)
       { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Kluft (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 11, name: 'Mooswald-Loch (Moosige Grotte)' },
-      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.30), targetCave: 'forest_grotto', targetX: 14, targetY: 14, name: 'Alteiche-Schacht (Moosige Grotte)' },
-      { x: Math.round(this.width * 0.28), y: Math.round(this.height * 0.18), targetCave: 'main_complex', targetX: 30, targetY: 14, name: 'Nordwest-Stollen (Tiefenhöhlen)' },
-      { x: this.spawnPoint.x + 18, y: this.spawnPoint.y - 14, targetCave: 'main_complex', targetX: 22, targetY: 20, name: 'Spawn-Gipfelspalte (Tiefenhöhlen)' },
-      { x: this.spawnPoint.x - 14, y: this.spawnPoint.y + 24, targetCave: 'main_complex', targetX: 18, targetY: 35, name: 'Lichtungsschacht (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 9, name: 'Mooswald-Loch (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.30), targetCave: 'forest_grotto', targetX: 12, targetY: 10, name: 'Alteiche-Schacht (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.28), y: Math.round(this.height * 0.18), targetCave: 'main_complex', targetX: 17, targetY: 17, name: 'Nordwest-Stollen (Tiefenhöhlen)' },
+      { x: this.spawnPoint.x + 18, y: this.spawnPoint.y - 14, targetCave: 'main_complex', targetX: 16, targetY: 18, name: 'Spawn-Gipfelspalte (Tiefenhöhlen)' },
+      { x: this.spawnPoint.x - 14, y: this.spawnPoint.y + 24, targetCave: 'main_complex', targetX: 19, targetY: 17, name: 'Lichtungsschacht (Tiefenhöhlen)' },
 
       // 2. Wüsten- & Canyon-Region (Südwesten)
       { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.84), targetCave: 'main_complex', targetX: 20, targetY: 53, name: 'Wüsten-Trichter (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.14), y: Math.round(this.height * 0.74), targetCave: 'main_complex', targetX: 24, targetY: 60, name: 'Dünen-Erdloch (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.78), targetCave: 'main_complex', targetX: 35, targetY: 58, name: 'Sandstein-Riss (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.10), y: Math.round(this.height * 0.86), targetCave: 'main_complex', targetX: 12, targetY: 50, name: 'Oasen-Senke (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.94), targetCave: 'main_complex', targetX: 28, targetY: 66, name: 'Südwest-Schlucht (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.14), y: Math.round(this.height * 0.74), targetCave: 'main_complex', targetX: 21, targetY: 53, name: 'Dünen-Erdloch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.78), targetCave: 'main_complex', targetX: 18, targetY: 52, name: 'Sandstein-Riss (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.10), y: Math.round(this.height * 0.86), targetCave: 'main_complex', targetX: 21, targetY: 55, name: 'Oasen-Senke (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.94), targetCave: 'main_complex', targetX: 23, targetY: 52, name: 'Südwest-Schlucht (Tiefenhöhlen)' },
 
       // 3. Schnee- & Gletscher-Region (Nordosten)
-      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.16), targetCave: 'snow_grotto', targetX: 11, targetY: 11, name: 'Schnee-Eisspalte (Eis-Grotte)' },
-      { x: Math.round(this.width * 0.86), y: Math.round(this.height * 0.24), targetCave: 'snow_grotto', targetX: 16, targetY: 14, name: 'Gletscher-Höhle (Eis-Grotte)' },
-      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.22), targetCave: 'main_complex', targetX: 62, targetY: 18, name: 'Eispass-Stollen (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.32), targetCave: 'main_complex', targetX: 70, targetY: 22, name: 'Frostkamm-Einsturz (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.92), y: Math.round(this.height * 0.14), targetCave: 'snow_grotto', targetX: 13, targetY: 18, name: 'Nordkap-Kluft (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.16), targetCave: 'snow_grotto', targetX: 11, targetY: 9, name: 'Schnee-Eisspalte (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.86), y: Math.round(this.height * 0.24), targetCave: 'snow_grotto', targetX: 12, targetY: 10, name: 'Gletscher-Höhle (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.22), targetCave: 'main_complex', targetX: 58, targetY: 22, name: 'Eispass-Stollen (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.32), targetCave: 'main_complex', targetX: 76, targetY: 22, name: 'Frostkamm-Einsturz (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.92), y: Math.round(this.height * 0.14), targetCave: 'snow_grotto', targetX: 10, targetY: 9, name: 'Nordkap-Kluft (Eis-Grotte)' },
 
       // 4. Sumpf- & Nebelmoor-Region (Südosten)
       { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.72), targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.72), y: Math.round(this.height * 0.80), targetCave: 'main_complex', targetX: 80, targetY: 56, name: 'Schilf-Trichter (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.58), y: Math.round(this.height * 0.76), targetCave: 'main_complex', targetX: 66, targetY: 52, name: 'Moorloch (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.80), y: Math.round(this.height * 0.88), targetCave: 'main_complex', targetX: 84, targetY: 62, name: 'Teerpfuhl-Grotte (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.72), y: Math.round(this.height * 0.80), targetCave: 'main_complex', targetX: 72, targetY: 53, name: 'Schilf-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.58), y: Math.round(this.height * 0.76), targetCave: 'main_complex', targetX: 75, targetY: 51, name: 'Moorloch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.80), y: Math.round(this.height * 0.88), targetCave: 'main_complex', targetX: 75, targetY: 54, name: 'Teerpfuhl-Grotte (Tiefenhöhlen)' },
 
       // 5. Void-Zone & Umfeld
-      { x: this.preset.voidZone.x - 6, y: this.preset.voidZone.y + 4, targetCave: 'void_grotto', targetX: 12, targetY: 11, name: 'Leeren-Riss (Astrale Kluft)' },
-      { x: this.preset.voidZone.x + 5, y: this.preset.voidZone.y - 4, targetCave: 'void_grotto', targetX: 18, targetY: 15, name: 'Schatten-Schlund (Astrale Kluft)' },
+      { x: this.preset.voidZone.x - 7, y: this.preset.voidZone.y + 6, targetCave: 'void_grotto', targetX: 12, targetY: 9, name: 'Leeren-Riss (Astrale Kluft)' },
+      { x: this.preset.voidZone.x + 7, y: this.preset.voidZone.y - 6, targetCave: 'void_grotto', targetX: 13, targetY: 10, name: 'Schatten-Schlund (Astrale Kluft)' },
 
       // 6. Zentrales Tal, Seenplatte & Hochebenen
-      { x: Math.round(this.width * 0.46), y: Math.round(this.height * 0.34), targetCave: 'main_complex', targetX: 45, targetY: 28, name: 'Flusstal-Klamm (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.56), y: Math.round(this.height * 0.40), targetCave: 'main_complex', targetX: 54, targetY: 34, name: 'Seeterrassen-Schacht (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.46), targetCave: 'main_complex', targetX: 78, targetY: 38, name: 'Ostplateau-Grotte (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.40), y: Math.round(this.height * 0.68), targetCave: 'main_complex', targetX: 42, targetY: 48, name: 'Südübergang-Höhle (Tiefenhöhlen)' }
+      { x: Math.round(this.width * 0.46), y: Math.round(this.height * 0.34), targetCave: 'main_complex', targetX: 44, targetY: 32, name: 'Flusstal-Klamm (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.56), y: Math.round(this.height * 0.40), targetCave: 'main_complex', targetX: 42, targetY: 34, name: 'Seeterrassen-Schacht (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.46), targetCave: 'main_complex', targetX: 46, targetY: 30, name: 'Ostplateau-Grotte (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.40), y: Math.round(this.height * 0.68), targetCave: 'main_complex', targetX: 46, targetY: 54, name: 'Südübergang-Höhle (Tiefenhöhlen)' }
     ];
 
-    for (const entrance of this.holeEntrances) {
-      if (this.isValid(entrance.x, entrance.y)) {
-        this.objects[entrance.y][entrance.x] = OBJECTS.CAVE_ENTRANCE;
-        this.canopy[entrance.y][entrance.x] = CANOPY.NONE;
-        // Make sure entrance is walkable ground
-        const g = this.ground[entrance.y][entrance.x];
-        if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE) {
-          this.ground[entrance.y][entrance.x] = TILES.DIRT;
+    this.holeEntrances = [];
+
+    for (const d of desiredEntrances) {
+      const spot = this.findSafeCaveEntranceSpot(d.x, d.y);
+      const entrance = {
+        ...d,
+        x: spot.x,
+        y: spot.y
+      };
+      this.holeEntrances.push(entrance);
+
+      this.objects[entrance.y][entrance.x] = OBJECTS.CAVE_ENTRANCE;
+      this.canopy[entrance.y][entrance.x] = CANOPY.NONE;
+
+      // 3x3 Bereich um das Loch begehbar und frei von Felsen & Bäumen halten
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = entrance.x + dx;
+          const ny = entrance.y + dy;
+          if (this.isValid(nx, ny)) {
+            if (dx !== 0 || dy !== 0) {
+              if (this.objects[ny][nx] !== OBJECTS.NONE && this.objects[ny][nx] !== OBJECTS.TRAMPOLINE && this.objects[ny][nx] !== OBJECTS.SHRINE) {
+                this.objects[ny][nx] = OBJECTS.NONE;
+              }
+            }
+            this.canopy[ny][nx] = CANOPY.NONE;
+            const g = this.ground[ny][nx];
+            if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE) {
+              this.ground[ny][nx] = TILES.DIRT;
+            }
+          }
         }
       }
+
+      // Bäume und Baumkronen um das Loch herum freiräumen
+      const exPx = entrance.x * TILE_SIZE + 8;
+      const eyPx = entrance.y * TILE_SIZE + 8;
+      this.trees = this.trees.filter(t => Math.hypot(t.x - exPx, t.y - eyPx) > 24);
+      this.canopyCrowns = this.canopyCrowns.filter(c => Math.hypot(c.x - exPx, c.y - eyPx) > 28);
     }
   }
 
@@ -785,6 +884,84 @@ export class WorldMap {
     }
   }
 
+  clearBridgesAndAccessCorridors() {
+    const bridgeTiles = [];
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const g = this.ground[y][x];
+        if (g === TILES.BRIDGE_H || g === TILES.BRIDGE_V) {
+          bridgeTiles.push({ x, y, g });
+          this.objects[y][x] = OBJECTS.NONE;
+          this.canopy[y][x] = CANOPY.NONE;
+        }
+      }
+    }
+
+    if (bridgeTiles.length === 0) return;
+
+    // Bridge landings / approaches: walkable non-bridge tiles adjacent to the ends of bridges
+    const landingTiles = [];
+    for (const b of bridgeTiles) {
+      // For BRIDGE_H, look at left/right (dx = -1, -2, 1, 2)
+      // For BRIDGE_V, look at up/down (dy = -1, -2, 1, 2)
+      const offsets = (b.g === TILES.BRIDGE_H)
+        ? [{ dx: -1, dy: 0 }, { dx: -2, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 }]
+        : [{ dx: 0, dy: -1 }, { dx: 0, dy: -2 }, { dx: 0, dy: 1 }, { dx: 0, dy: 2 }];
+
+      for (const off of offsets) {
+        const nx = b.x + off.dx;
+        const ny = b.y + off.dy;
+        if (this.isValid(nx, ny)) {
+          const ng = this.ground[ny][nx];
+          if (ng !== TILES.BRIDGE_H && ng !== TILES.BRIDGE_V && ng !== TILES.WATER && ng !== TILES.SWAMP_WATER && ng !== TILES.VOID_LAKE) {
+            landingTiles.push({ x: nx, y: ny });
+            // Clear obstacles on landing path
+            if (this.objects[ny][nx] !== OBJECTS.NONE && this.objects[ny][nx] !== OBJECTS.CAVE_ENTRANCE && this.objects[ny][nx] !== OBJECTS.TRAMPOLINE && this.objects[ny][nx] !== OBJECTS.SHRINE) {
+              this.objects[ny][nx] = OBJECTS.NONE;
+            }
+            this.canopy[ny][nx] = CANOPY.NONE;
+            // Also clear 1 tile perpendicular for bridgehead corridor
+            for (const adj of [-1, 1]) {
+              const any = (b.g === TILES.BRIDGE_H) ? ny + adj : ny;
+              const anx = (b.g === TILES.BRIDGE_H) ? nx : nx + adj;
+              if (this.isValid(anx, any)) {
+                if (this.objects[any][anx] !== OBJECTS.NONE && this.objects[any][anx] !== OBJECTS.CAVE_ENTRANCE && this.objects[any][anx] !== OBJECTS.TRAMPOLINE && this.objects[any][anx] !== OBJECTS.SHRINE) {
+                  this.objects[any][anx] = OBJECTS.NONE;
+                }
+                this.canopy[any][anx] = CANOPY.NONE;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Filter trees away from all bridge tiles and bridge landings
+    const criticalPoints = [...bridgeTiles, ...landingTiles];
+    this.trees = this.trees.filter(t => {
+      for (const pt of criticalPoints) {
+        const px = pt.x * TILE_SIZE + 8;
+        const py = pt.y * TILE_SIZE + 8;
+        if (Math.hypot(t.x - px, t.y - py) < (t.trunkRadius + 14)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    // Filter canopy crowns away from bridges so bridge decks are clearly visible
+    this.canopyCrowns = this.canopyCrowns.filter(c => {
+      for (const pt of bridgeTiles) {
+        const px = pt.x * TILE_SIZE + 8;
+        const py = pt.y * TILE_SIZE + 8;
+        if (Math.hypot(c.x - px, c.y - py) < 28) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
   createOrganicBlob(cx, cy, radius, tileId, threshold = 0.5) {
     const n = this.noise;
     const r = radius + 4;
@@ -901,10 +1078,42 @@ export class WorldMap {
     return false;
   }
 
+  isNearBridge(tileX, tileY, radius = 2) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const nx = tileX + dx;
+        const ny = tileY + dy;
+        if (this.isValid(nx, ny)) {
+          const g = this.ground[ny][nx];
+          if (g === TILES.BRIDGE_H || g === TILES.BRIDGE_V) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  isNearWater(tileX, tileY, radius = 2) {
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const nx = tileX + dx;
+        const ny = tileY + dy;
+        if (!this.isValid(nx, ny)) return true;
+        const g = this.ground[ny][nx];
+        if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE || g === TILES.QUICKSAND) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   addTree(px, py, type, variant = 0) {
     const tileX = Math.floor(px / TILE_SIZE);
     const tileY = Math.floor(py / TILE_SIZE);
     if (this.isNearRamp(tileX, tileY, 2)) return;
+    if (this.isNearBridge(tileX, tileY, 2)) return;
 
     for (const t of this.trees) {
       if (Math.hypot(t.x - px, t.y - py) < 14) return;
