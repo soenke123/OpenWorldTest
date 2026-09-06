@@ -235,15 +235,15 @@ const PVP_CONFIG = {
 
   // 7. Rückstoß (Knockback)
   KNOCKBACK_MULTIPLIER: 1.0,            // Globaler Multiplikator für PvP-Rückstoß (z.B. 0.5 = sanfter, 2.0 = extrem weit wegfliegen)
-  MELEE_KNOCKBACK_SLASH: 80,            // Rückstoß bei Slash 1 & 2 (Pixel-Impuls)
-  MELEE_KNOCKBACK_THRUST: 320,          // Rückstoß beim Stich / Ausfallschritt
-  MELEE_KNOCKBACK_SPIN: 290,            // Rückstoß bei der Wirbelattacke
-  ARROW_KNOCKBACK_NORMAL: 70,           // Rückstoß bei normalem Pfeiltreffer
-  ARROW_KNOCKBACK_CHARGED: 140,         // Rückstoß bei aufgeladenem Pfeiltreffer
+  MELEE_KNOCKBACK_SLASH: 40,            // Rückstoß bei Slash 1 & 2 (Pixel-Impuls)
+  MELEE_KNOCKBACK_THRUST: 150,          // Rückstoß beim Stich / Ausfallschritt
+  MELEE_KNOCKBACK_SPIN: 250,            // Rückstoß bei der Wirbelattacke
+  ARROW_KNOCKBACK_NORMAL: 50,           // Rückstoß bei normalem Pfeiltreffer
+  ARROW_KNOCKBACK_CHARGED: 100,         // Rückstoß bei aufgeladenem Pfeiltreffer
 
   // 8. Bogen: Feuerrate & Fluggeschwindigkeit
-  ARROW_FIRE_RATE: 0.50,                // Schuss-Intervall beim Gedrückthalten in Sekunden (z.B. 0.5 = 2 Pfeile/s, 0.25 = 4 Pfeile/s Schnellfeuer)
-  ARROW_CHARGE_TIME: 0.55,              // Ladezeit für gezielten Schuss in Sekunden
+  ARROW_FIRE_RATE: 0.30,                // Schuss-Intervall beim Gedrückthalten in Sekunden (z.B. 0.5 = 2 Pfeile/s, 0.25 = 4 Pfeile/s Schnellfeuer)
+  ARROW_CHARGE_TIME: 0.75,              // Ladezeit für gezielten Schuss in Sekunden
   ARROW_FLIGHT_SPEED: 330,              // Fluggeschwindigkeit normaler Pfeil (Pixel/Sekunde)
   ARROW_CHARGED_FLIGHT_SPEED: 580,      // Fluggeschwindigkeit gezielter Pfeil (Pixel/Sekunde)
   ARROW_RANGE: 165,                     // Reichweite normaler Pfeil in Pixeln
