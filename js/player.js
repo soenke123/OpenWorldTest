@@ -850,7 +850,8 @@ export class Player {
     this.ranged.charging = false;
     this.ranged.aiming = true;
     this.ranged.chargeTimer = 0;
-    this.ranged.autoFireTimer = 0.5; // Next auto-fire shot in 0.5s
+    const fireRate = COMBAT_CONFIG.ARROW_FIRE_RATE || 0.5;
+    this.ranged.autoFireTimer = fireRate;
 
     // First shot fires immediately upon pressing
     this.fireSingleArrow(false);
@@ -860,6 +861,7 @@ export class Player {
     if (typeof angle === 'number' && !isNaN(angle)) {
       this.setAimAngle(angle);
     }
+    const fireRate = COMBAT_CONFIG.ARROW_FIRE_RATE || 0.5;
     if (isAimed) {
       this.ranged.isAimedShot = true;
       this.ranged.charging = true;
@@ -868,8 +870,8 @@ export class Player {
     } else if (isAimed === false) {
       this.ranged.isAimedShot = false;
       this.ranged.charging = false;
-      if (this.ranged.autoFireTimer > 0.5) {
-        this.ranged.autoFireTimer = 0.5;
+      if (this.ranged.autoFireTimer > fireRate) {
+        this.ranged.autoFireTimer = fireRate;
       }
     }
   }
@@ -1313,7 +1315,7 @@ export class Player {
     if (this.ranged.isHolding && !this.ranged.isAimedShot && !this.isDead && !this.transition && !this.shield.active) {
       this.ranged.autoFireTimer -= dt;
       if (this.ranged.autoFireTimer <= 0) {
-        this.ranged.autoFireTimer = 0.5; // Next arrow every 0.5s in calm rhythm
+        this.ranged.autoFireTimer = COMBAT_CONFIG.ARROW_FIRE_RATE || 0.5;
         this.fireSingleArrow(false);
       }
     }

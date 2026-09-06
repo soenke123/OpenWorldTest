@@ -201,37 +201,53 @@ const PVP_CONFIG = {
   BEAR_HP_MULTIPLIER: 1.5,              // Lebenspunkte-Multiplikator im Bären-Modus (1.5 = +50%)
 
   // 2. Nahkampf-Schaden (Melee)
-  MELEE_SLASH_1_DMG: 25,                // 1. Schlag der Kombo
-  MELEE_SLASH_2_DMG: 35,                // 2. Schlag der Kombo
-  MELEE_THRUST_DMG: 52,                 // 3. Schlag (Stich / Ausfallschritt)
-  MELEE_SPIN_DMG: 68,                   // 360° Wirbelattacke
+  MELEE_SLASH_1_DMG: 20,                // 1. Schlag der Kombo
+  MELEE_SLASH_2_DMG: 20,                // 2. Schlag der Kombo
+  MELEE_THRUST_DMG: 30,                 // 3. Schlag (Stich / Ausfallschritt)
+  MELEE_SPIN_DMG: 25,                   // 360° Wirbelattacke
   MELEE_DMG_PER_SKILL: 4,               // Bonus-Schaden pro Nahkampf-Skillpunkt
   BEAR_DMG_MULTIPLIER: 2.0,             // Schadens-Multiplikator im Bären-Modus (2.0 = doppelter Schaden)
 
   // 3. Fernkampf-Schaden (Bogen & Pfeile)
-  ARROW_NORMAL_DMG: 22,                 // Normaler Schnellschuss
-  ARROW_CHARGED_DMG: 33,                // Aufgeladener Schuss (Aimed Shot)
+  ARROW_NORMAL_DMG: 30,                 // Normaler Schnellschuss
+  ARROW_CHARGED_DMG: 50,                // Aufgeladener Schuss (Aimed Shot)
 
   // 4. Schild-System
   SHIELD_MAX_ENERGY: 100,               // Maximale Schild-Energie
   SHIELD_PER_SKILL_POINT: 15,           // Zusätzliche Schild-Energie pro Skillpunkt
-  SHIELD_DRAIN_PER_SEC: 22,             // Energie-Verbrauch pro Sekunde beim aktiven Halten
+  SHIELD_DRAIN_PER_SEC: 10,             // Energie-Verbrauch pro Sekunde beim aktiven Halten
   SHIELD_RECHARGE_PER_SEC: 20,          // Aufladung pro Sekunde nach Pause
   SHIELD_RECHARGE_DELAY: 1.0,           // Pause in Sekunden vor Beginn der Aufladung
   SHIELD_STUN_DURATION: 1.2,            // Betäubungsdauer in Sekunden bei Schildbruch (0 Energie)
-  SHIELD_MELEE_DAMAGE_REDUCTION: 0.80,  // Block-Effizienz gegen Nahkampf (0.80 = 80% geblockt, 20% geht durch)
+  SHIELD_MELEE_DAMAGE_REDUCTION: 1.00,  // Block-Effizienz gegen Nahkampf (0.80 = 80% geblockt, 20% geht durch)
   SHIELD_ARROW_DAMAGE_REDUCTION: 1.00,  // Block-Effizienz gegen Pfeile (1.00 = 100% geblockt, 0% geht durch)
 
   // 5. Magie & Artefakte
-  SPELL_FROST_DMG: 30,                  // Schaden des Eisnebels
+  SPELL_FROST_DMG: 10,                  // Schaden des Eisnebels
   SPELL_FROST_FREEZE_TIME: 2.0,         // Einfrierdauer in Sekunden
-  SPELL_PLASMA_ORB_DMG: 45,             // Schaden pro Plasmakugel
-  SPELL_PHOENIX_DMG: 220,               // Schaden des Phönix-Flammensturms
+  SPELL_PLASMA_ORB_DMG: 60,             // Schaden pro Plasmakugel
+  SPELL_PHOENIX_DMG: 120,               // Schaden des Phönix-Flammensturms
 
   // 6. Dash (Ausweichen & I-Frames)
   DASH_DURATION: 0.18,                  // Dauer des Dashs in Sekunden (vollständige Unverwundbarkeit)
   DASH_SPEED: 265,                      // Geschwindigkeit während des Dashs
-  DASH_COOLDOWN: 0.42                   // Abklingzeit bis zum nächsten Dash
+  DASH_COOLDOWN: 0.72,                  // Abklingzeit bis zum nächsten Dash
+
+  // 7. Rückstoß (Knockback)
+  KNOCKBACK_MULTIPLIER: 1.0,            // Globaler Multiplikator für PvP-Rückstoß (z.B. 0.5 = sanfter, 2.0 = extrem weit wegfliegen)
+  MELEE_KNOCKBACK_SLASH: 80,            // Rückstoß bei Slash 1 & 2 (Pixel-Impuls)
+  MELEE_KNOCKBACK_THRUST: 320,          // Rückstoß beim Stich / Ausfallschritt
+  MELEE_KNOCKBACK_SPIN: 290,            // Rückstoß bei der Wirbelattacke
+  ARROW_KNOCKBACK_NORMAL: 70,           // Rückstoß bei normalem Pfeiltreffer
+  ARROW_KNOCKBACK_CHARGED: 140,         // Rückstoß bei aufgeladenem Pfeiltreffer
+
+  // 8. Bogen: Feuerrate & Fluggeschwindigkeit
+  ARROW_FIRE_RATE: 0.50,                // Schuss-Intervall beim Gedrückthalten in Sekunden (z.B. 0.5 = 2 Pfeile/s, 0.25 = 4 Pfeile/s Schnellfeuer)
+  ARROW_CHARGE_TIME: 0.55,              // Ladezeit für gezielten Schuss in Sekunden
+  ARROW_FLIGHT_SPEED: 330,              // Fluggeschwindigkeit normaler Pfeil (Pixel/Sekunde)
+  ARROW_CHARGED_FLIGHT_SPEED: 580,      // Fluggeschwindigkeit gezielter Pfeil (Pixel/Sekunde)
+  ARROW_RANGE: 165,                     // Reichweite normaler Pfeil in Pixeln
+  ARROW_CHARGED_RANGE: 270              // Reichweite gezielter Pfeil in Pixeln
 };
 
 // Player Settings for 16px Scale
@@ -255,12 +271,12 @@ const COMBAT_CONFIG = {
   COMBO_SLASH_RADIUS: 28,
   COMBO_THRUST_RANGE: 48,
   COMBO_THRUST_WIDTH: 22,
-  COMBO_THRUST_KNOCKBACK: 320,
+  COMBO_THRUST_KNOCKBACK: PVP_CONFIG.MELEE_KNOCKBACK_THRUST,
   COMBO_THRUST_LUNGE: 18,
   COMBO_RECOVERY_PAUSE: 0.38,
   SPIN_RADIUS: 48,
   SPIN_CHARGE_TIME: 0.45,
-  SPIN_KNOCKBACK: 290,
+  SPIN_KNOCKBACK: PVP_CONFIG.MELEE_KNOCKBACK_SPIN,
 
   // Shield
   SHIELD_MAX: PVP_CONFIG.SHIELD_MAX_ENERGY,
@@ -272,11 +288,12 @@ const COMBAT_CONFIG = {
 
   // Ranged (Bow & Arrow)
   MAX_AMMO: 30,
-  ARROW_SPEED: 330,
-  ARROW_CHARGED_SPEED: 580,
-  ARROW_RANGE: 165,
-  ARROW_CHARGED_RANGE: 270,
-  ARROW_CHARGE_TIME: 0.55,
+  ARROW_FIRE_RATE: PVP_CONFIG.ARROW_FIRE_RATE,
+  ARROW_SPEED: PVP_CONFIG.ARROW_FLIGHT_SPEED,
+  ARROW_CHARGED_SPEED: PVP_CONFIG.ARROW_CHARGED_FLIGHT_SPEED,
+  ARROW_RANGE: PVP_CONFIG.ARROW_RANGE,
+  ARROW_CHARGED_RANGE: PVP_CONFIG.ARROW_CHARGED_RANGE,
+  ARROW_CHARGE_TIME: PVP_CONFIG.ARROW_CHARGE_TIME,
   ARROW_PICKUP_RADIUS: 16
 };
 
@@ -13488,7 +13505,8 @@ class Player {
     this.ranged.charging = false;
     this.ranged.aiming = true;
     this.ranged.chargeTimer = 0;
-    this.ranged.autoFireTimer = 0.5; // Next auto-fire shot in 0.5s
+    const fireRate = COMBAT_CONFIG.ARROW_FIRE_RATE || 0.5;
+    this.ranged.autoFireTimer = fireRate;
 
     // First shot fires immediately upon pressing
     this.fireSingleArrow(false);
@@ -13498,6 +13516,7 @@ class Player {
     if (typeof angle === 'number' && !isNaN(angle)) {
       this.setAimAngle(angle);
     }
+    const fireRate = COMBAT_CONFIG.ARROW_FIRE_RATE || 0.5;
     if (isAimed) {
       this.ranged.isAimedShot = true;
       this.ranged.charging = true;
@@ -13506,8 +13525,8 @@ class Player {
     } else if (isAimed === false) {
       this.ranged.isAimedShot = false;
       this.ranged.charging = false;
-      if (this.ranged.autoFireTimer > 0.5) {
-        this.ranged.autoFireTimer = 0.5;
+      if (this.ranged.autoFireTimer > fireRate) {
+        this.ranged.autoFireTimer = fireRate;
       }
     }
   }
@@ -13951,7 +13970,7 @@ class Player {
     if (this.ranged.isHolding && !this.ranged.isAimedShot && !this.isDead && !this.transition && !this.shield.active) {
       this.ranged.autoFireTimer -= dt;
       if (this.ranged.autoFireTimer <= 0) {
-        this.ranged.autoFireTimer = 0.5; // Next arrow every 0.5s in calm rhythm
+        this.ranged.autoFireTimer = COMBAT_CONFIG.ARROW_FIRE_RATE || 0.5;
         this.fireSingleArrow(false);
       }
     }
@@ -18147,7 +18166,7 @@ class CombatManager {
           }
 
           const angle = isSpin ? Math.atan2(dy, dx) : hitbox.angle;
-          let kb = hitbox.knockback || (isThrust ? 120 : (isSpin ? 140 : 80));
+          let kb = hitbox.knockback || (isThrust ? (PVP_CONFIG.MELEE_KNOCKBACK_THRUST ?? 320) : (isSpin ? (PVP_CONFIG.MELEE_KNOCKBACK_SPIN ?? 290) : (PVP_CONFIG.MELEE_KNOCKBACK_SLASH ?? 80)));
           if (hitbox.knockbackMultiplier) {
             kb = Math.round(kb * hitbox.knockbackMultiplier);
           }
@@ -18163,8 +18182,9 @@ class CombatManager {
             this.addFloatingText(`-${dmg}`, remotePlayer.x, remotePlayer.y - 14, '#f87171');
           }
 
-          const kbX = Math.cos(angle) * (kb * 0.4);
-          const kbY = Math.sin(angle) * (kb * 0.4);
+          const kbMult = PVP_CONFIG.KNOCKBACK_MULTIPLIER ?? 1.0;
+          const kbX = Math.cos(angle) * (kb * 0.4 * kbMult);
+          const kbY = Math.sin(angle) * (kb * 0.4 * kbMult);
           this.game.network.sendPvPHit(remotePlayer.id, dmg, kbX, kbY);
         }
       }
@@ -18400,7 +18420,7 @@ class CombatManager {
 
           if (Math.hypot(remotePlayer.x - arrow.x, remotePlayer.y - arrow.y) <= (remotePlayer.radius + 6)) {
             let dmg = arrow.isCharged ? (PVP_CONFIG.ARROW_CHARGED_DMG ?? 33) : (PVP_CONFIG.ARROW_NORMAL_DMG ?? 22);
-            const kb = arrow.isCharged ? 140 : 70;
+            const kb = arrow.isCharged ? (PVP_CONFIG.ARROW_KNOCKBACK_CHARGED ?? 140) : (PVP_CONFIG.ARROW_KNOCKBACK_NORMAL ?? 70);
 
             if (remotePlayer.shieldActive) {
               this.addHitSparks(arrow.x, arrow.y, '#38bdf8', 14, 80);
@@ -18413,8 +18433,9 @@ class CombatManager {
             }
 
             if (dmg > 0) {
-              const kbX = Math.cos(arrow.angle) * kb * 0.3;
-              const kbY = Math.sin(arrow.angle) * kb * 0.3;
+              const kbMult = PVP_CONFIG.KNOCKBACK_MULTIPLIER ?? 1.0;
+              const kbX = Math.cos(arrow.angle) * kb * 0.3 * kbMult;
+              const kbY = Math.sin(arrow.angle) * kb * 0.3 * kbMult;
               this.game.network.sendPvPHit(remotePlayer.id, dmg, kbX, kbY);
             }
 

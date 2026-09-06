@@ -509,7 +509,7 @@ export class CombatManager {
           }
 
           const angle = isSpin ? Math.atan2(dy, dx) : hitbox.angle;
-          let kb = hitbox.knockback || (isThrust ? 120 : (isSpin ? 140 : 80));
+          let kb = hitbox.knockback || (isThrust ? (PVP_CONFIG.MELEE_KNOCKBACK_THRUST ?? 320) : (isSpin ? (PVP_CONFIG.MELEE_KNOCKBACK_SPIN ?? 290) : (PVP_CONFIG.MELEE_KNOCKBACK_SLASH ?? 80)));
           if (hitbox.knockbackMultiplier) {
             kb = Math.round(kb * hitbox.knockbackMultiplier);
           }
@@ -525,8 +525,9 @@ export class CombatManager {
             this.addFloatingText(`-${dmg}`, remotePlayer.x, remotePlayer.y - 14, '#f87171');
           }
 
-          const kbX = Math.cos(angle) * (kb * 0.4);
-          const kbY = Math.sin(angle) * (kb * 0.4);
+          const kbMult = PVP_CONFIG.KNOCKBACK_MULTIPLIER ?? 1.0;
+          const kbX = Math.cos(angle) * (kb * 0.4 * kbMult);
+          const kbY = Math.sin(angle) * (kb * 0.4 * kbMult);
           this.game.network.sendPvPHit(remotePlayer.id, dmg, kbX, kbY);
         }
       }
@@ -762,7 +763,7 @@ export class CombatManager {
 
           if (Math.hypot(remotePlayer.x - arrow.x, remotePlayer.y - arrow.y) <= (remotePlayer.radius + 6)) {
             let dmg = arrow.isCharged ? (PVP_CONFIG.ARROW_CHARGED_DMG ?? 33) : (PVP_CONFIG.ARROW_NORMAL_DMG ?? 22);
-            const kb = arrow.isCharged ? 140 : 70;
+            const kb = arrow.isCharged ? (PVP_CONFIG.ARROW_KNOCKBACK_CHARGED ?? 140) : (PVP_CONFIG.ARROW_KNOCKBACK_NORMAL ?? 70);
 
             if (remotePlayer.shieldActive) {
               this.addHitSparks(arrow.x, arrow.y, '#38bdf8', 14, 80);
@@ -775,8 +776,9 @@ export class CombatManager {
             }
 
             if (dmg > 0) {
-              const kbX = Math.cos(arrow.angle) * kb * 0.3;
-              const kbY = Math.sin(arrow.angle) * kb * 0.3;
+              const kbMult = PVP_CONFIG.KNOCKBACK_MULTIPLIER ?? 1.0;
+              const kbX = Math.cos(arrow.angle) * kb * 0.3 * kbMult;
+              const kbY = Math.sin(arrow.angle) * kb * 0.3 * kbMult;
               this.game.network.sendPvPHit(remotePlayer.id, dmg, kbX, kbY);
             }
 
