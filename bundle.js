@@ -10213,9 +10213,8 @@ class MagicManager {
         const col = player.artifact.colorTheme || '#ef4444';
         const glow = player.artifact.glowColor || 'rgba(239, 68, 68, 0.5)';
         touchMagicBtn.style.borderColor = col;
-        touchMagicBtn.style.boxShadow = `0 0 14px ${glow}`;
-        const letterEl = touchMagicBtn.querySelector('.btn-letter');
-        if (letterEl) letterEl.textContent = player.artifact.icon || '✨';
+        const iconEl = touchMagicBtn.querySelector('.btn-icon') || touchMagicBtn.querySelector('.btn-letter');
+        if (iconEl) iconEl.textContent = player.artifact.icon || '✨';
         if (touchChargesBadge) touchChargesBadge.textContent = player.artifact.charges;
         if (touchSub) touchSub.textContent = player.artifact.title || 'Magie';
       }
@@ -12694,14 +12693,14 @@ class Player {
       this.xp -= this.xpToNext;
       this.level++;
       this.xpToNext = Math.round(50 * Math.pow(1.35, this.level - 1));
-      this.skillPoints = (this.skillPoints || 0) + 1;
+      this.skillPoints = (this.skillPoints || 0) + 2;
       leveledUp = true;
     }
 
     if (leveledUp) {
       this.levelUpFlameTimer = 2.4;
       if (this.game && this.game.combat) {
-        this.game.combat.addFloatingText(`🎉 LEVEL UP! Lv. ${this.level}`, this.x, this.y - 28, '#facc15', 1.0);
+        this.game.combat.addFloatingText(`🎉 LEVEL UP! Lv. ${this.level} (+2 Skillpunkte)`, this.x, this.y - 28, '#facc15', 1.1);
         for (let i = 0; i < 22; i++) {
           const ang = Math.random() * Math.PI * 2;
           const sp = Math.random() * 60 + 20;
@@ -13281,6 +13280,13 @@ class Player {
       return;
     }
     if (this.shield.active || this.shield.stunTimer > 0 || this.isDead || this.transition) return;
+    if (this.ranged.ammo <= 0) {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('Keine Pfeile! (0/30) 🏹', this.x, this.y - 22, '#ef4444', 0.65);
+      }
+      return;
+    }
+
     if (typeof targetAngle === 'number' && !isNaN(targetAngle)) {
       this.setAimAngle(targetAngle);
     }
@@ -13300,13 +13306,17 @@ class Player {
     if (typeof angle === 'number' && !isNaN(angle)) {
       this.setAimAngle(angle);
     }
-    this.ranged.isAimedShot = Boolean(isAimed);
-    this.ranged.charging = Boolean(isAimed);
-    this.ranged.aiming = true;
     if (isAimed) {
+      this.ranged.isAimedShot = true;
+      this.ranged.charging = true;
+      this.ranged.aiming = true;
       this.ranged.autoFireTimer = 999; // Stop auto-fire while charging aimed shot
-    } else if (this.ranged.autoFireTimer > 0.5) {
-      this.ranged.autoFireTimer = 0.5;
+    } else if (isAimed === false) {
+      this.ranged.isAimedShot = false;
+      this.ranged.charging = false;
+      if (this.ranged.autoFireTimer > 0.5) {
+        this.ranged.autoFireTimer = 0.5;
+      }
     }
   }
 
@@ -13316,7 +13326,8 @@ class Player {
       this.setAimAngle(targetAngle);
     }
 
-    const wasAimed = (forceAimed !== null) ? Boolean(forceAimed) : this.ranged.isAimedShot;
+    // Guarantee that if the shot was charged / aimed (line visible), it ALWAYS shoots the aimed shot!
+    const wasAimed = (forceAimed === true) || Boolean(this.ranged.isAimedShot) || Boolean(this.ranged.charging);
 
     this.ranged.isHolding = false;
     this.ranged.isAimedShot = false;
@@ -14313,8 +14324,8 @@ class Player {
     this.xp = Math.round(fraction * this.xpToNext);
     this.totalXpEarned = this.getTotalXpEarned();
 
-    // 3. Even Skill Reduction matching new level
-    const targetTotalPoints = Math.max(0, this.level - 1);
+    // 3. Even Skill Reduction matching new level (2 skill points per level)
+    const targetTotalPoints = Math.max(0, (this.level - 1) * 2);
     const currentTotalPoints = (this.skills.hp + this.skills.melee + this.skills.range + this.skills.shield) + (this.skillPoints || 0);
     let pointsToRemove = Math.max(0, currentTotalPoints - targetTotalPoints);
     let skillsReducedCount = 0;
@@ -16119,16 +16130,21 @@ class TouchControls {
         state.btn.classList.add('aiming-active');
 
         // Visuelle Auslenkung des Buttons (virtueller Analog-Stick-Effekt)
-        const clampDist = Math.min(24, dist);
+        const clampDist = Math.min(28, dist);
         const vx = (dx / dist) * clampDist;
         const vy = (dy / dist) * clampDist;
         state.btn.style.transform = `translate(${vx}px, ${vy}px)`;
 
-        // Range (Button X): Zone 1 (< 45px) = normal fire | Zone 2 (>= 45px) = Aimed Shot
+        // Range (Button X): Zone 1 (< 54px) = normal fire | Zone 2 (>= 54px) = Aimed Shot (+20% weiter)
         if (state.action === 'X') {
-          const isAimed = dist >= 45;
-          state.isAimed = isAimed;
-          if (isAimed) {
+          // Hysterese: Lädt ab 54px auf, bleibt aufgeladen bis der Finger fast ganz im Zentrum (< 22px) ist
+          if (dist >= 54) {
+            state.isAimed = true;
+          } else if (dist < 22) {
+            state.isAimed = false;
+          }
+
+          if (state.isAimed) {
             state.btn.classList.add('btn-aim-charged');
           } else {
             state.btn.classList.remove('btn-aim-charged');
@@ -16138,7 +16154,7 @@ class TouchControls {
               drag: true,
               angle: state.dragAngle,
               dist,
-              isAimed,
+              isAimed: Boolean(state.isAimed),
               isCancelled: false
             });
           }
@@ -16187,15 +16203,9 @@ class TouchControls {
             isCancelled: false
           });
         }
-      } else if (state.isDragging && dist < 12) {
-        // Finger zurück ins Zentrum gezogen -> Abbrechen (Cancel Deadzone)
-        state.isCancelled = true;
-        state.btn.classList.add('cancel-zone');
-        state.btn.classList.remove('aiming-active', 'btn-aim-charged');
+      } else {
+        // Finger nahe Button-Zentrum: Button visuell zentrieren, KEIN versehentlicher Abbruch!
         state.btn.style.transform = 'translate(0px, 0px)';
-        if (this.onButtonPress) {
-          this.onButtonPress(state.action, true, { cancel: true });
-        }
       }
     };
 
@@ -16205,7 +16215,7 @@ class TouchControls {
       state.btn.style.transform = 'translate(0px, 0px)';
       this.input.buttons[state.action] = false;
 
-      const wasDrag = state.isDragging && !state.isCancelled;
+      const wasDrag = state.isDragging && typeof state.dragAngle === 'number';
       const finalAngle = wasDrag ? state.dragAngle : null;
 
       if (this.onButtonPress) {
@@ -16214,7 +16224,7 @@ class TouchControls {
           angle: finalAngle,
           dist: state.dragDistance,
           isAimed: Boolean(state.isAimed),
-          isCancelled: state.isCancelled,
+          isCancelled: false,
           spinTriggered: state.spinFired
         });
       }
@@ -19595,7 +19605,7 @@ class Game {
         this.player.releaseMelee();
       }
     }
-    // X = Bogen (Gedrückt halten: ruhiges Tempo Schüsse in Zieh-Richtung | Weit ziehen >= 45px: Aimed Shot blau laden mit Flugbahn)
+    // X = Bogen (Gedrückt halten: ruhiges Tempo Schüsse in Zieh-Richtung | Weit ziehen >= 54px: Aimed Shot blau laden mit Flugbahn)
     else if (action === 'X') {
       if (isDown) {
         if (meta && meta.cancel) {
@@ -19610,7 +19620,7 @@ class Game {
         if (meta && meta.isCancelled) {
           this.player.cancelRanged();
         } else {
-          const aimAng = (meta && meta.isDrag && typeof meta.angle === 'number') ? meta.angle : null;
+          const aimAng = (meta && typeof meta.angle === 'number') ? meta.angle : null;
           this.player.releaseRanged(aimAng, meta ? meta.isAimed : null);
         }
       }

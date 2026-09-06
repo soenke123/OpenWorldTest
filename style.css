@@ -845,20 +845,32 @@ canvas#gameCanvas {
   opacity: 0.6;
 }
 
+.touch-btn .btn-icon {
+  font-size: 1.45rem;
+  line-height: 1;
+  display: block;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.65));
+  pointer-events: none;
+  transform: translateY(-1px);
+}
+
 .touch-btn .btn-letter {
-  font-size: 1.15rem;
+  font-size: 1.25rem;
   font-weight: 700;
   line-height: 1;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
 }
 
 .touch-btn .btn-sub {
-  font-size: 0.52rem;
+  font-size: 0.56rem;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  opacity: 0.85;
-  margin-top: 1px;
+  opacity: 0.95;
+  margin-top: 2px;
   line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
 }
 
 .touch-btn .btn-badge {

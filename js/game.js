@@ -707,7 +707,7 @@ class Game {
         this.player.releaseMelee();
       }
     }
-    // X = Bogen (Gedrückt halten: ruhiges Tempo Schüsse in Zieh-Richtung | Weit ziehen >= 45px: Aimed Shot blau laden mit Flugbahn)
+    // X = Bogen (Gedrückt halten: ruhiges Tempo Schüsse in Zieh-Richtung | Weit ziehen >= 54px: Aimed Shot blau laden mit Flugbahn)
     else if (action === 'X') {
       if (isDown) {
         if (meta && meta.cancel) {
@@ -722,7 +722,7 @@ class Game {
         if (meta && meta.isCancelled) {
           this.player.cancelRanged();
         } else {
-          const aimAng = (meta && meta.isDrag && typeof meta.angle === 'number') ? meta.angle : null;
+          const aimAng = (meta && typeof meta.angle === 'number') ? meta.angle : null;
           this.player.releaseRanged(aimAng, meta ? meta.isAimed : null);
         }
       }

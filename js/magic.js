@@ -1822,9 +1822,8 @@ export class MagicManager {
         const col = player.artifact.colorTheme || '#ef4444';
         const glow = player.artifact.glowColor || 'rgba(239, 68, 68, 0.5)';
         touchMagicBtn.style.borderColor = col;
-        touchMagicBtn.style.boxShadow = `0 0 14px ${glow}`;
-        const letterEl = touchMagicBtn.querySelector('.btn-letter');
-        if (letterEl) letterEl.textContent = player.artifact.icon || '✨';
+        const iconEl = touchMagicBtn.querySelector('.btn-icon') || touchMagicBtn.querySelector('.btn-letter');
+        if (iconEl) iconEl.textContent = player.artifact.icon || '✨';
         if (touchChargesBadge) touchChargesBadge.textContent = player.artifact.charges;
         if (touchSub) touchSub.textContent = player.artifact.title || 'Magie';
       }

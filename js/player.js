@@ -178,14 +178,14 @@ export class Player {
       this.xp -= this.xpToNext;
       this.level++;
       this.xpToNext = Math.round(50 * Math.pow(1.35, this.level - 1));
-      this.skillPoints = (this.skillPoints || 0) + 1;
+      this.skillPoints = (this.skillPoints || 0) + 2;
       leveledUp = true;
     }
 
     if (leveledUp) {
       this.levelUpFlameTimer = 2.4;
       if (this.game && this.game.combat) {
-        this.game.combat.addFloatingText(`🎉 LEVEL UP! Lv. ${this.level}`, this.x, this.y - 28, '#facc15', 1.0);
+        this.game.combat.addFloatingText(`🎉 LEVEL UP! Lv. ${this.level} (+2 Skillpunkte)`, this.x, this.y - 28, '#facc15', 1.1);
         for (let i = 0; i < 22; i++) {
           const ang = Math.random() * Math.PI * 2;
           const sp = Math.random() * 60 + 20;
@@ -765,6 +765,13 @@ export class Player {
       return;
     }
     if (this.shield.active || this.shield.stunTimer > 0 || this.isDead || this.transition) return;
+    if (this.ranged.ammo <= 0) {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('Keine Pfeile! (0/30) 🏹', this.x, this.y - 22, '#ef4444', 0.65);
+      }
+      return;
+    }
+
     if (typeof targetAngle === 'number' && !isNaN(targetAngle)) {
       this.setAimAngle(targetAngle);
     }
@@ -784,13 +791,17 @@ export class Player {
     if (typeof angle === 'number' && !isNaN(angle)) {
       this.setAimAngle(angle);
     }
-    this.ranged.isAimedShot = Boolean(isAimed);
-    this.ranged.charging = Boolean(isAimed);
-    this.ranged.aiming = true;
     if (isAimed) {
+      this.ranged.isAimedShot = true;
+      this.ranged.charging = true;
+      this.ranged.aiming = true;
       this.ranged.autoFireTimer = 999; // Stop auto-fire while charging aimed shot
-    } else if (this.ranged.autoFireTimer > 0.5) {
-      this.ranged.autoFireTimer = 0.5;
+    } else if (isAimed === false) {
+      this.ranged.isAimedShot = false;
+      this.ranged.charging = false;
+      if (this.ranged.autoFireTimer > 0.5) {
+        this.ranged.autoFireTimer = 0.5;
+      }
     }
   }
 
@@ -800,7 +811,8 @@ export class Player {
       this.setAimAngle(targetAngle);
     }
 
-    const wasAimed = (forceAimed !== null) ? Boolean(forceAimed) : this.ranged.isAimedShot;
+    // Guarantee that if the shot was charged / aimed (line visible), it ALWAYS shoots the aimed shot!
+    const wasAimed = (forceAimed === true) || Boolean(this.ranged.isAimedShot) || Boolean(this.ranged.charging);
 
     this.ranged.isHolding = false;
     this.ranged.isAimedShot = false;
@@ -1797,8 +1809,8 @@ export class Player {
     this.xp = Math.round(fraction * this.xpToNext);
     this.totalXpEarned = this.getTotalXpEarned();
 
-    // 3. Even Skill Reduction matching new level
-    const targetTotalPoints = Math.max(0, this.level - 1);
+    // 3. Even Skill Reduction matching new level (2 skill points per level)
+    const targetTotalPoints = Math.max(0, (this.level - 1) * 2);
     const currentTotalPoints = (this.skills.hp + this.skills.melee + this.skills.range + this.skills.shield) + (this.skillPoints || 0);
     let pointsToRemove = Math.max(0, currentTotalPoints - targetTotalPoints);
     let skillsReducedCount = 0;

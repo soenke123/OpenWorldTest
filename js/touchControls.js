@@ -246,16 +246,21 @@ export class TouchControls {
         state.btn.classList.add('aiming-active');
 
         // Visuelle Auslenkung des Buttons (virtueller Analog-Stick-Effekt)
-        const clampDist = Math.min(24, dist);
+        const clampDist = Math.min(28, dist);
         const vx = (dx / dist) * clampDist;
         const vy = (dy / dist) * clampDist;
         state.btn.style.transform = `translate(${vx}px, ${vy}px)`;
 
-        // Range (Button X): Zone 1 (< 45px) = normal fire | Zone 2 (>= 45px) = Aimed Shot
+        // Range (Button X): Zone 1 (< 54px) = normal fire | Zone 2 (>= 54px) = Aimed Shot (+20% weiter)
         if (state.action === 'X') {
-          const isAimed = dist >= 45;
-          state.isAimed = isAimed;
-          if (isAimed) {
+          // Hysterese: Lädt ab 54px auf, bleibt aufgeladen bis der Finger fast ganz im Zentrum (< 22px) ist
+          if (dist >= 54) {
+            state.isAimed = true;
+          } else if (dist < 22) {
+            state.isAimed = false;
+          }
+
+          if (state.isAimed) {
             state.btn.classList.add('btn-aim-charged');
           } else {
             state.btn.classList.remove('btn-aim-charged');
@@ -265,7 +270,7 @@ export class TouchControls {
               drag: true,
               angle: state.dragAngle,
               dist,
-              isAimed,
+              isAimed: Boolean(state.isAimed),
               isCancelled: false
             });
           }
@@ -314,15 +319,9 @@ export class TouchControls {
             isCancelled: false
           });
         }
-      } else if (state.isDragging && dist < 12) {
-        // Finger zurück ins Zentrum gezogen -> Abbrechen (Cancel Deadzone)
-        state.isCancelled = true;
-        state.btn.classList.add('cancel-zone');
-        state.btn.classList.remove('aiming-active', 'btn-aim-charged');
+      } else {
+        // Finger nahe Button-Zentrum: Button visuell zentrieren, KEIN versehentlicher Abbruch!
         state.btn.style.transform = 'translate(0px, 0px)';
-        if (this.onButtonPress) {
-          this.onButtonPress(state.action, true, { cancel: true });
-        }
       }
     };
 
@@ -332,7 +331,7 @@ export class TouchControls {
       state.btn.style.transform = 'translate(0px, 0px)';
       this.input.buttons[state.action] = false;
 
-      const wasDrag = state.isDragging && !state.isCancelled;
+      const wasDrag = state.isDragging && typeof state.dragAngle === 'number';
       const finalAngle = wasDrag ? state.dragAngle : null;
 
       if (this.onButtonPress) {
@@ -341,7 +340,7 @@ export class TouchControls {
           angle: finalAngle,
           dist: state.dragDistance,
           isAimed: Boolean(state.isAimed),
-          isCancelled: state.isCancelled,
+          isCancelled: false,
           spinTriggered: state.spinFired
         });
       }
