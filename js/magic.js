@@ -1273,70 +1273,37 @@ export class MagicManager {
     const coords = this.getCanvasCoords(clientX, clientY);
     if (!coords) return;
     const map = this.game?.map;
-    if (!map) return;
+    const player = this.game?.player;
+    if (!map || !player) return;
     const mapW = map.width || MAP_WIDTH;
     const mapH = map.height || MAP_HEIGHT;
 
-    const rawTx = coords.tx;
-    const rawTy = coords.ty;
+    const rawTx = Math.max(0, Math.min(mapW - 1, coords.tx));
+    const rawTy = Math.max(0, Math.min(mapH - 1, coords.ty));
+    const rawWorldX = rawTx * TILE_SIZE + TILE_SIZE / 2;
+    const rawWorldY = rawTy * TILE_SIZE + TILE_SIZE / 2;
 
-    const isValidTile = (tx, ty) => {
-      if (tx < 0 || tx >= mapW || ty < 0 || ty >= mapH) return false;
-      const walkable = map.isTileWalkable ? map.isTileWalkable(tx, ty) : true;
-      const explored = this.game?.minimap ? this.game.minimap.isTileExplored(tx, ty) : true;
-      return Boolean(walkable && explored);
-    };
+    // Sichere Landeposition suchen wie beim Wolkensturz (Wasser, Bäume, Abgrund etc. werden automatisch zum nächsten sicheren Uferplatz korrigiert)
+    const safePos = (typeof player.findSafeLandingPosition === 'function')
+      ? player.findSafeLandingPosition(map, rawWorldX, rawWorldY)
+      : { x: rawWorldX, y: rawWorldY };
 
-    let targetTx = rawTx;
-    let targetTy = rawTy;
+    const targetTx = Math.max(0, Math.min(mapW - 1, Math.floor(safePos.x / TILE_SIZE)));
+    const targetTy = Math.max(0, Math.min(mapH - 1, Math.floor(safePos.y / TILE_SIZE)));
+    const isAdjusted = (targetTx !== rawTx || targetTy !== rawTy);
 
-    // Sanfte Suche nach begehbaren Nachbar-Kacheln (Radius 1-6) für Fingerberührung
-    if (!isValidTile(targetTx, targetTy)) {
-      let found = false;
-      for (let r = 1; r <= 6 && !found; r++) {
-        for (let dy = -r; dy <= r && !found; dy++) {
-          for (let dx = -r; dx <= r && !found; dx++) {
-            if (Math.abs(dx) === r || Math.abs(dy) === r) {
-              const nx = rawTx + dx;
-              const ny = rawTy + dy;
-              if (isValidTile(nx, ny)) {
-                targetTx = nx;
-                targetTy = ny;
-                found = true;
-              }
-            }
-          }
-        }
-      }
-
-      if (!found) {
-        const isExplored = this.game?.minimap ? this.game.minimap.isTileExplored(rawTx, rawTy) : true;
-        const coordsEl = getElement('teleport-coords-display');
-        if (coordsEl) {
-          coordsEl.textContent = !isExplored ? '❌ Unerforschter Ort (im Nebel)' : '❌ Nicht begehbar';
-          coordsEl.style.color = '#ef4444';
-        }
-        const confirmBtn = getElement('btn-teleport-confirm');
-        if (confirmBtn) confirmBtn.classList.add('hidden');
-        this.selectedTeleportTile = null;
-        this.renderTeleportMap();
-        return;
-      }
-    }
-
-    // Zielort erfolgreich ausgewählt
-    const targetWorldX = targetTx * TILE_SIZE + TILE_SIZE / 2;
-    const targetWorldY = targetTy * TILE_SIZE + TILE_SIZE / 2;
     this.selectedTeleportTile = {
       tx: targetTx,
       ty: targetTy,
-      worldX: targetWorldX,
-      worldY: targetWorldY
+      worldX: safePos.x,
+      worldY: safePos.y
     };
 
     const coordsEl = getElement('teleport-coords-display');
     if (coordsEl) {
-      coordsEl.textContent = `📍 Ziel: X: ${targetTx}, Y: ${targetTy} ✅`;
+      coordsEl.textContent = isAdjusted
+        ? `📍 Ziel: X: ${targetTx}, Y: ${targetTy} (Sicherer Uferplatz) ✅`
+        : `📍 Ziel: X: ${targetTx}, Y: ${targetTy} ✅`;
       coordsEl.style.color = '#c084fc';
     }
 

@@ -224,11 +224,16 @@ export class Player {
 
   startTeleportSequence(targetX, targetY) {
     if (this.isDead) return;
+    // Sicherstellen, dass das Ziel wie beim Wolkensturz niemals auf Wasser, Bäumen oder unpassierbaren Kacheln liegt
+    const safePos = (this.map && typeof this.findSafeLandingPosition === 'function')
+      ? this.findSafeLandingPosition(this.map, targetX, targetY)
+      : { x: targetX, y: targetY };
+
     this.teleportSequence = {
       phase: 'sink', // 'sink' | 'blackout' | 'emerge'
       timer: 0,
-      targetX,
-      targetY,
+      targetX: safePos.x,
+      targetY: safePos.y,
       originX: this.x,
       originY: this.y,
       vortexAngle: 0
@@ -856,8 +861,12 @@ export class Player {
         if (this.teleportSequence.timer >= 0.35) {
           this.teleportSequence.phase = 'blackout';
           this.teleportSequence.timer = 0;
-          this.x = this.teleportSequence.targetX;
-          this.y = this.teleportSequence.targetY;
+          // Sichere Landung garantieren (kein Wasser, kein Abgrund, keine Bäume)
+          const safe = (this.map && typeof this.findSafeLandingPosition === 'function')
+            ? this.findSafeLandingPosition(this.map, this.teleportSequence.targetX, this.teleportSequence.targetY)
+            : { x: this.teleportSequence.targetX, y: this.teleportSequence.targetY };
+          this.x = safe.x;
+          this.y = safe.y;
           const targetTileX = Math.floor(this.x / TILE_SIZE);
           const targetTileY = Math.floor(this.y / TILE_SIZE);
           this.elevation = this.map ? this.map.getElevation(targetTileX, targetTileY) : 0;
@@ -1475,7 +1484,9 @@ export class Player {
 
     if (map.findSafeLandingFloor) {
       const sf = map.findSafeLandingFloor(Math.floor(startX / TILE_SIZE), Math.floor(startY / TILE_SIZE));
-      return { x: sf.x * TILE_SIZE + 8, y: sf.y * TILE_SIZE + 8 };
+      if (sf && typeof sf.x === 'number' && typeof sf.y === 'number') {
+        return { x: sf.x * TILE_SIZE + 8, y: sf.y * TILE_SIZE + 8 };
+      }
     }
 
     const isSafe = (x, y) => {
@@ -1486,12 +1497,13 @@ export class Player {
 
       const g = map.getGroundTile(tx, ty);
       if (g === TILES.WATER || g === TILES.SWAMP_WATER || g === TILES.VOID_LAKE ||
-          g === TILES.QUICKSAND || g === TILES.SKY_ABYSS) {
+          g === TILES.QUICKSAND || g === TILES.SKY_ABYSS || g === TILES.CAVE_WATER) {
         return false;
       }
       if (map.getSpeedModifier && map.getSpeedModifier(tx, ty) <= 0.05) return false;
 
       if (map.isSolid && map.isSolid(tx, ty)) return false;
+      if (typeof map.isTileWalkable === 'function' && !map.isTileWalkable(tx, ty)) return false;
       if (map.checkTreeCollision && map.checkTreeCollision(x, y, this.radius || 6)) return false;
 
       return true;
@@ -1506,7 +1518,7 @@ export class Player {
     const startTileX = Math.floor(startX / TILE_SIZE);
     const startTileY = Math.floor(startY / TILE_SIZE);
 
-    for (let r = 1; r <= 20; r++) {
+    for (let r = 1; r <= 25; r++) {
       const candidates = [];
       for (let dx = -r; dx <= r; dx++) {
         for (let dy = -r; dy <= r; dy++) {

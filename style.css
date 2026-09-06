@@ -1158,10 +1158,12 @@ canvas#gameCanvas {
   border-radius: 14px;
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.7), 0 0 24px rgba(34, 197, 94, 0.15);
   width: 100%;
-  max-width: 450px;
-  max-height: 94vh;
-  max-height: 94dvh;
+  max-width: min(95vw, 460px);
+  max-height: min(94vh, 94dvh);
   overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(74, 222, 128, 0.4) transparent;
   padding: 12px 14px;
@@ -1304,8 +1306,9 @@ canvas#gameCanvas {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
-  margin-top: 1px;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
 }
 
 .skill-upgrade-btn {
@@ -1349,7 +1352,10 @@ canvas#gameCanvas {
   background: rgba(0, 0, 0, 0.28);
   padding: 2px 6px;
   border-radius: 5px;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .skill-invested-info strong {
@@ -1447,10 +1453,24 @@ canvas#gameCanvas {
   }
 }
 
-/* Very Narrow Portrait Phones */
-@media (max-width: 360px) and (min-height: 481px) {
+/* Narrow Portrait Phones */
+@media (max-width: 460px) and (min-height: 481px) {
+  .skill-modal-backdrop {
+    padding: 6px;
+  }
+  .skill-modal-dialog {
+    padding: 10px 12px;
+    gap: 7px;
+  }
   .skill-cards-grid {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .skill-card {
+    padding: 8px 11px;
+  }
+  .skill-card-top {
+    gap: 9px;
   }
 }
 
@@ -1484,19 +1504,32 @@ canvas#gameCanvas {
   border-radius: 20px;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.85), 0 0 45px rgba(167, 139, 250, 0.18);
   width: 100%;
-  max-width: 620px;
-  max-height: 92vh;
-  max-height: 92dvh;
+  max-width: min(95vw, 620px);
+  max-height: min(94vh, 94dvh);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px 28px;
-  gap: 16px;
-  overflow: hidden;
+  padding: 22px 26px;
+  gap: 14px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(167, 139, 250, 0.4) transparent;
   animation: charModalPop 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   color: #f8fafc;
   user-select: none;
   position: relative;
+}
+
+.char-modal-dialog::-webkit-scrollbar {
+  width: 5px;
+}
+
+.char-modal-dialog::-webkit-scrollbar-thumb {
+  background: rgba(167, 139, 250, 0.4);
+  border-radius: 3px;
 }
 
 .char-modal-close-btn {
@@ -1644,10 +1677,11 @@ canvas#gameCanvas {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 12px;
-  max-height: 380px;
+  max-height: min(340px, 48vh);
   overflow-y: auto;
   padding: 6px 8px 10px;
   width: 100%;
+  box-sizing: border-box;
   justify-items: center;
 }
 
@@ -1893,61 +1927,197 @@ canvas#gameCanvas {
   font-size: 1.25rem;
 }
 
-/* Mobile Responsiveness */
+/* Mobile Responsiveness for Character Wizard Modal */
 @media (max-width: 600px) {
+  .char-modal-backdrop {
+    padding: 6px;
+  }
+  .char-modal-dialog {
+    padding: 14px 16px;
+    gap: 10px;
+    width: 100%;
+    max-width: 98vw;
+    border-radius: 14px;
+  }
+  .wizard-host-banner {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .host-banner-title {
+    font-size: 0.88rem;
+  }
+  .host-banner-sub {
+    font-size: 0.72rem;
+  }
+  .btn-wizard-host {
+    padding: 6px 12px;
+    font-size: 0.82rem;
+  }
+  .wizard-divider {
+    margin: 6px 0;
+    font-size: 0.72rem;
+  }
+  .wizard-step-title {
+    font-size: 1.15rem;
+  }
+  #char-wizard-step-1 {
+    padding: 4px 0;
+    gap: 8px;
+  }
+  .char-name-input-row {
+    max-width: 100%;
+    gap: 6px;
+  }
+  .hero-name-input {
+    padding: 9px 12px;
+    font-size: 1rem;
+  }
+  .btn-random-name {
+    padding: 9px 12px;
+    font-size: 0.88rem;
+  }
   .char-select-grid.visual-only-grid {
     grid-template-columns: repeat(4, 1fr);
     gap: 8px;
   }
   .char-select-card {
-    width: 72px;
-    height: 82px;
+    width: 70px;
+    height: 80px;
   }
   .char-card-canvas {
-    width: 64px;
-    height: 74px;
+    width: 62px;
+    height: 72px;
+  }
+  #char-wizard-step-3 {
+    gap: 10px;
+    padding: 4px 0;
+  }
+  .wizard-world-info-card {
+    padding: 8px 10px;
+    gap: 5px;
+  }
+  .wizard-active-world-name {
+    padding: 7px 10px;
+    font-size: 0.88rem;
+  }
+  .wizard-nav-row {
+    margin-top: 4px;
+    gap: 8px;
+  }
+  .btn-wizard-nav {
+    padding: 9px 18px;
+    font-size: 0.92rem;
+  }
+  .btn-start-game {
+    padding: 10px 22px;
+    font-size: 0.95rem;
   }
 }
 
 @media (max-height: 520px) {
+  .char-modal-backdrop {
+    padding: 4px;
+  }
   .char-modal-dialog {
-    padding: 10px 16px;
-    gap: 8px;
+    padding: 8px 14px;
+    gap: 6px;
     max-height: 98vh;
     max-height: 98dvh;
-    border-radius: 14px;
+    border-radius: 12px;
+  }
+  .char-wizard-dots {
+    margin-bottom: 2px;
+    gap: 6px;
+  }
+  .wizard-dot {
+    height: 3px;
+    width: 22px;
+  }
+  .wizard-dot.active {
+    width: 30px;
+  }
+  #char-wizard-step-1 {
+    padding: 2px 0;
+    gap: 6px;
+  }
+  .wizard-host-banner {
+    padding: 5px 8px;
+    gap: 4px;
+  }
+  .host-banner-title {
+    font-size: 0.80rem;
+  }
+  .host-banner-sub {
+    display: none;
+  }
+  .btn-wizard-host {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+  }
+  .wizard-divider {
+    margin: 3px 0;
+    font-size: 0.68rem;
   }
   .wizard-step-title {
-    font-size: 1.05rem;
+    font-size: 0.98rem;
     margin: 0;
   }
+  .char-name-input-row {
+    gap: 6px;
+  }
+  .hero-name-input {
+    padding: 6px 10px;
+    font-size: 0.90rem;
+  }
+  .btn-random-name {
+    padding: 6px 10px;
+    font-size: 0.80rem;
+  }
   .char-select-grid.visual-only-grid {
-    max-height: 180px;
+    max-height: min(160px, 44vh);
     grid-template-columns: repeat(5, 1fr);
     gap: 6px;
     padding: 4px;
   }
   .char-select-card {
-    width: 62px;
-    height: 72px;
+    width: 58px;
+    height: 68px;
   }
   .char-card-canvas {
-    width: 54px;
-    height: 64px;
+    width: 50px;
+    height: 60px;
+  }
+  #char-wizard-step-3 {
+    padding: 2px 0;
+    gap: 6px;
+  }
+  .char-confirm-preview-wrap {
+    padding: 4px;
   }
   .char-confirm-canvas {
-    width: 80px;
-    height: 80px;
+    width: 64px;
+    height: 64px;
   }
   .char-confirm-greeting {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
   }
   .char-confirm-sub {
-    font-size: 0.85rem;
+    font-size: 0.80rem;
+  }
+  .wizard-world-info-card {
+    padding: 6px 8px;
+    gap: 3px;
+    max-width: 380px;
+  }
+  .wizard-world-host-note {
+    display: none;
+  }
+  .wizard-nav-row {
+    margin-top: 2px;
   }
   .btn-start-game, .btn-wizard-nav {
-    padding: 7px 18px;
-    font-size: 0.88rem;
+    padding: 6px 16px;
+    font-size: 0.84rem;
   }
 }
 
