@@ -809,6 +809,9 @@ export class MagicManager {
       player.activateBearForm(60);
       player.artifact.charges--;
       player.artifact.cooldownTimer = player.artifact.cooldownMax || 2.0;
+      if (this.game && this.game.network && this.game.network.connected) {
+        this.game.network.sendAction('spell_bear', { x: player.x, y: player.y });
+      }
       this.updateHUD();
       return true;
     }
@@ -818,6 +821,9 @@ export class MagicManager {
       player.artifact.charges--;
       player.artifact.cooldownTimer = player.artifact.cooldownMax || 3.0;
       this.spawnPlasmaOrbSequence(player, combatManager);
+      if (this.game && this.game.network && this.game.network.connected) {
+        this.game.network.sendAction('spell_plasma', { x: player.x, y: player.y });
+      }
       this.updateHUD();
       return true;
     }
@@ -861,6 +867,19 @@ export class MagicManager {
     };
 
     this.activeSpells.push(spell);
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('spell_phoenix', {
+        x: spell.x,
+        y: spell.y,
+        dirX: spell.dirX,
+        dirY: spell.dirY,
+        angle: spell.angle,
+        speed: spell.speed,
+        damage: spell.damage,
+        dimension: spell.dimension
+      });
+    }
 
     // Casting shockwave & audio-visual particles
     if (combatManager) {
@@ -1025,7 +1044,100 @@ export class MagicManager {
       maxLife: 0.4
     });
 
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('spell_frost', {
+        x: px,
+        y: py,
+        angle: facingAngle,
+        dimension: curDim
+      });
+    }
+
     return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // REMOTE SPELL SPAWNERS (Multiplayer Synchronisation)
+  // ---------------------------------------------------------------------------
+  spawnRemoteFrostCone(data) {
+    const px = data.x;
+    const py = data.y;
+    const facingAngle = data.angle;
+    const range = 115;
+    const halfArc = 0.65;
+    const curDim = data.dimension ?? (this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD);
+
+    this.activeSpells.push({
+      id: `frost_remote_${Date.now()}`,
+      type: 'frost_cone',
+      dimension: curDim,
+      x: px,
+      y: py,
+      angle: facingAngle,
+      range,
+      arc: halfArc * 2,
+      animTime: 0,
+      life: 0.4,
+      maxLife: 0.4
+    });
+
+    const combatManager = this.game ? this.game.combat : null;
+    if (combatManager) {
+      combatManager.addFloatingText('❄️ EISNEBEL!', px, py - 26, '#38bdf8', 1.2);
+      for (let s = 0; s < 25; s++) {
+        const spreadAng = facingAngle + (Math.random() - 0.5) * (halfArc * 1.8);
+        const sp = Math.random() * 120 + 30;
+        combatManager.hitSparks.push({
+          x: px,
+          y: py,
+          vx: Math.cos(spreadAng) * sp,
+          vy: Math.sin(spreadAng) * sp,
+          color: Math.random() > 0.4 ? '#38bdf8' : (Math.random() > 0.5 ? '#bae6fd' : '#ffffff'),
+          size: Math.random() * 3 + 1.2,
+          life: 0.45,
+          maxLife: 0.45
+        });
+      }
+    }
+  }
+
+  spawnRemotePhoenix(data) {
+    const spell = {
+      id: `phoenix_remote_${Date.now()}_${Math.random()}`,
+      type: 'phoenix',
+      dimension: data.dimension ?? (this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD),
+      x: data.x,
+      y: data.y,
+      dirX: data.dirX,
+      dirY: data.dirY,
+      angle: data.angle,
+      width: 5 * TILE_SIZE,
+      speed: data.speed || 360,
+      damage: data.damage || 220,
+      hitEnemies: new Set(),
+      life: 14.0,
+      animTime: 0
+    };
+    this.activeSpells.push(spell);
+
+    const combatManager = this.game ? this.game.combat : null;
+    if (combatManager) {
+      combatManager.addFloatingText('🔥 PHÖNIX-STURM!', data.x, data.y - 28, '#ef4444', 1.2);
+      for (let i = 0; i < 25; i++) {
+        const ang = spell.angle + (Math.random() - 0.5) * 1.5;
+        const sp = Math.random() * 80 + 30;
+        combatManager.hitSparks.push({
+          x: data.x,
+          y: data.y,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp,
+          color: Math.random() > 0.4 ? '#ef4444' : '#f59e0b',
+          size: Math.random() * 3 + 2,
+          life: 0.6,
+          maxLife: 0.6
+        });
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

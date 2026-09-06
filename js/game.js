@@ -535,24 +535,49 @@ class Game {
       }, { passive: false });
     }
 
-    // 4. Minimap Collapse & Expand
+    // 4. Minimalist Minimap (Hold / Press to View Large Map)
     const minimapContainer = document.getElementById('minimap-container');
-    const minimapToggleBtn = document.getElementById('minimap-toggle-btn');
-    const minimapPillBtn = document.getElementById('minimap-pill-btn');
+    if (minimapContainer) {
+      let isHoldingMap = false;
 
-    if (minimapToggleBtn && minimapContainer && minimapPillBtn) {
-      minimapToggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        minimapContainer.classList.add('minimized');
-        minimapPillBtn.classList.remove('hidden');
-      });
+      const expandMap = (e) => {
+        if (e && e.cancelable) e.preventDefault();
+        isHoldingMap = true;
+        minimapContainer.classList.add('expanded');
+        minimapContainer.classList.add('pressing');
+      };
 
-      minimapPillBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        minimapContainer.classList.remove('minimized');
-        minimapPillBtn.classList.add('hidden');
-      });
+      const collapseMap = () => {
+        if (!isHoldingMap) return;
+        isHoldingMap = false;
+        minimapContainer.classList.remove('expanded');
+        minimapContainer.classList.remove('pressing');
+      };
+
+      // Pointer, Touch & Mouse Events
+      minimapContainer.addEventListener('pointerdown', expandMap);
+      window.addEventListener('pointerup', collapseMap);
+      window.addEventListener('pointercancel', collapseMap);
+
+      minimapContainer.addEventListener('touchstart', expandMap, { passive: false });
+      window.addEventListener('touchend', collapseMap, { passive: true });
+      window.addEventListener('touchcancel', collapseMap, { passive: true });
+
+      minimapContainer.addEventListener('mousedown', expandMap);
+      window.addEventListener('mouseup', collapseMap);
+
+      // Verhindere Kontextmenü bei langem Drücken
+      minimapContainer.addEventListener('contextmenu', (e) => e.preventDefault());
     }
+
+    // Automatischer Vollbild-Wechsel bei der ersten Benutzer-Geste
+    const triggerFsOnFirstGesture = () => {
+      this.requestGameFullscreen();
+      window.removeEventListener('pointerdown', triggerFsOnFirstGesture);
+      window.removeEventListener('keydown', triggerFsOnFirstGesture);
+    };
+    window.addEventListener('pointerdown', triggerFsOnFirstGesture, { once: true });
+    window.addEventListener('keydown', triggerFsOnFirstGesture, { once: true });
 
     // 5. Fullscreen Toggle (Vollbild)
     const fsBtn = document.getElementById('fullscreen-btn');
@@ -1346,8 +1371,8 @@ class Game {
       }
     }
 
-    // 13. LAYER 10: Minimap
-    this.minimap.render(this.player, this.camera);
+    // 13. LAYER 10: Minimap (inklusive Mitspieler auf der Karte)
+    this.minimap.render(this.player, this.camera, this.remotePlayers);
   }
 
   renderPaperGroundTiles(bounds, sunlight, sunset, night, t) {
@@ -4030,6 +4055,7 @@ class Game {
       this.charSelectModal.classList.add('hidden');
     }
     this.isCharacterSelectOpen = false;
+    this.requestGameFullscreen();
 
     // Auto-Connect to LAN-Multiplayer as Player
     if (this.network && !this.isHost) {
@@ -4147,12 +4173,29 @@ class Game {
   // ---------------------------------------------------------------------------
   // LAN MULTIPLAYER & SPECTATOR SYSTEMS
   // ---------------------------------------------------------------------------
+  requestGameFullscreen() {
+    const docEl = document.documentElement;
+    if (!docEl || document.fullscreenElement || document.webkitFullscreenElement) return;
+    try {
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch(() => {});
+      } else if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen();
+      } else if (docEl.mozRequestFullScreen) {
+        docEl.mozRequestFullScreen();
+      } else if (docEl.msRequestFullscreen) {
+        docEl.msRequestFullscreen();
+      }
+    } catch (e) {}
+  }
+
   startAsHost() {
     this.isHost = true;
     if (this.charSelectModal) {
       this.charSelectModal.classList.add('hidden');
     }
     this.isCharacterSelectOpen = false;
+    this.requestGameFullscreen();
 
     if (this.spectator) {
       this.spectator.activate();
@@ -4296,8 +4339,23 @@ class Game {
       if (rp) {
         rp.triggerAction(msg.action, msg);
       }
-      if (msg.action === 'arrow' && this.combat) {
+      if (msg.action === 'melee' && this.combat) {
+        const mx = (rp ? rp.x : msg.x) || 0;
+        const my = ((rp ? rp.y : msg.y) || 0) - 6;
+        this.combat.addSlashEffect(msg.subType || 'slash1', mx, my, msg.angle || 0, msg.radius || 24);
+      } else if (msg.action === 'arrow' && this.combat) {
         this.combat.fireArrow(msg.x, msg.y, msg.dirX, msg.dirY, msg.isCharged);
+      } else if (msg.action === 'dash' && this.combat) {
+        const dx = (rp ? rp.x : msg.x) || 0;
+        const dy = (rp ? rp.y : msg.y) || 0;
+        this.combat.addHitSparks(dx, dy + 2, 'rgba(240, 240, 245, 0.75)', 8, 40);
+      } else if (msg.action === 'shield_block' && this.combat) {
+        this.combat.addHitSparks(msg.x, msg.y, '#38bdf8', 14);
+        this.combat.addFloatingText('🛡️ GEBLOCKT!', msg.x, msg.y - 14, '#38bdf8');
+      } else if (msg.action === 'spell_phoenix' && this.magicManager) {
+        this.magicManager.spawnRemotePhoenix(msg);
+      } else if (msg.action === 'spell_frost' && this.magicManager) {
+        this.magicManager.spawnRemoteFrostCone(msg);
       }
     });
 

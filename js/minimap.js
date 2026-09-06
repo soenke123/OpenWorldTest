@@ -115,42 +115,7 @@ export class Minimap {
     this.renderStaticBackground();
   }
   updateHUD() {
-    const titleEl = document.getElementById('minimap-title');
-    const header = titleEl || document.getElementById('minimap-header');
-    const legend = document.getElementById('minimap-legend');
-    if (!header || !legend) return;
-
-    if (this.dimension === 'clouds') {
-      header.textContent = 'MINIMAP - 🌸 WOLKENREICH';
-      legend.innerHTML = `
-        <span class="legend-item"><i class="dot" style="background:#f472b6;"></i> Wolke</span>
-        <span class="legend-item"><i class="dot" style="background:#facc15;"></i> Brücke</span>
-        <span class="legend-item"><i class="dot" style="background:#130a24;"></i> Himmel</span>
-        <span class="legend-item"><i class="dot" style="background:#fbbf24;"></i> Schrein</span>
-      `;
-    } else if (this.dimension === 'caves') {
-      const cName = this.map.name || 'HÖHLENWELT';
-      header.textContent = `MINIMAP - 🪨 ${cName.toUpperCase()}`;
-      legend.innerHTML = `
-        <span class="legend-item"><i class="dot" style="background:#334155;"></i> Fels</span>
-        <span class="legend-item"><i class="dot" style="background:#0ea5e9;"></i> See</span>
-        <span class="legend-item"><i class="dot" style="background:#fef08a;"></i> Ausgang</span>
-        <span class="legend-item"><i class="dot" style="background:#f97316;"></i> Fackel</span>
-        <span class="legend-item"><i class="dot" style="background:#fbbf24;"></i> Schrein</span>
-      `;
-    } else {
-      header.textContent = 'MINIMAP - 🗺️ OBERWELT';
-      legend.innerHTML = `
-        <span class="legend-item"><i class="dot grass"></i> Gras</span>
-        <span class="legend-item"><i class="dot desert"></i> Wüste</span>
-        <span class="legend-item"><i class="dot snow"></i> Schnee</span>
-        <span class="legend-item"><i class="dot swamp"></i> Sumpf</span>
-        <span class="legend-item"><i class="dot void"></i> Leere</span>
-        <span class="legend-item"><i class="dot" style="background:#facc15;"></i> Schrein</span>
-        <span class="legend-item"><i class="dot" style="background:#38bdf8;"></i> Höhle</span>
-        <span class="legend-item"><i class="dot" style="background:#f472b6;"></i> Trampolin</span>
-      `;
-    }
+    // Header & Legende wurden für minimalistisches Design entfernt
   }
 
   renderStaticBackground() {
@@ -335,7 +300,7 @@ export class Minimap {
     }
   }
 
-  render(player, camera) {
+  render(player, camera, remotePlayers = null) {
     // 0. Clear canvas
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -354,30 +319,70 @@ export class Minimap {
     }
 
     // 4. Camera Viewport Box
-    const viewW = (camera.viewportWidth / camera.zoom) / TILE_SIZE * this.scaleX;
-    const viewH = (camera.viewportHeight / camera.zoom) / TILE_SIZE * this.scaleY;
-    const viewX = (camera.x / TILE_SIZE) * this.scaleX;
-    const viewY = (camera.y / TILE_SIZE) * this.scaleY;
+    if (camera) {
+      const viewW = (camera.viewportWidth / camera.zoom) / TILE_SIZE * this.scaleX;
+      const viewH = (camera.viewportHeight / camera.zoom) / TILE_SIZE * this.scaleY;
+      const viewX = (camera.x / TILE_SIZE) * this.scaleX;
+      const viewY = (camera.y / TILE_SIZE) * this.scaleY;
 
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    this.ctx.lineWidth = 1;
-    this.ctx.strokeRect(viewX, viewY, viewW, viewH);
+      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      this.ctx.lineWidth = 1;
+      this.ctx.strokeRect(viewX, viewY, viewW, viewH);
+    }
 
-    // 5. Player Marker
-    if (player) {
+    // 5. Remote Players (Andere Spieler auf der Minimap)
+    if (remotePlayers) {
+      const playersList = (remotePlayers instanceof Map) ? remotePlayers.values() : (Array.isArray(remotePlayers) ? remotePlayers : []);
+      for (const rp of playersList) {
+        if (!rp || rp.isDead) continue;
+        if (rp.dimension && rp.dimension !== this.dimension) continue;
+
+        const rx = (rp.x / TILE_SIZE) * this.scaleX;
+        const ry = (rp.y / TILE_SIZE) * this.scaleY;
+
+        // Leuchtender Cyan-Punkt mit Goldring
+        this.ctx.fillStyle = '#38bdf8';
+        this.ctx.beginPath();
+        this.ctx.arc(rx, ry, 3.2, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.strokeStyle = '#fbbf24';
+        this.ctx.lineWidth = 1.2;
+        this.ctx.beginPath();
+        this.ctx.arc(rx, ry, 4.4, 0, Math.PI * 2);
+        this.ctx.stroke();
+
+        if (rp.name) {
+          this.ctx.font = 'bold 8px system-ui, sans-serif';
+          this.ctx.fillStyle = '#f8fafc';
+          this.ctx.textAlign = 'center';
+          this.ctx.fillText(rp.name, rx, ry - 6);
+        }
+      }
+    }
+
+    // 6. Local Player Marker (Grüner Punkt mit weißer Umrandung)
+    if (player && !player.isDead) {
       const pX = (player.x / TILE_SIZE) * this.scaleX;
       const pY = (player.y / TILE_SIZE) * this.scaleY;
 
-      this.ctx.fillStyle = '#ff2a55';
+      this.ctx.fillStyle = '#22c55e';
       this.ctx.beginPath();
-      this.ctx.arc(pX, pY, 3, 0, Math.PI * 2);
+      this.ctx.arc(pX, pY, 3.5, 0, Math.PI * 2);
       this.ctx.fill();
 
       this.ctx.strokeStyle = '#ffffff';
-      this.ctx.lineWidth = 1;
+      this.ctx.lineWidth = 1.4;
       this.ctx.beginPath();
-      this.ctx.arc(pX, pY, 4, 0, Math.PI * 2);
+      this.ctx.arc(pX, pY, 4.8, 0, Math.PI * 2);
       this.ctx.stroke();
+
+      if (player.name) {
+        this.ctx.font = 'bold 8px system-ui, sans-serif';
+        this.ctx.fillStyle = '#4ade80';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(player.name, pX, pY - 6);
+      }
     }
   }
 }

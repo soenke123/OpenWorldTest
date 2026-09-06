@@ -175,25 +175,11 @@
         </a>
       </div>
 
-      <!-- Minimap Container & Toggle Button -->
+      <!-- Minimalist Corner Minimap (Press & hold to expand) -->
       <div id="minimap-wrapper">
-        <button id="minimap-pill-btn" class="top-nav-btn minimap-pill-btn hidden" title="Minimap aufklappen">
-          <span>🗺️ Karte</span>
-        </button>
-
-        <div id="minimap-container">
-          <div class="minimap-header" id="minimap-header">
-            <span id="minimap-title">MINIMAP</span>
-            <button id="minimap-toggle-btn" class="minimap-close-btn" title="Minimap minimieren">✕</button>
-          </div>
+        <div id="minimap-container" class="minimap-compact" title="Gedrückt halten für große Karte">
           <canvas id="minimapCanvas" width="200" height="150"></canvas>
-          <div class="minimap-legend" id="minimap-legend">
-            <span class="legend-item"><i class="dot grass"></i> Gras</span>
-            <span class="legend-item"><i class="dot desert"></i> Wüste</span>
-            <span class="legend-item"><i class="dot snow"></i> Schnee</span>
-            <span class="legend-item"><i class="dot swamp"></i> Sumpf</span>
-            <span class="legend-item"><i class="dot void"></i> Leere</span>
-          </div>
+          <span class="minimap-hint-badge">🗺️</span>
         </div>
       </div>
     </div>

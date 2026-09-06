@@ -241,6 +241,15 @@ export class Player {
     this.invulnTimer = 1.2;
     this.isMoving = false;
     this.currentSpeed = 0;
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('teleport', {
+        originX: this.x,
+        originY: this.y,
+        targetX: safePos.x,
+        targetY: safePos.y
+      });
+    }
   }
 
   getTeleportBlackoutAlpha() {
@@ -567,6 +576,15 @@ export class Player {
         maxLife: 0.28
       });
     }
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('dash', {
+        x: this.x,
+        y: this.y,
+        angle: Math.atan2(dirY, dirX),
+        isBear: Boolean(this.isBearForm)
+      });
+    }
   }
 
   startMelee(targetAngle = null) {
@@ -612,6 +630,15 @@ export class Player {
         damageMultiplier: isBear ? 2.0 : 1.0,
         knockbackMultiplier: isBear ? 1.5 : 1.0,
         knockback: COMBAT_CONFIG.SPIN_KNOCKBACK * (isBear ? 1.5 : 1.0)
+      });
+    }
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('melee', {
+        subType: slashType,
+        angle: 0,
+        radius,
+        isBear
       });
     }
   }
@@ -725,6 +752,17 @@ export class Player {
         });
       }
     }
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      const effectRadius = (nextStep === 3) ? COMBAT_CONFIG.COMBO_THRUST_RANGE * (isBear ? 1.2 : 1.0) : COMBAT_CONFIG.COMBO_SLASH_RADIUS * (isBear ? 0.8 : 1.0);
+      this.game.network.sendAction('melee', {
+        subType: slashType,
+        angle,
+        direction: this.direction,
+        radius: effectRadius,
+        isBear
+      });
+    }
   }
 
   setShield(isDown) {
@@ -740,6 +778,12 @@ export class Player {
       this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
     } else if (wasActive && !this.shield.broken) {
       this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
+    }
+
+    if (this.game && this.game.network && this.game.network.connected && wasActive !== this.shield.active) {
+      this.game.network.sendAction('shield', {
+        active: this.shield.active
+      });
     }
   }
 
@@ -759,6 +803,16 @@ export class Player {
 
     if (this.game && this.game.combat) {
       this.game.combat.fireArrow(this.x, this.y - 6, dirX, dirY, isCharged);
+    }
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('arrow', {
+        x: this.x,
+        y: this.y - 6,
+        dirX,
+        dirY,
+        isCharged: Boolean(isCharged)
+      });
     }
   }
 
@@ -1678,6 +1732,9 @@ export class Player {
         this.game.combat.addHitSparks(this.x, this.y, '#38bdf8', 14);
         this.game.combat.addFloatingText('🛡️ GEBLOCKT!', this.x, this.y - 18, '#38bdf8');
       }
+      if (this.game && this.game.network && this.game.network.connected) {
+        this.game.network.sendAction('shield_block', { x: this.x, y: this.y - 6 });
+      }
       if (this.shield.energy <= 0) {
         this.shield.broken = true;
         this.shield.stunTimer = COMBAT_CONFIG.SHIELD_BREAK_STUN || 1.2;
@@ -1739,6 +1796,9 @@ export class Player {
       if (this.game && this.game.combat) {
         this.game.combat.addHitSparks(this.x, this.y, '#38bdf8', 14);
         this.game.combat.addFloatingText('🛡️ GEBLOCKT!', this.x, this.y - 18, '#38bdf8');
+      }
+      if (this.game && this.game.network && this.game.network.connected) {
+        this.game.network.sendAction('shield_block', { x: this.x, y: this.y - 6 });
       }
       if (this.shield.energy <= 0) {
         this.shield.broken = true;

@@ -9200,6 +9200,9 @@ class MagicManager {
       player.activateBearForm(60);
       player.artifact.charges--;
       player.artifact.cooldownTimer = player.artifact.cooldownMax || 2.0;
+      if (this.game && this.game.network && this.game.network.connected) {
+        this.game.network.sendAction('spell_bear', { x: player.x, y: player.y });
+      }
       this.updateHUD();
       return true;
     }
@@ -9209,6 +9212,9 @@ class MagicManager {
       player.artifact.charges--;
       player.artifact.cooldownTimer = player.artifact.cooldownMax || 3.0;
       this.spawnPlasmaOrbSequence(player, combatManager);
+      if (this.game && this.game.network && this.game.network.connected) {
+        this.game.network.sendAction('spell_plasma', { x: player.x, y: player.y });
+      }
       this.updateHUD();
       return true;
     }
@@ -9252,6 +9258,19 @@ class MagicManager {
     };
 
     this.activeSpells.push(spell);
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('spell_phoenix', {
+        x: spell.x,
+        y: spell.y,
+        dirX: spell.dirX,
+        dirY: spell.dirY,
+        angle: spell.angle,
+        speed: spell.speed,
+        damage: spell.damage,
+        dimension: spell.dimension
+      });
+    }
 
     // Casting shockwave & audio-visual particles
     if (combatManager) {
@@ -9416,7 +9435,100 @@ class MagicManager {
       maxLife: 0.4
     });
 
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('spell_frost', {
+        x: px,
+        y: py,
+        angle: facingAngle,
+        dimension: curDim
+      });
+    }
+
     return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // REMOTE SPELL SPAWNERS (Multiplayer Synchronisation)
+  // ---------------------------------------------------------------------------
+  spawnRemoteFrostCone(data) {
+    const px = data.x;
+    const py = data.y;
+    const facingAngle = data.angle;
+    const range = 115;
+    const halfArc = 0.65;
+    const curDim = data.dimension ?? (this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD);
+
+    this.activeSpells.push({
+      id: `frost_remote_${Date.now()}`,
+      type: 'frost_cone',
+      dimension: curDim,
+      x: px,
+      y: py,
+      angle: facingAngle,
+      range,
+      arc: halfArc * 2,
+      animTime: 0,
+      life: 0.4,
+      maxLife: 0.4
+    });
+
+    const combatManager = this.game ? this.game.combat : null;
+    if (combatManager) {
+      combatManager.addFloatingText('❄️ EISNEBEL!', px, py - 26, '#38bdf8', 1.2);
+      for (let s = 0; s < 25; s++) {
+        const spreadAng = facingAngle + (Math.random() - 0.5) * (halfArc * 1.8);
+        const sp = Math.random() * 120 + 30;
+        combatManager.hitSparks.push({
+          x: px,
+          y: py,
+          vx: Math.cos(spreadAng) * sp,
+          vy: Math.sin(spreadAng) * sp,
+          color: Math.random() > 0.4 ? '#38bdf8' : (Math.random() > 0.5 ? '#bae6fd' : '#ffffff'),
+          size: Math.random() * 3 + 1.2,
+          life: 0.45,
+          maxLife: 0.45
+        });
+      }
+    }
+  }
+
+  spawnRemotePhoenix(data) {
+    const spell = {
+      id: `phoenix_remote_${Date.now()}_${Math.random()}`,
+      type: 'phoenix',
+      dimension: data.dimension ?? (this.game ? this.game.currentDimension : DIMENSIONS.OVERWORLD),
+      x: data.x,
+      y: data.y,
+      dirX: data.dirX,
+      dirY: data.dirY,
+      angle: data.angle,
+      width: 5 * TILE_SIZE,
+      speed: data.speed || 360,
+      damage: data.damage || 220,
+      hitEnemies: new Set(),
+      life: 14.0,
+      animTime: 0
+    };
+    this.activeSpells.push(spell);
+
+    const combatManager = this.game ? this.game.combat : null;
+    if (combatManager) {
+      combatManager.addFloatingText('🔥 PHÖNIX-STURM!', data.x, data.y - 28, '#ef4444', 1.2);
+      for (let i = 0; i < 25; i++) {
+        const ang = spell.angle + (Math.random() - 0.5) * 1.5;
+        const sp = Math.random() * 80 + 30;
+        combatManager.hitSparks.push({
+          x: data.x,
+          y: data.y,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp,
+          color: Math.random() > 0.4 ? '#ef4444' : '#f59e0b',
+          size: Math.random() * 3 + 2,
+          life: 0.6,
+          maxLife: 0.6
+        });
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -12723,6 +12835,15 @@ class Player {
     this.invulnTimer = 1.2;
     this.isMoving = false;
     this.currentSpeed = 0;
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('teleport', {
+        originX: this.x,
+        originY: this.y,
+        targetX: safePos.x,
+        targetY: safePos.y
+      });
+    }
   }
 
   getTeleportBlackoutAlpha() {
@@ -13049,6 +13170,15 @@ class Player {
         maxLife: 0.28
       });
     }
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('dash', {
+        x: this.x,
+        y: this.y,
+        angle: Math.atan2(dirY, dirX),
+        isBear: Boolean(this.isBearForm)
+      });
+    }
   }
 
   startMelee(targetAngle = null) {
@@ -13094,6 +13224,15 @@ class Player {
         damageMultiplier: isBear ? 2.0 : 1.0,
         knockbackMultiplier: isBear ? 1.5 : 1.0,
         knockback: COMBAT_CONFIG.SPIN_KNOCKBACK * (isBear ? 1.5 : 1.0)
+      });
+    }
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('melee', {
+        subType: slashType,
+        angle: 0,
+        radius,
+        isBear
       });
     }
   }
@@ -13207,6 +13346,17 @@ class Player {
         });
       }
     }
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      const effectRadius = (nextStep === 3) ? COMBAT_CONFIG.COMBO_THRUST_RANGE * (isBear ? 1.2 : 1.0) : COMBAT_CONFIG.COMBO_SLASH_RADIUS * (isBear ? 0.8 : 1.0);
+      this.game.network.sendAction('melee', {
+        subType: slashType,
+        angle,
+        direction: this.direction,
+        radius: effectRadius,
+        isBear
+      });
+    }
   }
 
   setShield(isDown) {
@@ -13222,6 +13372,12 @@ class Player {
       this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
     } else if (wasActive && !this.shield.broken) {
       this.shield.rechargeDelay = COMBAT_CONFIG.SHIELD_RECHARGE_DELAY;
+    }
+
+    if (this.game && this.game.network && this.game.network.connected && wasActive !== this.shield.active) {
+      this.game.network.sendAction('shield', {
+        active: this.shield.active
+      });
     }
   }
 
@@ -13241,6 +13397,16 @@ class Player {
 
     if (this.game && this.game.combat) {
       this.game.combat.fireArrow(this.x, this.y - 6, dirX, dirY, isCharged);
+    }
+
+    if (this.game && this.game.network && this.game.network.connected) {
+      this.game.network.sendAction('arrow', {
+        x: this.x,
+        y: this.y - 6,
+        dirX,
+        dirY,
+        isCharged: Boolean(isCharged)
+      });
     }
   }
 
@@ -14160,6 +14326,9 @@ class Player {
         this.game.combat.addHitSparks(this.x, this.y, '#38bdf8', 14);
         this.game.combat.addFloatingText('🛡️ GEBLOCKT!', this.x, this.y - 18, '#38bdf8');
       }
+      if (this.game && this.game.network && this.game.network.connected) {
+        this.game.network.sendAction('shield_block', { x: this.x, y: this.y - 6 });
+      }
       if (this.shield.energy <= 0) {
         this.shield.broken = true;
         this.shield.stunTimer = COMBAT_CONFIG.SHIELD_BREAK_STUN || 1.2;
@@ -14221,6 +14390,9 @@ class Player {
       if (this.game && this.game.combat) {
         this.game.combat.addHitSparks(this.x, this.y, '#38bdf8', 14);
         this.game.combat.addFloatingText('🛡️ GEBLOCKT!', this.x, this.y - 18, '#38bdf8');
+      }
+      if (this.game && this.game.network && this.game.network.connected) {
+        this.game.network.sendAction('shield_block', { x: this.x, y: this.y - 6 });
       }
       if (this.shield.energy <= 0) {
         this.shield.broken = true;
@@ -15592,42 +15764,7 @@ class Minimap {
     this.renderStaticBackground();
   }
   updateHUD() {
-    const titleEl = document.getElementById('minimap-title');
-    const header = titleEl || document.getElementById('minimap-header');
-    const legend = document.getElementById('minimap-legend');
-    if (!header || !legend) return;
-
-    if (this.dimension === 'clouds') {
-      header.textContent = 'MINIMAP - 🌸 WOLKENREICH';
-      legend.innerHTML = `
-        <span class="legend-item"><i class="dot" style="background:#f472b6;"></i> Wolke</span>
-        <span class="legend-item"><i class="dot" style="background:#facc15;"></i> Brücke</span>
-        <span class="legend-item"><i class="dot" style="background:#130a24;"></i> Himmel</span>
-        <span class="legend-item"><i class="dot" style="background:#fbbf24;"></i> Schrein</span>
-      `;
-    } else if (this.dimension === 'caves') {
-      const cName = this.map.name || 'HÖHLENWELT';
-      header.textContent = `MINIMAP - 🪨 ${cName.toUpperCase()}`;
-      legend.innerHTML = `
-        <span class="legend-item"><i class="dot" style="background:#334155;"></i> Fels</span>
-        <span class="legend-item"><i class="dot" style="background:#0ea5e9;"></i> See</span>
-        <span class="legend-item"><i class="dot" style="background:#fef08a;"></i> Ausgang</span>
-        <span class="legend-item"><i class="dot" style="background:#f97316;"></i> Fackel</span>
-        <span class="legend-item"><i class="dot" style="background:#fbbf24;"></i> Schrein</span>
-      `;
-    } else {
-      header.textContent = 'MINIMAP - 🗺️ OBERWELT';
-      legend.innerHTML = `
-        <span class="legend-item"><i class="dot grass"></i> Gras</span>
-        <span class="legend-item"><i class="dot desert"></i> Wüste</span>
-        <span class="legend-item"><i class="dot snow"></i> Schnee</span>
-        <span class="legend-item"><i class="dot swamp"></i> Sumpf</span>
-        <span class="legend-item"><i class="dot void"></i> Leere</span>
-        <span class="legend-item"><i class="dot" style="background:#facc15;"></i> Schrein</span>
-        <span class="legend-item"><i class="dot" style="background:#38bdf8;"></i> Höhle</span>
-        <span class="legend-item"><i class="dot" style="background:#f472b6;"></i> Trampolin</span>
-      `;
-    }
+    // Header & Legende wurden für minimalistisches Design entfernt
   }
 
   renderStaticBackground() {
@@ -15812,7 +15949,7 @@ class Minimap {
     }
   }
 
-  render(player, camera) {
+  render(player, camera, remotePlayers = null) {
     // 0. Clear canvas
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -15831,30 +15968,70 @@ class Minimap {
     }
 
     // 4. Camera Viewport Box
-    const viewW = (camera.viewportWidth / camera.zoom) / TILE_SIZE * this.scaleX;
-    const viewH = (camera.viewportHeight / camera.zoom) / TILE_SIZE * this.scaleY;
-    const viewX = (camera.x / TILE_SIZE) * this.scaleX;
-    const viewY = (camera.y / TILE_SIZE) * this.scaleY;
+    if (camera) {
+      const viewW = (camera.viewportWidth / camera.zoom) / TILE_SIZE * this.scaleX;
+      const viewH = (camera.viewportHeight / camera.zoom) / TILE_SIZE * this.scaleY;
+      const viewX = (camera.x / TILE_SIZE) * this.scaleX;
+      const viewY = (camera.y / TILE_SIZE) * this.scaleY;
 
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-    this.ctx.lineWidth = 1;
-    this.ctx.strokeRect(viewX, viewY, viewW, viewH);
+      this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      this.ctx.lineWidth = 1;
+      this.ctx.strokeRect(viewX, viewY, viewW, viewH);
+    }
 
-    // 5. Player Marker
-    if (player) {
+    // 5. Remote Players (Andere Spieler auf der Minimap)
+    if (remotePlayers) {
+      const playersList = (remotePlayers instanceof Map) ? remotePlayers.values() : (Array.isArray(remotePlayers) ? remotePlayers : []);
+      for (const rp of playersList) {
+        if (!rp || rp.isDead) continue;
+        if (rp.dimension && rp.dimension !== this.dimension) continue;
+
+        const rx = (rp.x / TILE_SIZE) * this.scaleX;
+        const ry = (rp.y / TILE_SIZE) * this.scaleY;
+
+        // Leuchtender Cyan-Punkt mit Goldring
+        this.ctx.fillStyle = '#38bdf8';
+        this.ctx.beginPath();
+        this.ctx.arc(rx, ry, 3.2, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.strokeStyle = '#fbbf24';
+        this.ctx.lineWidth = 1.2;
+        this.ctx.beginPath();
+        this.ctx.arc(rx, ry, 4.4, 0, Math.PI * 2);
+        this.ctx.stroke();
+
+        if (rp.name) {
+          this.ctx.font = 'bold 8px system-ui, sans-serif';
+          this.ctx.fillStyle = '#f8fafc';
+          this.ctx.textAlign = 'center';
+          this.ctx.fillText(rp.name, rx, ry - 6);
+        }
+      }
+    }
+
+    // 6. Local Player Marker (Grüner Punkt mit weißer Umrandung)
+    if (player && !player.isDead) {
       const pX = (player.x / TILE_SIZE) * this.scaleX;
       const pY = (player.y / TILE_SIZE) * this.scaleY;
 
-      this.ctx.fillStyle = '#ff2a55';
+      this.ctx.fillStyle = '#22c55e';
       this.ctx.beginPath();
-      this.ctx.arc(pX, pY, 3, 0, Math.PI * 2);
+      this.ctx.arc(pX, pY, 3.5, 0, Math.PI * 2);
       this.ctx.fill();
 
       this.ctx.strokeStyle = '#ffffff';
-      this.ctx.lineWidth = 1;
+      this.ctx.lineWidth = 1.4;
       this.ctx.beginPath();
-      this.ctx.arc(pX, pY, 4, 0, Math.PI * 2);
+      this.ctx.arc(pX, pY, 4.8, 0, Math.PI * 2);
       this.ctx.stroke();
+
+      if (player.name) {
+        this.ctx.font = 'bold 8px system-ui, sans-serif';
+        this.ctx.fillStyle = '#4ade80';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(player.name, pX, pY - 6);
+      }
     }
   }
 }
@@ -16332,6 +16509,21 @@ class RemotePlayer {
     // Melee attack visual effect
     this.swingAnim = 0;
     this.swingType = null;
+    this.swingAngle = 0;
+
+    // Bow attack visual effect
+    this.bowAnim = 0;
+    this.bowAngle = 0;
+
+    // Dash visual effect & ghost trails
+    this.dashAnim = 0;
+    this.dashAngle = 0;
+    this.dashGhosts = [];
+
+    // Shield block & spells
+    this.shieldBlockTimer = 0;
+    this.plasmaTimer = 0;
+    this.teleportSequence = null;
   }
 
   updateFromNetwork(data) {
@@ -16356,8 +16548,8 @@ class RemotePlayer {
     if (typeof data.deaths === 'number') this.deaths = data.deaths;
     if (typeof data.isDead === 'boolean') this.isDead = data.isDead;
 
-    this.shieldActive = Boolean(data.shieldActive);
-    this.isBearForm = Boolean(data.isBearForm);
+    if (typeof data.shieldActive === 'boolean') this.shieldActive = data.shieldActive;
+    if (typeof data.isBearForm === 'boolean') this.isBearForm = data.isBearForm;
   }
 
   update(dt) {
@@ -16383,16 +16575,126 @@ class RemotePlayer {
 
     // Swing animation decay
     if (this.swingAnim > 0) {
-      this.swingAnim = Math.max(0, this.swingAnim - dt * 4);
+      this.swingAnim = Math.max(0, this.swingAnim - dt * 4.2);
+    }
+
+    // Bow animation decay
+    if (this.bowAnim > 0) {
+      this.bowAnim = Math.max(0, this.bowAnim - dt * 2.5);
+    }
+
+    // Dash animation decay and ghost spawning
+    if (this.dashAnim > 0) {
+      this.dashAnim = Math.max(0, this.dashAnim - dt);
+      if (Math.random() < 0.7) {
+        this.dashGhosts.push({
+          x: this.x,
+          y: this.y,
+          direction: this.direction,
+          alpha: 0.65,
+          isBear: this.isBearForm
+        });
+      }
+    }
+
+    // Dash ghost fading
+    for (let g = this.dashGhosts.length - 1; g >= 0; g--) {
+      this.dashGhosts[g].alpha -= dt * 3.5;
+      if (this.dashGhosts[g].alpha <= 0) {
+        this.dashGhosts.splice(g, 1);
+      }
+    }
+
+    // Shield block timer decay
+    if (this.shieldBlockTimer > 0) {
+      this.shieldBlockTimer = Math.max(0, this.shieldBlockTimer - dt);
+    }
+
+    // Plasma timer decay
+    if (this.plasmaTimer > 0) {
+      this.plasmaTimer = Math.max(0, this.plasmaTimer - dt);
+    }
+
+    // Teleport sequence
+    if (this.teleportSequence) {
+      this.teleportSequence.timer += dt;
+      this.teleportSequence.vortexAngle += dt * 8;
+      if (this.teleportSequence.phase === 'sink') {
+        if (this.teleportSequence.timer >= 0.35) {
+          this.teleportSequence.phase = 'emerge';
+          this.teleportSequence.timer = 0;
+          this.x = this.teleportSequence.targetX;
+          this.y = this.teleportSequence.targetY;
+          this.targetX = this.x;
+          this.targetY = this.y;
+        }
+      } else if (this.teleportSequence.phase === 'emerge') {
+        if (this.teleportSequence.timer >= 0.35) {
+          this.teleportSequence = null;
+        }
+      }
     }
   }
 
   triggerAction(action, data = {}) {
     if (action === 'melee') {
       this.swingAnim = 1.0;
-      this.swingType = data.subType || 'slash';
+      this.swingType = data.subType || 'slash1';
+      this.swingAngle = (typeof data.angle === 'number') ? data.angle : this.getFacingAngle();
       if (data.direction) this.direction = data.direction;
+      if (typeof data.isBear === 'boolean') this.isBearForm = data.isBear;
+    } else if (action === 'arrow') {
+      this.bowAnim = 0.45;
+      this.bowAngle = Math.atan2(data.dirY || 0, data.dirX || 1);
+    } else if (action === 'dash') {
+      this.dashAnim = 0.28;
+      this.dashAngle = (typeof data.angle === 'number') ? data.angle : this.getFacingAngle();
+      if (typeof data.isBear === 'boolean') this.isBearForm = data.isBear;
+      this.dashGhosts.push({
+        x: this.x,
+        y: this.y,
+        direction: this.direction,
+        alpha: 0.75,
+        isBear: this.isBearForm
+      });
+    } else if (action === 'shield') {
+      this.shieldActive = Boolean(data.active);
+    } else if (action === 'shield_block') {
+      this.shieldBlockTimer = 0.28;
+    } else if (action === 'spell_bear') {
+      this.isBearForm = true;
+    } else if (action === 'spell_plasma') {
+      this.plasmaTimer = 2.0;
+    } else if (action === 'teleport') {
+      this.teleportSequence = {
+        phase: 'sink',
+        timer: 0,
+        originX: data.originX || this.x,
+        originY: data.originY || this.y,
+        targetX: data.targetX,
+        targetY: data.targetY,
+        vortexAngle: 0
+      };
     }
+  }
+
+  getFacingAngle() {
+    switch (this.direction) {
+      case 'up': return -Math.PI / 2;
+      case 'down': return Math.PI / 2;
+      case 'left': return Math.PI;
+      case 'right': return 0;
+      case 'up-left': return -Math.PI * 0.75;
+      case 'up-right': return -Math.PI * 0.25;
+      case 'down-left': return Math.PI * 0.75;
+      case 'down-right': return Math.PI * 0.25;
+      default: return 0;
+    }
+  }
+
+  getFacingVector() {
+    const angle = this.getFacingAngle();
+    return { x: Math.cos(angle), y: Math.sin(angle) };
   }
 
   render(ctx, animTime, nightFactor = 0) {
@@ -16403,25 +16705,79 @@ class RemotePlayer {
 
     ctx.save();
 
+    // 0. Dash Ghost Trails
+    for (const ghost of this.dashGhosts) {
+      ctx.save();
+      ctx.globalAlpha = ghost.alpha * 0.75;
+      const gx = Math.round(ghost.x);
+      const gy = Math.round(ghost.y - this.visualElevation * ELEVATION_PIXEL_OFFSET);
+      if (ghost.isBear) {
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.4)';
+        ctx.beginPath();
+        ctx.ellipse(gx, gy - 8, 14, 10, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        const skinDef = CHARACTERS_MAP[this.skinId] || CHARACTERS_MAP['ren_twilight'];
+        if (skinDef && typeof skinDef.render === 'function') {
+          skinDef.render(ctx, gx, gy, animTime, ghost.direction, true, 0);
+        }
+      }
+      ctx.restore();
+    }
+
+    // 0b. Teleportation Void Vortex
+    if (this.teleportSequence) {
+      ctx.save();
+      const seq = this.teleportSequence;
+      const vScale = seq.phase === 'sink'
+        ? Math.min(1.0, seq.timer / 0.18)
+        : Math.max(0, 1.0 - seq.timer / 0.35);
+      const vortexRadius = 22 * vScale;
+      ctx.translate(px, py - 4);
+      ctx.rotate(seq.vortexAngle);
+
+      const grad = ctx.createRadialGradient(0, 0, 2, 0, 0, vortexRadius);
+      grad.addColorStop(0, '#090514');
+      grad.addColorStop(0.65, 'rgba(88, 28, 135, 0.85)');
+      grad.addColorStop(1, 'rgba(168, 85, 247, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(0, 0, vortexRadius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#c084fc';
+      ctx.lineWidth = 1.6;
+      for (let arm = 0; arm < 3; arm++) {
+        ctx.beginPath();
+        const startA = (arm * Math.PI * 2) / 3;
+        ctx.arc(0, 0, vortexRadius * 0.75, startA, startA + 1.2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
     // 1. Weicher Papierschatten unter den Füßen
     ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
     ctx.beginPath();
-    ctx.ellipse(px, py + 5, 8, 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(px, py + 5, this.isBearForm ? 12 : 8, this.isBearForm ? 5 : 4, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 2. Charakter Skin rendern
-    const skinDef = CHARACTERS_MAP[this.skinId] || CHARACTERS_MAP['ren_twilight'];
-    if (skinDef && typeof skinDef.render === 'function') {
-      skinDef.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+    // 2. Charakter Skin oder Druiden-Bärengestalt
+    if (this.isBearForm) {
+      this.renderBearForm(ctx, px, py, animTime);
     } else {
-      // Fallback
-      ctx.fillStyle = '#60a5fa';
-      ctx.beginPath();
-      ctx.arc(px, py, 7, 0, Math.PI * 2);
-      ctx.fill();
+      const skinDef = CHARACTERS_MAP[this.skinId] || CHARACTERS_MAP['ren_twilight'];
+      if (skinDef && typeof skinDef.render === 'function') {
+        skinDef.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+      } else {
+        ctx.fillStyle = '#60a5fa';
+        ctx.beginPath();
+        ctx.arc(px, py, 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
-    // 3. Schild-Blase (wenn aktiv)
+    // 3. Schild-Blase (wenn aktiv) & Schild-Block Blitz
     if (this.shieldActive) {
       ctx.save();
       const pulse = 1.0 + Math.sin(animTime * 10) * 0.06;
@@ -16429,32 +16785,110 @@ class RemotePlayer {
       ctx.lineWidth = 1.8;
       ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
       ctx.beginPath();
-      ctx.arc(px, py - 4, 15 * pulse, 0, Math.PI * 2);
+      ctx.arc(px, py - 4, (this.isBearForm ? 20 : 15) * pulse, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
     }
 
-    // 4. Melee Schwung-Visual
-    if (this.swingAnim > 0) {
+    if (this.shieldBlockTimer > 0) {
       ctx.save();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-      ctx.lineWidth = 2.0;
+      const flareRatio = 1.0 - (this.shieldBlockTimer / 0.28);
+      ctx.strokeStyle = `rgba(56, 189, 248, ${1.0 - flareRatio})`;
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
-      let arcStart = 0;
-      let arcEnd = Math.PI;
-      if (this.direction === 'right') { arcStart = -Math.PI / 3; arcEnd = Math.PI / 3; }
-      else if (this.direction === 'left') { arcStart = Math.PI * 2/3; arcEnd = Math.PI * 4/3; }
-      else if (this.direction === 'up') { arcStart = -Math.PI * 5/6; arcEnd = -Math.PI / 6; }
-      else { arcStart = Math.PI / 6; arcEnd = Math.PI * 5/6; }
-
-      ctx.arc(px, py - 3, 16, arcStart, arcEnd);
+      ctx.arc(px, py - 4, 14 + flareRatio * 18, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
 
-    // 5. Nameplate & Level unter dem Charakter
-    const baseUnderY = py + 9;
+    // 4. Melee Schwung-Visual (Schwert, Stich, Spin & Bärenkrallen)
+    if (this.swingAnim > 0) {
+      ctx.save();
+      const isSpin = this.swingType === 'spin' || this.swingType === 'bear_spin';
+      const isThrust = this.swingType === 'thrust' || this.swingType === 'bear_thrust';
+      const isBear = this.isBearForm || (this.swingType && this.swingType.startsWith('bear_'));
+      const ang = this.swingAngle;
+
+      if (isBear) {
+        ctx.strokeStyle = '#22c55e';
+        ctx.lineWidth = 2.8;
+        ctx.beginPath();
+        if (isSpin) {
+          ctx.arc(px, py - 6, 26 * (1.0 - this.swingAnim * 0.25), 0, Math.PI * 2);
+        } else if (isThrust) {
+          const tx = Math.cos(ang) * 26;
+          const ty = Math.sin(ang) * 26;
+          ctx.moveTo(px, py - 6);
+          ctx.lineTo(px + tx, py - 6 + ty);
+        } else {
+          ctx.arc(px, py - 6, 22, ang - 0.75, ang + 0.75);
+        }
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = isSpin ? '#38bdf8' : '#f8fafc';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        if (isSpin) {
+          ctx.arc(px, py - 6, 24 * (1.0 - this.swingAnim * 0.25), 0, Math.PI * 2);
+        } else if (isThrust) {
+          const tx = Math.cos(ang) * 24;
+          const ty = Math.sin(ang) * 24;
+          ctx.moveTo(px, py - 6);
+          ctx.lineTo(px + tx, py - 6 + ty);
+        } else {
+          ctx.arc(px, py - 6, 18, ang - 0.7, ang + 0.7);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 5. Bogen-Zielen & Abschuss-Visual
+    if (this.bowAnim > 0 && !this.isBearForm) {
+      ctx.save();
+      ctx.translate(px, py - 6);
+      ctx.rotate(this.bowAngle);
+      ctx.strokeStyle = '#d97706';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(6, 0, 7, -Math.PI / 2, Math.PI / 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 1.0;
+      ctx.beginPath();
+      ctx.moveTo(6, -7);
+      ctx.lineTo(2, 0);
+      ctx.lineTo(6, 7);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 6. Plasmakugeln im Orbit
+    if (this.plasmaTimer > 0) {
+      ctx.save();
+      const orbDist = 20;
+      for (let i = 0; i < 4; i++) {
+        const orbAngle = animTime * 6 + (i * Math.PI) / 2;
+        const ox = px + Math.cos(orbAngle) * orbDist;
+        const oy = (py - 6) + Math.sin(orbAngle) * (orbDist * 0.65);
+
+        ctx.fillStyle = '#ec4899';
+        ctx.beginPath();
+        ctx.arc(ox, oy, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#fdf2f8';
+        ctx.beginPath();
+        ctx.arc(ox, oy, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 7. Nameplate & Level unter dem Charakter
+    const baseUnderY = py + (this.isBearForm ? 12 : 9);
     if (this.name) {
       ctx.save();
       ctx.font = 'bold 8.5px system-ui, -apple-system, sans-serif';
@@ -16484,7 +16918,7 @@ class RemotePlayer {
       ctx.restore();
     }
 
-    // 6. Lebensbalken direkt unter dem Namen (nur wenn verletzt)
+    // 8. Lebensbalken direkt unter dem Namen (nur wenn verletzt)
     if (this.hp < this.maxHp && this.hp > 0) {
       const barW = 24;
       const barH = 3.5;
@@ -16498,6 +16932,120 @@ class RemotePlayer {
       ctx.fillStyle = hpPct > 0.5 ? '#22c55e' : (hpPct > 0.25 ? '#f59e0b' : '#ef4444');
       ctx.fillRect(barX, barY, barW * hpPct, barH);
       ctx.restore();
+    }
+
+    ctx.restore();
+  }
+
+  renderBearForm(ctx, px, py, animTime) {
+    const vec = this.getFacingVector();
+    const dx = vec.x;
+    const dy = vec.y;
+    const waddle = this.isMoving ? Math.sin(animTime * 9) * 2 : Math.sin(animTime * 2.5) * 0.5;
+    const footStep = this.isMoving ? Math.cos(animTime * 9) * 2.5 : 0;
+
+    const drawBox = (x, y, w, h, rad) => {
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(x, y, w, h, rad);
+      } else {
+        ctx.rect(x, y, w, h);
+      }
+    };
+
+    ctx.save();
+
+    // 1. Druidic Nature Aura Ring (Forest Emerald Glow)
+    const auraPulse = 1.0 + Math.sin(animTime * 4) * 0.12;
+    if (typeof ctx.createRadialGradient === 'function') {
+      const auraGrad = ctx.createRadialGradient(px, py - 8, 4, px, py - 8, 22 * auraPulse);
+      auraGrad.addColorStop(0, 'rgba(34, 197, 94, 0.35)');
+      auraGrad.addColorStop(0.7, 'rgba(22, 163, 74, 0.15)');
+      auraGrad.addColorStop(1, 'rgba(22, 101, 52, 0)');
+      ctx.fillStyle = auraGrad;
+      ctx.beginPath();
+      ctx.arc(px, py - 8, 22 * auraPulse, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 2. Back Paws
+    const hindY = py - 2;
+    ctx.fillStyle = '#2e1507';
+    ctx.beginPath();
+    ctx.ellipse(px - 7, hindY - footStep * 0.5, 4.2, 3, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(px + 7, hindY + footStep * 0.5, 4.2, 3, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 3. Massive Bear Torso
+    const bodyY = py - 13 + waddle;
+    ctx.fillStyle = '#3d1d0a';
+    ctx.beginPath();
+    drawBox(px - 11, bodyY - 11, 22, 20, 7);
+    ctx.fill();
+
+    ctx.fillStyle = '#552a10';
+    ctx.beginPath();
+    drawBox(px - 10, bodyY - 10, 20, 18, 6);
+    ctx.fill();
+
+    // 4. Chest Crest
+    ctx.fillStyle = '#d4a373';
+    ctx.beginPath();
+    ctx.moveTo(px, bodyY - 7);
+    ctx.lineTo(px + 6 + dx * 1.5, bodyY + 4 + dy);
+    ctx.lineTo(px, bodyY + 7 + dy);
+    ctx.lineTo(px - 6 + dx * 1.5, bodyY + 4 + dy);
+    ctx.closePath();
+    ctx.fill();
+
+    // Emerald Spiral Mark
+    ctx.strokeStyle = '#22c55e';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.arc(px + dx * 1.2, bodyY + dy * 0.8, 2.8, 0, Math.PI * 1.6);
+    ctx.stroke();
+
+    // 5. Head & Snout
+    const headX = px + dx * 3;
+    const headY = bodyY - 9 + dy * 2;
+
+    // Ears
+    ctx.fillStyle = '#3d1d0a';
+    ctx.beginPath();
+    ctx.arc(headX - 6.5, headY - 5, 3.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(headX + 6.5, headY - 5, 3.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Head
+    ctx.fillStyle = '#5c3012';
+    ctx.beginPath();
+    ctx.ellipse(headX, headY, 8.5, 7.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Snout
+    const snoutX = headX + dx * 2.5;
+    const snoutY = headY + 2 + dy * 1.5;
+    ctx.fillStyle = '#783c18';
+    ctx.beginPath();
+    ctx.ellipse(snoutX, snoutY, 4.5, 3.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Nose
+    ctx.fillStyle = '#18181b';
+    ctx.beginPath();
+    ctx.arc(snoutX + dx * 0.8, snoutY - 1 + dy * 0.5, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Emerald Eyes
+    if (this.direction !== 'up') {
+      const eyeY = headY - 1.5 + dy * 0.5;
+      const eyeSpacing = 3.8;
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
+      ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
     }
 
     ctx.restore();
@@ -19412,24 +19960,49 @@ class Game {
       }, { passive: false });
     }
 
-    // 4. Minimap Collapse & Expand
+    // 4. Minimalist Minimap (Hold / Press to View Large Map)
     const minimapContainer = document.getElementById('minimap-container');
-    const minimapToggleBtn = document.getElementById('minimap-toggle-btn');
-    const minimapPillBtn = document.getElementById('minimap-pill-btn');
+    if (minimapContainer) {
+      let isHoldingMap = false;
 
-    if (minimapToggleBtn && minimapContainer && minimapPillBtn) {
-      minimapToggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        minimapContainer.classList.add('minimized');
-        minimapPillBtn.classList.remove('hidden');
-      });
+      const expandMap = (e) => {
+        if (e && e.cancelable) e.preventDefault();
+        isHoldingMap = true;
+        minimapContainer.classList.add('expanded');
+        minimapContainer.classList.add('pressing');
+      };
 
-      minimapPillBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        minimapContainer.classList.remove('minimized');
-        minimapPillBtn.classList.add('hidden');
-      });
+      const collapseMap = () => {
+        if (!isHoldingMap) return;
+        isHoldingMap = false;
+        minimapContainer.classList.remove('expanded');
+        minimapContainer.classList.remove('pressing');
+      };
+
+      // Pointer, Touch & Mouse Events
+      minimapContainer.addEventListener('pointerdown', expandMap);
+      window.addEventListener('pointerup', collapseMap);
+      window.addEventListener('pointercancel', collapseMap);
+
+      minimapContainer.addEventListener('touchstart', expandMap, { passive: false });
+      window.addEventListener('touchend', collapseMap, { passive: true });
+      window.addEventListener('touchcancel', collapseMap, { passive: true });
+
+      minimapContainer.addEventListener('mousedown', expandMap);
+      window.addEventListener('mouseup', collapseMap);
+
+      // Verhindere Kontextmenü bei langem Drücken
+      minimapContainer.addEventListener('contextmenu', (e) => e.preventDefault());
     }
+
+    // Automatischer Vollbild-Wechsel bei der ersten Benutzer-Geste
+    const triggerFsOnFirstGesture = () => {
+      this.requestGameFullscreen();
+      window.removeEventListener('pointerdown', triggerFsOnFirstGesture);
+      window.removeEventListener('keydown', triggerFsOnFirstGesture);
+    };
+    window.addEventListener('pointerdown', triggerFsOnFirstGesture, { once: true });
+    window.addEventListener('keydown', triggerFsOnFirstGesture, { once: true });
 
     // 5. Fullscreen Toggle (Vollbild)
     const fsBtn = document.getElementById('fullscreen-btn');
@@ -20223,8 +20796,8 @@ class Game {
       }
     }
 
-    // 13. LAYER 10: Minimap
-    this.minimap.render(this.player, this.camera);
+    // 13. LAYER 10: Minimap (inklusive Mitspieler auf der Karte)
+    this.minimap.render(this.player, this.camera, this.remotePlayers);
   }
 
   renderPaperGroundTiles(bounds, sunlight, sunset, night, t) {
@@ -22907,6 +23480,7 @@ class Game {
       this.charSelectModal.classList.add('hidden');
     }
     this.isCharacterSelectOpen = false;
+    this.requestGameFullscreen();
 
     // Auto-Connect to LAN-Multiplayer as Player
     if (this.network && !this.isHost) {
@@ -23024,12 +23598,29 @@ class Game {
   // ---------------------------------------------------------------------------
   // LAN MULTIPLAYER & SPECTATOR SYSTEMS
   // ---------------------------------------------------------------------------
+  requestGameFullscreen() {
+    const docEl = document.documentElement;
+    if (!docEl || document.fullscreenElement || document.webkitFullscreenElement) return;
+    try {
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch(() => {});
+      } else if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen();
+      } else if (docEl.mozRequestFullScreen) {
+        docEl.mozRequestFullScreen();
+      } else if (docEl.msRequestFullscreen) {
+        docEl.msRequestFullscreen();
+      }
+    } catch (e) {}
+  }
+
   startAsHost() {
     this.isHost = true;
     if (this.charSelectModal) {
       this.charSelectModal.classList.add('hidden');
     }
     this.isCharacterSelectOpen = false;
+    this.requestGameFullscreen();
 
     if (this.spectator) {
       this.spectator.activate();
@@ -23173,8 +23764,23 @@ class Game {
       if (rp) {
         rp.triggerAction(msg.action, msg);
       }
-      if (msg.action === 'arrow' && this.combat) {
+      if (msg.action === 'melee' && this.combat) {
+        const mx = (rp ? rp.x : msg.x) || 0;
+        const my = ((rp ? rp.y : msg.y) || 0) - 6;
+        this.combat.addSlashEffect(msg.subType || 'slash1', mx, my, msg.angle || 0, msg.radius || 24);
+      } else if (msg.action === 'arrow' && this.combat) {
         this.combat.fireArrow(msg.x, msg.y, msg.dirX, msg.dirY, msg.isCharged);
+      } else if (msg.action === 'dash' && this.combat) {
+        const dx = (rp ? rp.x : msg.x) || 0;
+        const dy = (rp ? rp.y : msg.y) || 0;
+        this.combat.addHitSparks(dx, dy + 2, 'rgba(240, 240, 245, 0.75)', 8, 40);
+      } else if (msg.action === 'shield_block' && this.combat) {
+        this.combat.addHitSparks(msg.x, msg.y, '#38bdf8', 14);
+        this.combat.addFloatingText('🛡️ GEBLOCKT!', msg.x, msg.y - 14, '#38bdf8');
+      } else if (msg.action === 'spell_phoenix' && this.magicManager) {
+        this.magicManager.spawnRemotePhoenix(msg);
+      } else if (msg.action === 'spell_frost' && this.magicManager) {
+        this.magicManager.spawnRemoteFrostCone(msg);
       }
     });
 

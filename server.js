@@ -301,17 +301,11 @@ wss.on('connection', (ws) => {
       }
 
       case 'player_action': {
-        // Broadcast combat actions (melee swing, bow shot, dash, spell cast)
+        // Broadcast combat actions (melee swing, bow shot, dash, shield, spell cast)
         broadcast({
+          ...msg,
           type: 'player_action',
-          id: clientId,
-          action: msg.action,
-          subType: msg.subType,
-          x: msg.x,
-          y: msg.y,
-          angle: msg.angle,
-          direction: msg.direction,
-          dimension: msg.dimension || 'overworld'
+          id: clientId
         }, ws);
         break;
       }
