@@ -5,11 +5,14 @@ export const TILE_SIZE = 16;
 export const MAP_WIDTH = 290;
 export const MAP_HEIGHT = 200;
 
-// Dimensions / Worlds
+// Dimensions / Worlds (4 Vertikale Schichten)
 export const DIMENSIONS = {
-  OVERWORLD: 'overworld',
-  CAVES: 'caves',
-  CLOUDS: 'clouds'
+  CLOUDS: 'clouds',         // Layer +1 (Wolke +1)
+  OVERWORLD: 'overworld',   // Layer 0  (Ground 0)
+  CAVES: 'caves_l1',        // Layer -1 (Höhle -1)
+  CAVES_L1: 'caves_l1',
+  CAVES_DEEP: 'caves_l2',   // Layer -2 (Höhle -2)
+  CAVES_L2: 'caves_l2'
 };
 
 // Biome Names
@@ -19,6 +22,8 @@ export const BIOMES = {
   SNOW: 'Schnee & Eislande',
   SWAMP: 'Düsterer Sumpf',
   VOID: 'Die Leere (Void)',
+  CAVES_L1: 'Höhlen & Grotten (Ebene -1)',
+  CAVES_L2: 'Tiefe Kristall- & Magmahöhlen (Ebene -2)',
   CAVES_MAIN: 'Tiefenhöhlen & Unterirdischer See',
   CAVES_SUB: 'Kristall-Unterhöhle',
   CAVES_GROTTO: 'Versteckte Grotte',

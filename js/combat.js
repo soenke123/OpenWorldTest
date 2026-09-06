@@ -13,6 +13,7 @@ export class CombatManager {
     this.enemyProjectiles = [];
     this.shockwaves = [];
     this.celestialStrikes = [];
+    this.caveRockfalls = [];
     this.hazardPuddles = [];
     this.grapplingHooks = [];
     this.defeatPoofs = [];
@@ -295,6 +296,19 @@ export class CombatManager {
       damage,
       delay: 0.75,
       timer: 0,
+      impacted: false
+    });
+  }
+
+  spawnCaveRockfall(targetX, targetY, damage = 35, dimension = null) {
+    this.caveRockfalls.push({
+      dimension: dimension || this.game?.currentDimension || 'overworld',
+      targetX,
+      targetY,
+      damage,
+      delay: 1.1, // 1.1s Vorwarnzeit
+      timer: 0,
+      radius: 28,
       impacted: false
     });
   }
@@ -1047,6 +1061,32 @@ export class CombatManager {
       }
     }
 
+    // 9b. Update Cave Rockfalls (Erdbeben & Steinschlag vom Fels-Koloss)
+    for (let i = this.caveRockfalls.length - 1; i >= 0; i--) {
+      const rf = this.caveRockfalls[i];
+      if (rf.dimension && curDim && rf.dimension !== curDim) continue;
+
+      rf.timer += dt;
+
+      if (rf.timer >= rf.delay && !rf.impacted) {
+        rf.impacted = true;
+        this.addHitSparks(rf.targetX, rf.targetY, '#78716c', 28, 120);
+        this.addHitSparks(rf.targetX, rf.targetY, '#f59e0b', 18, 90);
+        if (this.game.camera) this.game.camera.shake(7.5, 0.3);
+
+        const dist = Math.hypot(player.x - rf.targetX, player.y - rf.targetY);
+        if (dist <= rf.radius && !player.isDead) {
+          const kx = (dist > 0.1) ? (player.x - rf.targetX) / dist : 0;
+          const ky = (dist > 0.1) ? (player.y - rf.targetY) / dist : 1;
+          player.takeDamage(rf.damage, { x: kx, y: ky });
+          if (typeof player.applyKnockback === 'function') {
+            player.applyKnockback(kx * 120, ky * 120);
+          }
+        }
+        this.caveRockfalls.splice(i, 1);
+      }
+    }
+
     // 10. Update Hazard Puddles
     for (let i = this.hazardPuddles.length - 1; i >= 0; i--) {
       const pud = this.hazardPuddles[i];
@@ -1204,6 +1244,7 @@ export class CombatManager {
     this.renderHazardPuddles(ctx, t);
     this.renderShockwaves(ctx, t);
     this.renderCelestialStrikes(ctx, t);
+    this.renderCaveRockfalls(ctx, t);
     this.renderGrapplingHooks(ctx, t);
     this.renderStuckArrows(ctx);
     this.renderTrainingDummies(ctx, t);
@@ -1356,6 +1397,74 @@ export class CombatManager {
         ctx.beginPath();
         ctx.arc(0, starY, 4, 0, Math.PI * 2);
         ctx.fill();
+      }
+
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1.0;
+  }
+
+  renderCaveRockfalls(ctx, t) {
+    const curDim = this.game?.currentDimension || 'overworld';
+    for (const rf of this.caveRockfalls) {
+      if (rf.dimension && rf.dimension !== curDim) continue;
+      const prog = rf.timer / rf.delay;
+      ctx.save();
+      ctx.translate(rf.targetX, rf.targetY);
+
+      // 1. Roter Gefahrenkreis am Boden
+      const pulse = 0.9 + Math.sin(t * 14) * 0.1;
+      ctx.strokeStyle = `rgba(239, 68, 68, ${0.45 + prog * 0.55})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, rf.radius * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Rote Gefahrenfüllung & Fadenkreuz
+      ctx.fillStyle = `rgba(239, 68, 68, ${0.15 + prog * 0.3})`;
+      ctx.beginPath();
+      ctx.arc(0, 0, rf.radius * pulse, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-rf.radius * 0.7, 0); ctx.lineTo(rf.radius * 0.7, 0);
+      ctx.moveTo(0, -rf.radius * 0.7); ctx.lineTo(0, rf.radius * 0.7);
+      ctx.stroke();
+
+      // 2. Schatten des herabfallenden Felsens
+      const shadowSize = Math.max(3, rf.radius * 0.8 * prog);
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.3 + prog * 0.5})`;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, shadowSize, shadowSize * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 3. Herabstürzender Felsen (ab 30% der Zeit sichtbar)
+      if (prog > 0.3) {
+        const fallProg = (prog - 0.3) / 0.7; // 0 -> 1
+        const rockY = -140 * (1 - fallProg);
+        const rockSize = 10 + fallProg * 2;
+
+        ctx.fillStyle = '#44403c';
+        ctx.strokeStyle = '#1c1917';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(-rockSize * 0.8, rockY - rockSize * 0.5);
+        ctx.lineTo(rockSize * 0.6, rockY - rockSize * 0.9);
+        ctx.lineTo(rockSize * 0.9, rockY + rockSize * 0.4);
+        ctx.lineTo(-rockSize * 0.4, rockY + rockSize * 0.8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Staubstreifen
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.6)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(0, rockY - rockSize * 0.5);
+        ctx.lineTo(0, rockY - rockSize * 0.5 - 18);
+        ctx.stroke();
       }
 
       ctx.restore();

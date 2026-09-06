@@ -42,12 +42,16 @@ class Game {
     // Multi-Dimension Maps & Core Systems
     this.overworldMap = new WorldMap();
     this.cloudMap = new CloudMap(this.overworldMap);
+    const caveL1 = new CaveMap('caves_l1', this.overworldMap);
+    const caveL2 = new CaveMap('caves_l2', this.overworldMap);
     this.caves = {
-      main_complex: new CaveMap('main_complex'),
-      sub_crystal: new CaveMap('sub_crystal'),
-      forest_grotto: new CaveMap('forest_grotto'),
-      snow_grotto: new CaveMap('snow_grotto'),
-      void_grotto: new CaveMap('void_grotto')
+      caves_l1: caveL1,
+      caves_l2: caveL2,
+      main_complex: caveL1,
+      sub_crystal: caveL2,
+      forest_grotto: caveL1,
+      snow_grotto: caveL1,
+      void_grotto: caveL1
     };
 
     this.map = this.overworldMap;
@@ -60,6 +64,12 @@ class Game {
     this.player = new Player(this.map.spawnPoint.x, this.map.spawnPoint.y, this.map, this);
     this.camera = new Camera(window.innerWidth, window.innerHeight);
     this.minimap = new Minimap(this.minimapCanvas, this.map);
+    this.minimap.registerMaps({
+      clouds: this.cloudMap,
+      overworld: this.overworldMap,
+      caves_l1: caveL1,
+      caves_l2: caveL2
+    });
 
     // Magic & Artifact System (Phoenix Spells, Shrines & Monster Drops)
     this.magicManager = new MagicManager(this);
@@ -250,6 +260,19 @@ class Game {
           this.magicManager.closeSwapModal();
         }
         return;
+      }
+
+      if (e.code === 'KeyM') {
+        this.toggleLargeMap();
+        return;
+      }
+
+      if (e.code === 'Escape') {
+        const mc = document.getElementById('minimap-container');
+        if (mc && mc.classList.contains('expanded')) {
+          this.closeLargeMap();
+          return;
+        }
       }
 
       this.input.keys[e.code] = true;
@@ -535,36 +558,32 @@ class Game {
       }, { passive: false });
     }
 
-    // 4. Minimalist Minimap (Hold / Press to View Large Map)
+    // 4. Minimalist Minimap (Klick / M für große Karte mit 4 Kacheln)
     const minimapContainer = document.getElementById('minimap-container');
+    const closeBtn = document.getElementById('minimap-close-btn');
+
     if (minimapContainer) {
-      let isHoldingMap = false;
+      minimapContainer.addEventListener('click', (e) => {
+        if (!minimapContainer.classList.contains('expanded')) {
+          this.openLargeMap();
+        }
+      });
 
-      const expandMap = (e) => {
-        if (e && e.cancelable) e.preventDefault();
-        isHoldingMap = true;
-        minimapContainer.classList.add('expanded');
-        minimapContainer.classList.add('pressing');
-      };
+      if (closeBtn) {
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          this.closeLargeMap();
+        });
+      }
 
-      const collapseMap = () => {
-        if (!isHoldingMap) return;
-        isHoldingMap = false;
-        minimapContainer.classList.remove('expanded');
-        minimapContainer.classList.remove('pressing');
-      };
-
-      // Pointer, Touch & Mouse Events
-      minimapContainer.addEventListener('pointerdown', expandMap);
-      window.addEventListener('pointerup', collapseMap);
-      window.addEventListener('pointercancel', collapseMap);
-
-      minimapContainer.addEventListener('touchstart', expandMap, { passive: false });
-      window.addEventListener('touchend', collapseMap, { passive: true });
-      window.addEventListener('touchcancel', collapseMap, { passive: true });
-
-      minimapContainer.addEventListener('mousedown', expandMap);
-      window.addEventListener('mouseup', collapseMap);
+      // Klick außerhalb schließt die vergrößerte Karte
+      window.addEventListener('pointerdown', (e) => {
+        if (minimapContainer.classList.contains('expanded')) {
+          if (!minimapContainer.contains(e.target)) {
+            this.closeLargeMap();
+          }
+        }
+      });
 
       // Verhindere Kontextmenü bei langem Drücken
       minimapContainer.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -670,6 +689,36 @@ class Game {
     const zoomValEl = document.getElementById('zoom-val-text');
     if (zoomValEl && this.camera) {
       zoomValEl.textContent = this.camera.zoom.toFixed(2) + 'x';
+    }
+  }
+
+  openLargeMap() {
+    const el = document.getElementById('minimap-container');
+    if (!el) return;
+    el.classList.add('expanded');
+    if (this.minimap) {
+      this.minimap.viewingDimension = this.minimap.dimension;
+      this.minimap.updateTabsUI();
+    }
+  }
+
+  closeLargeMap() {
+    const el = document.getElementById('minimap-container');
+    if (!el) return;
+    el.classList.remove('expanded');
+    if (this.minimap) {
+      this.minimap.viewingDimension = this.minimap.dimension;
+      this.minimap.updateTabsUI();
+    }
+  }
+
+  toggleLargeMap() {
+    const el = document.getElementById('minimap-container');
+    if (!el) return;
+    if (el.classList.contains('expanded')) {
+      this.closeLargeMap();
+    } else {
+      this.openLargeMap();
     }
   }
 
@@ -805,10 +854,14 @@ class Game {
       this.map = this.cloudMap;
       this.currentDimension = DIMENSIONS.CLOUDS;
       this.activeSubCave = null;
-    } else if (this.caves[targetDim]) {
-      this.map = this.caves[targetDim];
-      this.currentDimension = DIMENSIONS.CAVES;
-      this.activeSubCave = targetDim;
+    } else if (targetDim === 'caves_l2' || targetDim === 'sub_crystal' || targetDim === DIMENSIONS.CAVES_DEEP) {
+      this.map = this.caves.caves_l2;
+      this.currentDimension = DIMENSIONS.CAVES_DEEP;
+      this.activeSubCave = 'caves_l2';
+    } else if (this.caves[targetDim] || targetDim === 'caves_l1' || targetDim === 'caves' || targetDim === 'main_complex') {
+      this.map = this.caves.caves_l1;
+      this.currentDimension = DIMENSIONS.CAVES_L1;
+      this.activeSubCave = 'caves_l1';
     }
 
     this.player.map = this.map;

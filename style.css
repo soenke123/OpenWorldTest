@@ -430,7 +430,7 @@ canvas#gameCanvas {
   transform: scale(0.98);
 }
 
-/* Expanded Map State (Held down by finger / mouse) */
+/* Expanded Map State (Held down / clicked by user) */
 #minimap-container.expanded {
   position: fixed !important;
   top: 50% !important;
@@ -438,22 +438,192 @@ canvas#gameCanvas {
   right: auto !important;
   bottom: auto !important;
   transform: translate(-50%, -50%) !important;
-  width: min(92vw, 360px) !important;
-  height: min(69vw, 270px) !important;
-  max-height: 72vh !important;
+  width: min(94vw, 540px) !important;
+  height: min(78vh, 370px) !important;
+  max-height: 82vh !important;
   z-index: 999999 !important;
-  padding: 6px !important;
+  padding: 10px !important;
   border: 2px solid #38bdf8 !important;
   border-radius: 16px !important;
   background: rgba(10, 15, 29, 0.97) !important;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 35px rgba(56, 189, 248, 0.4) !important;
   backdrop-filter: blur(14px) !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: stretch !important;
+  gap: 12px !important;
   animation: minimapPop 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes minimapPop {
   0% { transform: translate(-50%, -50%) scale(0.85); opacity: 0.5; }
   100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+}
+
+/* Close Button (Nur bei .expanded sichtbar) */
+.minimap-close-btn {
+  display: none;
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 2px solid #ffffff;
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1000000;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.6);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+#minimap-container.expanded .minimap-close-btn {
+  display: flex;
+}
+
+.minimap-close-btn:hover {
+  transform: scale(1.15);
+  background: #dc2626;
+}
+
+/* 4-Ebenen Kacheln links (Nur bei .expanded sichtbar) */
+.minimap-layer-tabs {
+  display: none;
+  flex-direction: column;
+  width: 136px;
+  gap: 8px;
+  justify-content: space-between;
+  user-select: none;
+  z-index: 10;
+}
+
+#minimap-container.expanded .minimap-layer-tabs {
+  display: flex;
+}
+
+.layer-tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1.5px solid rgba(148, 163, 184, 0.22);
+  color: #f8fafc;
+  cursor: pointer;
+  transition: all 0.16s ease;
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+}
+
+.layer-tab-btn:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(56, 189, 248, 0.6);
+  transform: translateX(2px);
+}
+
+.layer-tab-btn.selected {
+  background: rgba(14, 116, 144, 0.38);
+  border-color: #38bdf8;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.4), inset 0 0 8px rgba(56, 189, 248, 0.2);
+}
+
+.layer-tab-btn .layer-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.layer-tab-btn .layer-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.layer-tab-btn .layer-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #f1f5f9;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.layer-tab-btn .layer-status {
+  font-size: 0.66rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.layer-tab-btn.selected .layer-status {
+  color: #7dd3fc;
+}
+
+.layer-tab-btn .active-indicator {
+  font-size: 0.76rem;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  filter: drop-shadow(0 0 4px #22c55e);
+}
+
+.layer-tab-btn.is-current-dim .active-indicator {
+  opacity: 1;
+  animation: pulsePin 1.4s ease-in-out infinite;
+}
+
+@keyframes pulsePin {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.3); }
+}
+
+/* Minimap Canvas Container */
+#minimap-canvas-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: #050508;
+}
+
+#minimap-canvas-wrapper canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#minimap-viewing-header {
+  display: none;
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.88);
+  padding: 3px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  font-size: 0.72rem;
+  color: #38bdf8;
+  font-weight: 700;
+  pointer-events: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+#minimap-container.expanded #minimap-viewing-header {
+  display: block;
 }
 
 .minimap-hint-badge {

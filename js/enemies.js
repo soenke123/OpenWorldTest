@@ -116,7 +116,9 @@ export class EnemyEntity {
 
     // Geschwindigkeit
     const spdStr = this.def.stats.spd || 'Mittel';
-    if (spdStr.includes('Sehr Schnell')) this.baseSpeed = 92;
+    if (this.typeId === 'cave_stalker') this.baseSpeed = 190;
+    else if (this.typeId === 'rock_golem') this.baseSpeed = 46;
+    else if (spdStr.includes('Extrem schnell') || spdStr.includes('Sehr Schnell')) this.baseSpeed = 92;
     else if (spdStr.includes('Schnell')) this.baseSpeed = 74;
     else if (spdStr.includes('Mittel')) this.baseSpeed = 52;
     else if (spdStr.includes('Langsam')) this.baseSpeed = 34;
@@ -127,7 +129,7 @@ export class EnemyEntity {
     // Reichweite
     const rngStr = this.def.stats.rng || '40px';
     const parsedRng = parseInt(rngStr, 10);
-    this.attackRange = isNaN(parsedRng) ? 40 : parsedRng;
+    this.attackRange = isNaN(parsedRng) ? (this.typeId === 'cave_stalker' ? 34 : (this.typeId === 'rock_golem' ? 48 : 40)) : parsedRng;
 
     // KI & Animationsstatus
     this.state = 'idle'; // 'idle' | 'walk' | 'alert' | 'attack' | 'cooldown' | 'hurt' | 'dead'
@@ -145,6 +147,14 @@ export class EnemyEntity {
     this.chargeDir = { x: 0, y: 0 };
     this.isCharging = false;
     this.chargeTimer = 0;
+
+    // Cave Stalker Hit-and-Run State ('stalking' | 'dash_in' | 'retreat')
+    this.stalkerState = 'stalking';
+    this.stalkerTimer = 1.0 + Math.random() * 0.8;
+    this.stalkerCircleDir = Math.random() > 0.5 ? 1 : -1;
+
+    // Rock Golem Erdbeben-Cooldown
+    this.golemSlamCooldown = 3.5 + Math.random() * 2.5;
 
     // Anti-Kiting & Spezialfähigkeiten
     this.teleportCooldown = Math.random() * 2 + 4.0;
@@ -245,6 +255,10 @@ export class EnemyEntity {
       return;
     }
 
+    if (this.golemSlamCooldown > 0) {
+      this.golemSlamCooldown -= dt;
+    }
+
     // Erfassungsreichweite
     const detectionRange = (this.category === 'range' || this.typeId === 'star_astromancer')
       ? ENEMY_CONFIG.DETECTION_RADIUS_SCOUT
@@ -335,7 +349,69 @@ export class EnemyEntity {
         return;
       }
 
-      // Bereite Angriff vor, wenn in Angriffsreichweite
+      // 3. Fels-Koloss Erdbeben-Bodenstampfen (Flächen-Steinschlag)
+      if (this.typeId === 'rock_golem' && this.golemSlamCooldown <= 0 && distToPlayer <= 160 && this.state !== 'attack' && this.cooldownTimer <= 0) {
+        this.golemSlamCooldown = 7.0 + Math.random() * 2.5;
+        this.startAttack(player, combatManager);
+        if (combatManager) {
+          combatManager.addFloatingText('💥 ERDBEBEN!', this.x, this.y - 24, '#fbbf24', 1.2);
+        }
+        return;
+      }
+
+      // 4. Schatten-Huscher (Cave Stalker): Taktisches Hit-and-Run (Umkreisen -> Blitz-Ansturm -> Schatten-Rückzug)
+      if (this.typeId === 'cave_stalker') {
+        const normDx = dx / (distToPlayer || 1);
+        const normDy = dy / (distToPlayer || 1);
+
+        if (this.stalkerState === 'retreat') {
+          this.stalkerTimer -= dt;
+          this.state = 'walk';
+          // Rennt mit rasendem Tempo (230 px/s) vom Spieler WEG in die Schatten!
+          this.moveWithCollision(-normDx, -normDy, 230, dt, map);
+          if (this.stalkerTimer <= 0 || distToPlayer > 180) {
+            this.stalkerState = 'stalking';
+            this.stalkerTimer = 1.3 + Math.random() * 1.0;
+            this.stalkerCircleDir = Math.random() > 0.5 ? 1 : -1;
+          }
+          return;
+        }
+
+        if (this.stalkerState === 'stalking') {
+          this.stalkerTimer -= dt;
+          this.state = 'walk';
+          // Umkreist den Spieler in ca. 95-125px Entfernung
+          const targetDist = 110;
+          const radialFactor = (distToPlayer - targetDist) / targetDist;
+          const perpX = -normDy * this.stalkerCircleDir;
+          const perpY = normDx * this.stalkerCircleDir;
+          const moveDirX = perpX + normDx * radialFactor;
+          const moveDirY = perpY + normDy * radialFactor;
+          const moveLen = Math.hypot(moveDirX, moveDirY) || 1;
+          this.moveWithCollision(moveDirX / moveLen, moveDirY / moveLen, 165, dt, map);
+
+          if (this.stalkerTimer <= 0 && this.cooldownTimer <= 0) {
+            this.stalkerState = 'dash_in';
+            if (combatManager) {
+              combatManager.addHitSparks(this.x, this.y, '#ef4444', 6);
+            }
+          }
+          return;
+        }
+
+        if (this.stalkerState === 'dash_in') {
+          this.state = 'walk';
+          // Rauscht mit Blitzgeschwindigkeit (270 px/s) auf den Spieler zu!
+          if (distToPlayer <= this.attackRange && this.cooldownTimer <= 0) {
+            this.startAttack(player, combatManager);
+            return;
+          }
+          this.moveWithCollision(normDx, normDy, 270, dt, map);
+          return;
+        }
+      }
+
+      // Bereite regulären Angriff vor, wenn in Angriffsreichweite
       if (distToPlayer <= this.attackRange && this.cooldownTimer <= 0) {
         this.startAttack(player, combatManager);
         return;
@@ -473,7 +549,13 @@ export class EnemyEntity {
 
   startAttack(player, combatManager) {
     this.state = 'attack';
-    this.telegraphTimer = ENEMY_CONFIG.ATTACK_TELEGRAPH_TIME;
+    if (this.typeId === 'cave_stalker') {
+      this.telegraphTimer = 0.22;
+    } else if (this.typeId === 'rock_golem') {
+      this.telegraphTimer = 0.90;
+    } else {
+      this.telegraphTimer = ENEMY_CONFIG.ATTACK_TELEGRAPH_TIME;
+    }
 
     // Optisches Telegraphing (Warnkreis / Funken)
     if (combatManager) {
@@ -660,6 +742,43 @@ export class EnemyEntity {
         }
         break;
 
+      // 14b. Schatten-Huscher: Blitzschneller Klauenhieb mit direktem Rückzug
+      case 'cave_stalker':
+        if (dist <= 38) {
+          this.hitPlayer(player, combatManager, this.atk, { x: dirX, y: dirY });
+          if (combatManager) {
+            combatManager.addSlashEffect('slash1', player.x, player.y, Math.atan2(dirY, dirX), 24);
+            combatManager.addHitSparks(player.x, player.y, '#ef4444', 12);
+          }
+        }
+        // Sofortiger Rückzug in die Dunkelheit!
+        this.stalkerState = 'retreat';
+        this.stalkerTimer = 1.6 + Math.random() * 0.8;
+        this.cooldownTimer = 1.3;
+        break;
+
+      // 14c. Fels-Koloss: Kolossaler Steinschlag & Erdbeben-Bodenstampfen
+      case 'rock_golem':
+        if (dist <= 54) {
+          this.hitPlayer(player, combatManager, this.atk, { x: dirX, y: dirY });
+          if (combatManager) {
+            combatManager.addHitSparks(this.x, this.y, '#94a3b8', 16);
+            if (enemyManager?.game?.camera) enemyManager.game.camera.shake(5.5, 0.22);
+          }
+        }
+        // Erdbeben: Lässt Felsbrocken von der Decke stürzen!
+        if (combatManager && combatManager.spawnCaveRockfall) {
+          const rockCount = 5 + Math.floor(Math.random() * 3);
+          for (let r = 0; r < rockCount; r++) {
+            const angle = Math.random() * Math.PI * 2;
+            const distRock = r === 0 ? 0 : Math.random() * 110 + 20;
+            const rx = r === 0 ? player.x : (this.x + Math.cos(angle) * distRock);
+            const ry = r === 0 ? player.y : (this.y + Math.sin(angle) * distRock);
+            combatManager.spawnCaveRockfall(rx, ry, 35, this.dimension);
+          }
+        }
+        break;
+
       // 15. Leeren-Verschlinger: Kaonashi Sternenklingen-Schnitt
       case 'void_reaper':
         if (dist <= 48) {
@@ -813,9 +932,9 @@ export class EnemyEntity {
       }
     }
 
-    // Knockback (Kleine Blob-Gegner fliegen mit starkem Impuls wie Kegel weg!)
+    // Knockback (Kleine Blob-Gegner fliegen mit starkem Impuls wie Kegel weg, Kolosse widerstehen fast allem!)
     if (this.baseSpeed > 0) {
-      const kbMult = (this.typeId === 'green_slime' || this.scale < 0.6) ? 0.24 : 0.08;
+      const kbMult = this.typeId === 'rock_golem' ? 0.015 : ((this.typeId === 'green_slime' || this.scale < 0.6) ? 0.24 : 0.08);
       this.x += Math.cos(knockbackAngle) * (knockbackForce * kbMult);
       this.y += Math.sin(knockbackAngle) * (knockbackForce * kbMult);
 
@@ -1223,29 +1342,121 @@ export class EnemyManager {
     });
 
     // =========================================================================
-    // HÖHLEN-SPAWNS (CAVES DIMENSION)
+    // HÖHLEN-SPAWNS (EBENE -1: CAVES_L1 & EBENE -2: CAVES_L2)
     // =========================================================================
-    // Haupthöhlen (main_complex)
-    this.spawnPack('cave_weaver', 32 * TILE_SIZE, 26 * TILE_SIZE, 8, 36, DIMENSIONS.CAVES, 'pack_cave_spiders_main1', {
-      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+
+    // --- EBENE -1: OBERE HÖHLEN (Direkt mit Oberwelt verbunden) ---
+    // 1. Zentraler See & Hauptgrotten (145, 85)
+    this.spawnPack('cave_weaver', 145 * TILE_SIZE, 85 * TILE_SIZE, 6, 32, DIMENSIONS.CAVES_L1, 'pack_c1_spider_center', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
     });
-    this.spawnPack('cave_weaver', 55 * TILE_SIZE, 42 * TILE_SIZE, 6, 32, DIMENSIONS.CAVES, 'pack_cave_spiders_main2', {
-      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    this.spawnPack('cave_stalker', 138 * TILE_SIZE, 82 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_center', {
+      scale: 0.65, hp: 95, atk: 22, xpValue: 12
+    });
+    this.spawnEnemy('rock_golem', 135 * TILE_SIZE, 95 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_center', {
+      scale: 1.35, hp: 380, atk: 26, xpValue: 24
     });
 
-    // Moosige Grotte
-    this.spawnPack('cave_weaver', 12 * TILE_SIZE, 12 * TILE_SIZE, 6, 28, DIMENSIONS.CAVES, 'pack_cave_spiders_forest', {
-      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    // 2. Westliches Grasland & Wald-Grotten (70, 72 & 52, 32)
+    this.spawnPack('cave_weaver', 65 * TILE_SIZE, 62 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_west', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 70 * TILE_SIZE, 72 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_west', {
+      scale: 0.65, hp: 95, atk: 22, xpValue: 12
     });
 
-    // Eis-Grotte
-    this.spawnPack('cave_weaver', 12 * TILE_SIZE, 12 * TILE_SIZE, 6, 28, DIMENSIONS.CAVES, 'pack_cave_spiders_snow', {
-      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    // 3. Südwestliche Wüsten- & Canyon-Klüfte (70, 168 & 93, 156)
+    this.spawnPack('cave_weaver', 70 * TILE_SIZE, 168 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_desert', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 82 * TILE_SIZE, 160 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_desert', {
+      scale: 0.65, hp: 95, atk: 22, xpValue: 12
+    });
+    this.spawnEnemy('rock_golem', 74 * TILE_SIZE, 166 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_desert', {
+      scale: 1.35, hp: 380, atk: 26, xpValue: 24
     });
 
-    // Astrale Kluft
-    this.spawnPack('cave_weaver', 12 * TILE_SIZE, 12 * TILE_SIZE, 6, 28, DIMENSIONS.CAVES, 'pack_cave_spiders_void', {
-      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    // 4. Nordöstliche Schnee- & Gletscher-Stollen (226, 32 & 197, 44)
+    this.spawnPack('cave_weaver', 215 * TILE_SIZE, 45 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_snow', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 226 * TILE_SIZE, 35 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_snow', {
+      scale: 0.65, hp: 95, atk: 22, xpValue: 12
+    });
+    this.spawnEnemy('rock_golem', 205 * TILE_SIZE, 50 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_snow', {
+      scale: 1.35, hp: 380, atk: 26, xpValue: 24
+    });
+
+    // 5. Südöstliche Sumpf- & Moor-Grotte (191, 144 & 209, 160)
+    this.spawnPack('cave_weaver', 195 * TILE_SIZE, 150 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_swamp', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 190 * TILE_SIZE, 142 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_swamp', {
+      scale: 0.65, hp: 95, atk: 22, xpValue: 12
+    });
+
+    // 6. Östliche Astrale Leeren-Kluft (243, 106 & 257, 94)
+    this.spawnPack('cave_weaver', 248 * TILE_SIZE, 100 * TILE_SIZE, 4, 25, DIMENSIONS.CAVES_L1, 'pack_c1_spider_void', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 243 * TILE_SIZE, 106 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_void', {
+      scale: 0.65, hp: 95, atk: 22, xpValue: 12
+    });
+
+    // --- EBENE -2: TIEFE HÖHLEN (Kristall-, Magma- & Basaltkammern) ---
+    // 1. Äther-Kristallpalast (145, 88)
+    this.spawnEnemy('rock_golem', 140 * TILE_SIZE, 85 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crystal1', {
+      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    });
+    this.spawnEnemy('rock_golem', 152 * TILE_SIZE, 92 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crystal2', {
+      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    });
+    this.spawnPack('cave_stalker', 145 * TILE_SIZE, 80 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_crystal', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
+    });
+    this.spawnPack('cave_weaver', 148 * TILE_SIZE, 86 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L2, 'pack_c2_spider_crystal', {
+      scale: 0.72, hp: 28, atk: 12, xpValue: 5
+    });
+
+    // 2. Südwestliche Magma- & Basalthallen (72, 170)
+    this.spawnEnemy('rock_golem', 70 * TILE_SIZE, 166 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_magma1', {
+      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    });
+    this.spawnEnemy('rock_golem', 76 * TILE_SIZE, 174 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_magma2', {
+      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    });
+    this.spawnPack('cave_stalker', 72 * TILE_SIZE, 172 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_magma', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
+    });
+
+    // 3. Nordöstlicher Glazialer Abgrund (225, 45)
+    this.spawnEnemy('rock_golem', 222 * TILE_SIZE, 42 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_frost', {
+      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    });
+    this.spawnPack('cave_stalker', 228 * TILE_SIZE, 48 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_frost', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
+    });
+    this.spawnPack('cave_weaver', 224 * TILE_SIZE, 44 * TILE_SIZE, 4, 25, DIMENSIONS.CAVES_L2, 'pack_c2_spider_frost', {
+      scale: 0.72, hp: 28, atk: 12, xpValue: 5
+    });
+
+    // 4. Südöstliche Versunkene Krypta (195, 160)
+    this.spawnEnemy('rock_golem', 198 * TILE_SIZE, 158 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crypt', {
+      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    });
+    this.spawnPack('cave_stalker', 192 * TILE_SIZE, 162 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_crypt', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
+    });
+    this.spawnPack('cave_weaver', 196 * TILE_SIZE, 156 * TILE_SIZE, 5, 26, DIMENSIONS.CAVES_L2, 'pack_c2_spider_crypt', {
+      scale: 0.72, hp: 28, atk: 12, xpValue: 5
+    });
+
+    // 5. Tiefe Astrale Leere (245, 100)
+    this.spawnEnemy('rock_golem', 244 * TILE_SIZE, 98 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_void', {
+      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    });
+    this.spawnPack('cave_stalker', 246 * TILE_SIZE, 102 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_void', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
 
     // =========================================================================
@@ -1289,8 +1500,11 @@ export class EnemyManager {
 
   getMapForDimension(dim) {
     if (!this.game) return null;
-    if (dim === DIMENSIONS.CAVES) {
-      return this.game.caves?.main_complex || null;
+    if (dim === DIMENSIONS.CAVES_L2 || dim === 'caves_l2' || dim === 'caves_deep') {
+      return this.game.caves?.caves_l2 || null;
+    }
+    if (dim === DIMENSIONS.CAVES_L1 || dim === DIMENSIONS.CAVES || dim === 'caves_l1' || dim === 'caves' || dim === 'main_complex') {
+      return this.game.caves?.caves_l1 || this.game.caves?.main_complex || null;
     }
     if (dim === DIMENSIONS.CLOUDS) {
       return this.game.cloudMap || null;
@@ -1414,7 +1628,7 @@ export class EnemyManager {
     const HEAVY_MONSTER_TYPES = [
       'boulder_troll', 'frost_giant', 'void_reaper', 'gazer_of_the_void',
       'sky_harpy_queen', 'sky_astromancer_grand', 'star_astromancer',
-      'cursed_knight', 'emperor_scorpion'
+      'cursed_knight', 'emperor_scorpion', 'rock_golem'
     ];
     const isHeavyMonster = enemy && (
       enemy.category === 'boss' ||

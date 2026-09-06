@@ -707,6 +707,9 @@ export class WorldMap {
       const spot = this.findSafeCaveEntranceSpot(d.x, d.y);
       const entrance = {
         ...d,
+        targetCave: 'caves_l1',
+        targetX: spot.x,
+        targetY: spot.y,
         x: spot.x,
         y: spot.y
       };

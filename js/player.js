@@ -1531,8 +1531,8 @@ export class Player {
           this.startTransition('fall', 'overworld', this.x, this.y, 0.85);
         }
       }
-      // 3. Lichtschacht oder Leiter in Höhlen
-      else if (this.game && this.game.currentDimension === 'caves') {
+      // 3. Lichtschacht oder Leiter in Höhlen (Ebene -1 oder Ebene -2)
+      else if (this.game && (this.game.currentDimension === 'caves' || this.game.currentDimension === 'caves_l1' || this.game.currentDimension === 'caves_l2')) {
         if (this.map.exits) {
           const exit = this.map.exits.find(e => e.x === curTileX && e.y === curTileY);
           if (exit) {
@@ -1541,7 +1541,7 @@ export class Player {
             let targetY = (exit.targetY + 1) * TILE_SIZE + 8;
             if (tType === 'cave_exit') {
               if (this.lastOverworldCaveEntrance &&
-                  this.lastOverworldCaveEntrance.targetCave === this.map.id &&
+                  (this.lastOverworldCaveEntrance.targetCave === this.map.id || this.map.id === 'caves_l1') &&
                   (!exit.chamber || !this.lastOverworldCaveEntrance.chamber || this.lastOverworldCaveEntrance.chamber === exit.chamber)) {
                 targetX = this.lastOverworldCaveEntrance.x * TILE_SIZE + 8;
                 targetY = (this.lastOverworldCaveEntrance.y + 1) * TILE_SIZE + 8;
@@ -1631,8 +1631,8 @@ export class Player {
       const safe = this.findSafeLandingPosition(targetMap, targetX, targetY);
       destX = safe.x;
       destY = safe.y;
-    } else if (type === 'cave_enter') {
-      const targetMap = (this.game && this.game.caves) ? this.game.caves[targetDim] : null;
+    } else if (type === 'cave_enter' || type === 'ladder') {
+      const targetMap = (this.game && this.game.caves) ? (this.game.caves[targetDim] || (targetDim === 'overworld' ? this.game.overworldMap : null)) : null;
       if (targetMap && targetMap.findSafeLandingFloor) {
         const safeFloor = targetMap.findSafeLandingFloor(Math.floor(targetX / TILE_SIZE), Math.floor(targetY / TILE_SIZE));
         destX = safeFloor.x * TILE_SIZE + 8;

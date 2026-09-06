@@ -1632,6 +1632,181 @@ export const BESTIARY_DATA = [
     }
   },
 
+  {
+    id: 'cave_stalker',
+    name: 'Schatten-Huscher',
+    title: 'Creeping Shadow Lurker',
+    category: 'beast',
+    categoryName: '🐺 Wilde Bestien',
+    biome: 'Höhlensysteme & Dunkle Schlünde',
+    biomeBadge: 'Höhle',
+    badgeClass: 'badge-cave',
+    variants: ['Blutaugen-Schwarz (Standard)', 'Phantom-Grau (Selten)'],
+    scale: 0.65,
+    xpValue: 12,
+    stats: { hp: 95, maxHp: 95, atk: 22, spd: 'Extrem schnell (230px/s)', rng: 'Nahkampf (Hit-and-Run)' },
+    behavior: 'Ein unheimlich schnelles, kleines Schattenwesen mit glühenden Schlitzaugen. Lauert am Rande der Finsternis, schnellt mit rasanter Geschwindigkeit auf sein Opfer zu, teilt einen Klauenhieb aus und huscht sofort wieder in die Dunkelheit zurück.',
+    counter: 'Den Ansturm mit erhobenem Schild abfangen und mit einem schnellen Konterschlag bestrafen, bevor es wieder in den Schatten flieht!',
+    lore: 'Bergarbeiter berichten von leisem Huschen über Decken und Felswände. Kurz bevor es zuschlägt, sieht man zwei brennende rote Augen in der Schwärze aufblitzen.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const bob = Math.sin(time * 8) * (isAttacking ? 3 : 1.5);
+
+      drawPaperShadow(ctx, cx, cy + 12, 11, 3.5);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.4) saturate(0.2)';
+
+      // Schatten-Schweif / Rauch-Aura
+      for (let i = 0; i < 4; i++) {
+        const sOff = Math.sin(time * 6 + i) * 3;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+        ctx.beginPath();
+        ctx.arc(cx - 6 + i * 4 + sOff, cy + 6 + bob, 4 + i * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 4 flinke, dünne Schatten-Krallenbeine
+      for (let i = -1; i <= 1; i += 2) {
+        const legStep = Math.sin(time * 12 + i * 2) * 4;
+        ctx.strokeStyle = '#05070e';
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(cx + i * 4, cy + 2 + bob);
+        ctx.lineTo(cx + i * 11, cy - 2 + bob + legStep);
+        ctx.lineTo(cx + i * 13, cy + 10 + bob);
+        ctx.stroke();
+
+        // Spitze Klauen
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(cx + i * 13, cy + 10 + bob);
+        ctx.lineTo(cx + i * 15, cy + 12 + bob);
+        ctx.stroke();
+      }
+
+      // Geduckter, spitzer Schattenkörper
+      ctx.fillStyle = '#090d16';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 2 + bob, 8, 5.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glühende, unheimliche Augen (Rot-Gelb leuchtend)
+      const eyeGlow = 0.8 + Math.sin(time * 9) * 0.2;
+      ctx.fillStyle = `rgba(239, 68, 68, ${eyeGlow})`;
+      ctx.beginPath();
+      ctx.arc(cx - 3, cy + bob, 2.2, 0, Math.PI * 2);
+      ctx.arc(cx + 3, cy + bob, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Pupillen-Kerne
+      ctx.fillStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(cx - 3, cy + bob, 1, 0, Math.PI * 2);
+      ctx.arc(cx + 3, cy + bob, 1, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Bei Angriff: rote Klauenstreifen
+      if (isAttacking) {
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(cx - 8, cy - 4);
+        ctx.lineTo(cx + 8, cy + 8);
+        ctx.moveTo(cx - 5, cy - 6);
+        ctx.lineTo(cx + 10, cy + 6);
+        ctx.stroke();
+      }
+
+      ctx.filter = 'none';
+    }
+  },
+
+  {
+    id: 'rock_golem',
+    name: 'Fels-Koloss',
+    title: 'Ancient Bedrock Behemoth',
+    category: 'beast',
+    categoryName: '🗿 Urzeitliche Kolosse',
+    biome: 'Tiefste Höhlen & Basaltkammern',
+    biomeBadge: 'Höhle',
+    badgeClass: 'badge-cave',
+    variants: ['Granitgrau (Standard)', 'Magmageädert (Ebene -2)', 'Eiskristallin (Schnee-Höhle)'],
+    scale: 1.4,
+    xpValue: 24,
+    stats: { hp: 380, maxHp: 380, atk: 26, spd: 'Schreitend (50px/s)', rng: 'Erdbeben & Steinschlag (AOE)' },
+    behavior: 'Ein massives lebendiges Felsengebilde. Seine gewaltige Masse absorbiert fast jeden Rückstoß. Schlägt mit schweren Steinäxten zu und entfesselt Erdbeben, die Felsbrocken von der Decke herabstürzen lassen.',
+    counter: 'Wenn er zum Erdbeben ausholt, sofort auf die roten Warnzonen am Boden achten und per Dash ausweichen, bevor die Felsbrocken einschlagen!',
+    lore: 'Jahrtausende lang ruhten sie als scheinbar lebloses Urgestein in den tiefsten Höhlenschichten, bis die Welt wieder von magischer Glut erfüllt wurde.',
+    render(ctx, cx, cy, time, state, hitFlash) {
+      const isAttacking = state === 'attack';
+      const step = Math.sin(time * 2.8) * 2;
+      const armLift = isAttacking ? -8 : Math.sin(time * 2.8) * 3;
+
+      drawPaperShadow(ctx, cx, cy + 22, 22, 6);
+
+      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
+
+      // 1. Wuchtige Fels-Beine
+      ctx.fillStyle = '#334155';
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = 1.5;
+
+      // Linkes Bein
+      ctx.fillRect(cx - 14, cy + 12 + (step > 0 ? -step : 0), 9, 12);
+      ctx.strokeRect(cx - 14, cy + 12 + (step > 0 ? -step : 0), 9, 12);
+
+      // Rechtes Bein
+      ctx.fillRect(cx + 5, cy + 12 + (step < 0 ? step : 0), 9, 12);
+      ctx.strokeRect(cx + 5, cy + 12 + (step < 0 ? step : 0), 9, 12);
+
+      // 2. Massiver Rumpf aus Felsplatten
+      ctx.fillStyle = '#475569';
+      ctx.beginPath();
+      ctx.moveTo(cx - 18, cy + 12);
+      ctx.lineTo(cx - 20, cy - 6);
+      ctx.lineTo(cx - 10, cy - 14);
+      ctx.lineTo(cx + 10, cy - 14);
+      ctx.lineTo(cx + 20, cy - 6);
+      ctx.lineTo(cx + 18, cy + 12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Glühende Magma- / Kristalladern im Rumpf
+      const veinGlow = 0.6 + Math.sin(time * 4) * 0.4;
+      ctx.strokeStyle = `rgba(245, 158, 11, ${veinGlow})`;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, cy - 8);
+      ctx.lineTo(cx, cy - 2);
+      ctx.lineTo(cx + 7, cy - 6);
+      ctx.lineTo(cx + 4, cy + 4);
+      ctx.stroke();
+
+      // 3. Wuchtige Schulter-Felsen & Steinfäuste
+      ctx.fillStyle = '#334155';
+      // Linke Faust
+      ctx.fillRect(cx - 24, cy - 4 + armLift, 9, 14);
+      ctx.strokeRect(cx - 24, cy - 4 + armLift, 9, 14);
+
+      // Rechte Faust
+      ctx.fillRect(cx + 15, cy - 4 - armLift, 9, 14);
+      ctx.strokeRect(cx + 15, cy - 4 - armLift, 9, 14);
+
+      // 4. Steinkopf mit glühenden Augen
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(cx - 7, cy - 18, 14, 8);
+      ctx.strokeRect(cx - 7, cy - 18, 14, 8);
+
+      ctx.fillStyle = '#f59e0b';
+      ctx.fillRect(cx - 4, cy - 15, 2.5, 2);
+      ctx.fillRect(cx + 1.5, cy - 15, 2.5, 2);
+
+      ctx.filter = 'none';
+    }
+  },
+
   // =========================================================================
   // 7. LEEREN-WESEN & GEISTER (VOID)
   // =========================================================================

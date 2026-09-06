@@ -407,8 +407,11 @@ export class MagicManager {
     let map = null;
     if (dimension === DIMENSIONS.OVERWORLD) map = this.game?.overworldMap;
     else if (dimension === DIMENSIONS.CLOUDS) map = this.game?.cloudMap;
-    else if (dimension === DIMENSIONS.CAVES && this.game?.caves) {
-      map = subCaveId ? this.game.caves[subCaveId] : this.game.caves.main_complex;
+    else if ((dimension === DIMENSIONS.CAVES_L2 || dimension === 'caves_l2' || dimension === 'caves_deep') && this.game?.caves) {
+      map = this.game?.caves?.caves_l2 || null;
+    }
+    else if ((dimension === DIMENSIONS.CAVES || dimension === DIMENSIONS.CAVES_L1 || dimension === 'caves_l1' || dimension === 'caves') && this.game?.caves) {
+      map = (subCaveId && this.game.caves[subCaveId]) ? this.game.caves[subCaveId] : (this.game.caves.caves_l1 || this.game.caves.main_complex);
     }
 
     if (map) {
@@ -441,7 +444,7 @@ export class MagicManager {
     // 5. An jedem Schrein liegt maximal 1 Artefakt!
     const existing = this.groundArtifacts.find(a =>
       a.dimension === dimension &&
-      (dimension !== DIMENSIONS.CAVES || a.subCaveId === subCaveId) &&
+      ((dimension !== DIMENSIONS.CAVES && dimension !== DIMENSIONS.CAVES_L1 && dimension !== DIMENSIONS.CAVES_L2) || a.subCaveId === subCaveId) &&
       Math.hypot(a.x - x, a.y - y) < 24
     );
     if (existing) {
@@ -478,19 +481,20 @@ export class MagicManager {
       });
     }
 
-    // 2. Shrines in Cave World (Höhlen): Jede Unterhöhle separat taggen
+    // 2. Shrines in Cave World (Höhlen L1 & L2): Jede Unterhöhle separat taggen
     if (caves && typeof caves === 'object') {
       if (Array.isArray(caves.shrines)) {
         caves.shrines.forEach(shrine => {
           const type = getRandomType();
-          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true, null);
+          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES_L1, type, true, 'caves_l1');
         });
       } else {
         Object.entries(caves).forEach(([caveKey, cMap]) => {
           if (cMap && Array.isArray(cMap.shrines)) {
+            const dim = (caveKey === 'caves_l2' || caveKey === 'caves_deep') ? DIMENSIONS.CAVES_L2 : DIMENSIONS.CAVES_L1;
             cMap.shrines.forEach(shrine => {
               const type = getRandomType();
-              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES, type, true, caveKey);
+              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, dim, type, true, caveKey);
             });
           }
         });
