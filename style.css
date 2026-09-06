@@ -2413,6 +2413,13 @@ canvas#gameCanvas {
 .swap-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.swap-header-title {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -2427,6 +2434,29 @@ canvas#gameCanvas {
   color: #fef08a;
 }
 
+.swap-close-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #94a3b8;
+  font-size: 1rem;
+  font-weight: 700;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.swap-close-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #ffffff;
+  transform: scale(1.05);
+}
+
 .swap-desc {
   font-size: 0.88rem;
   color: #cbd5e1;
@@ -2435,7 +2465,7 @@ canvas#gameCanvas {
 
 .swap-comparison {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   gap: 14px;
   width: 100%;
@@ -2444,24 +2474,50 @@ canvas#gameCanvas {
 
 .swap-card {
   flex: 1;
-  background: rgba(14, 18, 30, 0.9);
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
-  border-radius: 14px;
-  padding: 12px 10px;
+  background: rgba(14, 18, 30, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 16px 12px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .swap-card.current {
-  border-color: rgba(148, 163, 184, 0.4);
+  border-color: rgba(245, 158, 11, 0.45);
+  background: linear-gradient(180deg, rgba(32, 24, 14, 0.95) 0%, rgba(14, 18, 30, 0.98) 100%);
+  box-shadow: 0 0 14px rgba(245, 158, 11, 0.15);
+}
+.swap-card.current:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: #f59e0b;
+  box-shadow: 0 12px 28px rgba(245, 158, 11, 0.35);
+}
+.swap-card.current:active {
+  transform: translateY(-1px) scale(0.99);
 }
 
 .swap-card.incoming {
-  border-color: #55e6a5;
-  box-shadow: 0 0 16px rgba(85, 230, 165, 0.3);
-  background: rgba(16, 38, 38, 0.9);
+  border-color: rgba(16, 185, 129, 0.5);
+  background: linear-gradient(180deg, rgba(14, 38, 30, 0.95) 0%, rgba(14, 18, 30, 0.98) 100%);
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.25);
+}
+.swap-card.incoming:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: #34d399;
+  box-shadow: 0 12px 28px rgba(16, 185, 129, 0.4);
+}
+.swap-card.incoming:active {
+  transform: translateY(-1px) scale(0.99);
 }
 
 .swap-card-tag {
@@ -2476,8 +2532,9 @@ canvas#gameCanvas {
 }
 
 .swap-card-icon {
-  font-size: 1.8rem;
-  margin: 2px 0;
+  font-size: 2rem;
+  margin: 4px 0;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
 }
 
 .swap-card h4 {
@@ -2493,6 +2550,42 @@ canvas#gameCanvas {
   font-weight: 700;
 }
 
+.swap-card-btn-badge {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  letter-spacing: 0.3px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  transition: all 0.18s ease;
+}
+
+.swap-card-btn-badge.badge-recharge {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+.swap-card.current:hover .swap-card-btn-badge.badge-recharge {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.55);
+}
+
+.swap-card-btn-badge.badge-accept {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+.swap-card.incoming:hover .swap-card-btn-badge.badge-accept {
+  background: linear-gradient(135deg, #34d399, #10b981);
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.55);
+}
+
 .swap-divider {
   font-size: 0.9rem;
   font-weight: 900;
@@ -2500,64 +2593,29 @@ canvas#gameCanvas {
   background: rgba(255, 255, 255, 0.08);
   padding: 4px 8px;
   border-radius: 50%;
+  align-self: center;
 }
 
-.swap-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  max-width: 380px;
+.swap-footer {
+  margin-top: 4px;
 }
 
-.btn-swap-primary {
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  padding: 10px 18px;
-  font-size: 0.95rem;
-  font-weight: 800;
+.swap-leave-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 18px;
+  border-radius: 20px;
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
+  font-family: inherit;
 }
-.btn-swap-primary:hover {
-  background: linear-gradient(135deg, #34d399, #10b981);
-  transform: translateY(-1px);
-}
-
-.btn-swap-recharge {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  padding: 10px 18px;
-  font-size: 0.95rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
-}
-.btn-swap-recharge:hover {
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
-  transform: translateY(-1px);
-}
-
-.btn-swap-secondary {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: #cbd5e1;
-  border-radius: 12px;
-  padding: 8px 18px;
-  font-size: 0.88rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.btn-swap-secondary:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+.swap-leave-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f1f5f9;
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 /* Mobile Adjustments for Magic HUD (Über dem Diamond-Gamepad platziert) */

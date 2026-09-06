@@ -311,40 +311,43 @@
     <div id="artifact-swap-modal" class="artifact-swap-backdrop hidden">
       <div class="artifact-swap-dialog">
         <div class="swap-header">
-          <span class="swap-header-icon">✨</span>
-          <h3>Neues magisches Artefakt gefunden!</h3>
+          <div class="swap-header-title">
+            <span class="swap-header-icon">✨</span>
+            <h3>Neues magisches Artefakt gefunden!</h3>
+          </div>
+          <button type="button" id="btn-artifact-swap-close" class="swap-close-btn" aria-label="Schließen" title="Schließen">✕</button>
         </div>
-        <p class="swap-desc">Du kannst immer nur ein Artefakt gleichzeitig tragen. Wähle deine Aktion:</p>
+        <p class="swap-desc">Du kannst immer nur ein Artefakt gleichzeitig tragen. Klicke auf eine Option:</p>
 
         <div class="swap-comparison">
-          <!-- Aktuelles Artefakt -->
-          <div class="swap-card current">
+          <!-- Aktuelles Artefakt: Behalten & Aufladen -->
+          <button type="button" id="btn-artifact-swap-recharge" class="swap-card current" title="Altes Artefakt behalten und Aufladungen erhöhen">
             <span class="swap-card-tag">Aktuell getragen</span>
             <span id="swap-current-icon" class="swap-card-icon">🔥</span>
             <h4 id="swap-current-name">Rubin-Phönix</h4>
             <span id="swap-current-charges" class="swap-card-charges">2 / 5 Aufladungen</span>
-          </div>
+            <div class="swap-card-btn-badge badge-recharge">
+              <span id="swap-recharge-label">⚡ Behalten (+3)</span>
+            </div>
+          </button>
 
           <div class="swap-divider">VS</div>
 
-          <!-- Neues Artefakt -->
-          <div class="swap-card incoming">
+          <!-- Neues Artefakt: Neuen wählen -->
+          <button type="button" id="btn-artifact-swap-accept" class="swap-card incoming" title="Neues Artefakt ausrüsten">
             <span class="swap-card-tag">Gefunden</span>
             <span id="swap-new-icon" class="swap-card-icon">🔥</span>
             <h4 id="swap-new-name">Rubin-Phönix</h4>
             <span id="swap-new-charges" class="swap-card-charges">5 Aufladungen</span>
-          </div>
+            <div class="swap-card-btn-badge badge-accept">
+              <span>🔄 Neuen wählen</span>
+            </div>
+          </button>
         </div>
 
-        <div class="swap-actions">
-          <button id="btn-artifact-swap-accept" class="btn-swap-primary" title="Neues Artefakt anlegen">
-            <span>🔄 Neues Artefakt ausrüsten</span>
-          </button>
-          <button id="btn-artifact-swap-recharge" class="btn-swap-recharge" title="Altes Artefakt behalten und Aufladungen erhöhen">
-            <span>⚡ Behalten &amp; Aufladen (+3)</span>
-          </button>
-          <button id="btn-artifact-swap-leave" class="btn-swap-secondary" title="Neues Artefakt liegen lassen">
-            <span>✕ Liegen lassen</span>
+        <div class="swap-footer">
+          <button type="button" id="btn-artifact-swap-leave" class="swap-leave-btn" title="Neues Artefakt liegen lassen">
+            ✕ Liegen lassen
           </button>
         </div>
       </div>

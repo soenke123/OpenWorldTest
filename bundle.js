@@ -8700,6 +8700,17 @@ class MagicManager {
       btnSwapLeave.addEventListener('touchstart', handleLeave, { passive: false });
     }
 
+    const btnSwapClose = getElement('btn-artifact-swap-close');
+    if (btnSwapClose) {
+      const handleClose = (e) => {
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+        this.closeSwapModal();
+      };
+      btnSwapClose.addEventListener('click', handleClose);
+      btnSwapClose.addEventListener('touchstart', handleClose, { passive: false });
+    }
+
     // Click backdrop outside modal dialog to dismiss
     if (this.artifactSwapModal) {
       this.artifactSwapModal.addEventListener('click', (e) => {
@@ -9126,6 +9137,12 @@ class MagicManager {
     if (newIcon) newIcon.textContent = incoming.icon;
     if (newName) newName.textContent = incoming.name;
     if (newCharges) newCharges.textContent = `${incoming.maxCharges} Aufladungen`;
+
+    const rechargeLabel = getElement('swap-recharge-label');
+    const bonus = incoming.rechargeBonus || 3;
+    if (rechargeLabel) {
+      rechargeLabel.textContent = `⚡ Behalten (+${bonus})`;
+    }
 
     modal.classList.remove('hidden');
   }
