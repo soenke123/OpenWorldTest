@@ -555,6 +555,35 @@ export class CombatManager {
       }
     }
 
+    // PvP: Treffer auf andere Mitspieler im LAN-Multiplayer
+    if (this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
+      for (const remotePlayer of this.game.remotePlayers.values()) {
+        if (remotePlayer.id === this.game.network.clientId) continue;
+        if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== dim)) continue;
+
+        const dx = remotePlayer.x - x;
+        const dy = remotePlayer.y - y;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= radius + (remotePlayer.radius || 10)) {
+          const angle = dist > 1 ? Math.atan2(dy, dx) : Math.random() * Math.PI * 2;
+          const kbX = Math.cos(angle) * knockback;
+          const kbY = Math.sin(angle) * knockback;
+
+          let actualDmg = damage;
+          if (remotePlayer.shield && remotePlayer.shield.active && remotePlayer.shield.energy > 0) {
+            actualDmg = Math.round(damage * 0.3);
+            this.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 16);
+            this.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 20, '#38bdf8');
+          } else {
+            this.addHitSparks(remotePlayer.x, remotePlayer.y, '#ec4899', 18);
+            this.addFloatingText(`-${actualDmg}!`, remotePlayer.x, remotePlayer.y - 20, '#f472b6');
+          }
+
+          this.game.network.sendPvPHit(remotePlayer.id, actualDmg, kbX, kbY);
+        }
+      }
+    }
+
     for (const dummy of this.dummies) {
       const dx = dummy.x - x;
       const dy = dummy.y - 6 - y;

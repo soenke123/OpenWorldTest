@@ -112,7 +112,13 @@ export class NetworkManager {
         this.clientId = msg.clientId;
         this.lanIp = msg.lanIp;
         this.joinUrl = msg.joinUrl;
-        console.log(`[Network] Initialisiert. Eigene ID: ${this.clientId}, LAN-URL: ${this.joinUrl}`);
+        this.masterClientId = msg.masterClientId || null;
+        console.log(`[Network] Initialisiert. Eigene ID: ${this.clientId}, Master: ${this.masterClientId}, LAN-URL: ${this.joinUrl}`);
+        break;
+
+      case 'master_client':
+        this.masterClientId = msg.masterClientId;
+        console.log(`[Network] Neuer Master-Client für Mobs: ${this.masterClientId}`);
         break;
 
       case 'player_killed':
@@ -212,6 +218,26 @@ export class NetworkManager {
     this.send({
       type: 'host_start_round',
       worldId
+    });
+  }
+
+  sendEnemiesUpdate(enemies) {
+    if (!this.connected) return;
+    this.send({
+      type: 'enemies_update',
+      enemies
+    });
+  }
+
+  sendDamageEnemy(enemyId, damage, angle = 0, knockback = 0, isRange = false) {
+    if (!this.connected) return;
+    this.send({
+      type: 'damage_enemy',
+      enemyId,
+      damage,
+      angle,
+      knockback,
+      isRange
     });
   }
 }

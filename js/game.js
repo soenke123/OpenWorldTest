@@ -764,6 +764,15 @@ class Game {
     // Netzwerk-Synchronisation
     if (this.network) {
       this.network.update(dt, this.isHost ? null : this.player);
+
+      // Im LAN-Modus: Wenn dieser Client der Master ist, Snapshot aller Monster an Mitspieler senden (~12.5 Hz)
+      if (this.network.connected && this.enemyManager && this.enemyManager.isMasterClient) {
+        this.enemySyncTimer = (this.enemySyncTimer || 0) + dt;
+        if (this.enemySyncTimer >= 0.08) {
+          this.enemySyncTimer = 0;
+          this.network.sendEnemiesUpdate(this.enemyManager.serializeEnemiesState());
+        }
+      }
     }
   }
 
@@ -1198,6 +1207,17 @@ class Game {
     // 12. Screen Overlay: Floating Shrine Discovery Banner
     if (this.player.shrineMessage) {
       this.renderShrineBanner(this.player.shrineMessage);
+    }
+
+    // 12.5. Screen Overlay: Teleport Blackout Fade (kurze Schwarzüberblende während Kamerasprung)
+    if (this.player && typeof this.player.getTeleportBlackoutAlpha === 'function') {
+      const bAlpha = this.player.getTeleportBlackoutAlpha();
+      if (bAlpha > 0) {
+        this.ctx.save();
+        this.ctx.fillStyle = `rgba(15, 5, 29, ${bAlpha})`;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.restore();
+      }
     }
 
     // 13. LAYER 10: Minimap
@@ -4086,6 +4106,9 @@ class Game {
     this.network.on('init', (msg) => {
       this.remotePlayers.clear();
       const myId = msg.clientId || (this.network ? this.network.clientId : null);
+      if (msg.masterClientId && this.enemyManager) {
+        this.enemyManager.isMasterClient = (myId === msg.masterClientId);
+      }
       if (msg.players) {
         for (const p of msg.players) {
           if (p.id !== myId) {
@@ -4098,6 +4121,25 @@ class Game {
           this.switchWorld(msg.worldId);
         }
         this.updateWizardWorldDisplay(msg.worldId);
+      }
+    });
+
+    this.network.on('master_client', (msg) => {
+      const isMaster = (this.network.clientId === msg.masterClientId);
+      if (this.enemyManager) {
+        this.enemyManager.isMasterClient = isMaster;
+      }
+    });
+
+    this.network.on('enemies_update', (msg) => {
+      if (this.enemyManager && !this.enemyManager.isMasterClient) {
+        this.enemyManager.applyEnemiesState(msg.enemies);
+      }
+    });
+
+    this.network.on('damage_enemy', (msg) => {
+      if (this.enemyManager && this.enemyManager.isMasterClient) {
+        this.enemyManager.handleRemoteDamage(msg);
       }
     });
 

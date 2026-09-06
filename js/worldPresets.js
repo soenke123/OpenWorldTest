@@ -20,8 +20,8 @@ export const WORLD_PRESETS = [
     description: 'Eine sonnendurchflutete grüne Landschaft mit weiten Lichtungen, 5 großen Waldhainen, zwei mächtigen Flüssen mit Holzbrücken und seltenem Schnee im Norden.',
     voidZone: { x: 268, y: 40, radius: 18, name: 'Nordost-Rift' },
     forestCount: 5,
-    trampolineCount: 8,
-    shrineCount: 7
+    trampolineCount: 18,
+    shrineCount: 1
   },
   {
     id: 2,
@@ -36,8 +36,8 @@ export const WORLD_PRESETS = [
     description: 'Eine eisige Welt aus Schnee, Gletscherspalten und dichten Kiefernwäldern. Ein riesiger zugefrorener Bergsee dominiert das Zentrum. Die Leere liegt am fernen Südrand.',
     voidZone: { x: 265, y: 175, radius: 18, name: 'Südost-Gletscherabgrund' },
     forestCount: 6,
-    trampolineCount: 7,
-    shrineCount: 8
+    trampolineCount: 17,
+    shrineCount: 1
   },
   {
     id: 3,
@@ -52,8 +52,8 @@ export const WORLD_PRESETS = [
     description: 'Glühende Wüstenmeere mit tückischem Treibsand, schattigen Palmenoasen und weiten Sandsteinplateaus. Im Osten klafft ein verlassener Leerenkrater.',
     voidZone: { x: 272, y: 110, radius: 17, name: 'Östlicher Dünenkrater' },
     forestCount: 4,
-    trampolineCount: 6,
-    shrineCount: 6
+    trampolineCount: 16,
+    shrineCount: 1
   },
   {
     id: 4,
@@ -68,8 +68,8 @@ export const WORLD_PRESETS = [
     description: 'Ein von zwei gewaltigen Flüssen durchzogenes Tal mit üppiger Vegetation, 6 Mischwäldern und einem weitläufigen Binnensee mit Insel.',
     voidZone: { x: 145, y: 186, radius: 18, name: 'Südliches Bruch-Rift' },
     forestCount: 6,
-    trampolineCount: 9,
-    shrineCount: 7
+    trampolineCount: 18,
+    shrineCount: 1
   },
   {
     id: 5,
@@ -84,8 +84,8 @@ export const WORLD_PRESETS = [
     description: 'Imposante Höhenstufen und Steilwände aus weißem Eis. Schneebedeckte Haine und geheime Grottenzugänge prägen die Bergketten.',
     voidZone: { x: 20, y: 170, radius: 17, name: 'Südwestlicher Abgrund' },
     forestCount: 5,
-    trampolineCount: 7,
-    shrineCount: 8
+    trampolineCount: 16,
+    shrineCount: 1
   },
   {
     id: 6,
@@ -100,8 +100,8 @@ export const WORLD_PRESETS = [
     description: 'Tief eingeschnittene rote Canyons, gewundene Schluchten mit kleinen Quellflüssen und seltsamen Felsformationen. Die Leere liegt ganz im Norden.',
     voidZone: { x: 150, y: 16, radius: 17, name: 'Nördliche Kluft' },
     forestCount: 5,
-    trampolineCount: 6,
-    shrineCount: 6
+    trampolineCount: 16,
+    shrineCount: 1
   },
   {
     id: 7,
@@ -116,8 +116,8 @@ export const WORLD_PRESETS = [
     description: 'Ein märchenhafter Riesenwald mit rosa Kirschblüten, Moosbächen und uralten Holzbrücken. Ein dichter Sumpf liegt versteckt im Südosten.',
     voidZone: { x: 270, y: 165, radius: 18, name: 'Südost-Schattenforst' },
     forestCount: 7,
-    trampolineCount: 10,
-    shrineCount: 8
+    trampolineCount: 18,
+    shrineCount: 1
   },
   {
     id: 8,
@@ -132,8 +132,8 @@ export const WORLD_PRESETS = [
     description: 'Majestätische Doppelgipfel auf Ebene +2 mit zahlreichen Kletterrampen, eisblauen Bergseen und 8 geheimen Schreinen für tapfere Entdecker.',
     voidZone: { x: 268, y: 55, radius: 18, name: 'Nordost-Eisspalte' },
     forestCount: 6,
-    trampolineCount: 8,
-    shrineCount: 8
+    trampolineCount: 17,
+    shrineCount: 1
   },
   {
     id: 9,
@@ -148,8 +148,8 @@ export const WORLD_PRESETS = [
     description: 'Eine atemberaubende, weitläufige Wüstenwelt mit verbundenen Oasen, Palmenhainen und verborgenen Grotteneingängen.',
     voidZone: { x: 275, y: 100, radius: 18, name: 'Östliches Astraltor' },
     forestCount: 4,
-    trampolineCount: 6,
-    shrineCount: 6
+    trampolineCount: 16,
+    shrineCount: 1
   },
   {
     id: 10,
@@ -164,8 +164,8 @@ export const WORLD_PRESETS = [
     description: 'Eine harmonische Großwelt, die weite Grasländer, dichte Laub- und Tannenwälder, weite Flüsse und kleine Wüstenausläufer perfekt vereint.',
     voidZone: { x: 270, y: 180, radius: 18, name: 'Südost-Urzeit-Abgrund' },
     forestCount: 7,
-    trampolineCount: 9,
-    shrineCount: 8
+    trampolineCount: 18,
+    shrineCount: 1
   }
 ];
 

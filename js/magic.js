@@ -961,6 +961,42 @@ export class MagicManager {
       }
     }
 
+    // PvP: Treffer auf Mitspieler im LAN-Multiplayer
+    if (this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
+      for (const remotePlayer of this.game.remotePlayers.values()) {
+        if (remotePlayer.id === this.game.network.clientId) continue;
+        if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
+
+        const dx = remotePlayer.x - px;
+        const dy = remotePlayer.y - py;
+        const dist = Math.hypot(dx, dy);
+        if (dist > range + (remotePlayer.radius || 10)) continue;
+
+        const angToRemote = Math.atan2(dy, dx);
+        let diff = angToRemote - facingAngle;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+
+        if (Math.abs(diff) <= halfArc) {
+          const frostDmg = 30;
+          let actualDmg = frostDmg;
+          const kbX = Math.cos(angToRemote) * 50;
+          const kbY = Math.sin(angToRemote) * 50;
+
+          if (remotePlayer.shield && remotePlayer.shield.active && remotePlayer.shield.energy > 0) {
+            actualDmg = 10;
+            combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 14);
+            combatManager?.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 20, '#38bdf8');
+          } else {
+            combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 18);
+            combatManager?.addFloatingText('❄️ EINGEFROREN! (2s)', remotePlayer.x, remotePlayer.y - 20, '#38bdf8', 1.1);
+          }
+
+          this.game.network.sendPvPHit(remotePlayer.id, actualDmg, kbX, kbY);
+        }
+      }
+    }
+
     // Audio-visuelles Feedback
     if (combatManager) {
       combatManager.addFloatingText(`❄️ EISNEBEL! (${player.artifact.charges} übrig)`, px, py - 26, '#38bdf8', 1.2);
@@ -1327,28 +1363,15 @@ export class MagicManager {
     // Modal SOFORT schließen, damit der Spieler die volle Animation sieht!
     this.closeTeleportModal();
 
-    const combat = this.game?.combat;
-    if (combat) {
-      combat.spawnVoidTeleportVFX(player.x, player.y, false);
-    }
-
-    player.x = worldX;
-    player.y = worldY;
-    if (this.game?.camera) {
-      this.game.camera.centerOn(worldX, worldY);
-    }
-
-    if (combat) {
-      combat.spawnVoidTeleportVFX(player.x, player.y, true);
-      combat.addFloatingText('🌌 LEEREN-SPRUNG!', player.x, player.y - 28, '#c084fc', 1.3);
-    }
-
     if (player.artifact) {
       player.artifact.charges--;
       player.artifact.cooldownTimer = player.artifact.cooldownMax || 1.0;
     }
 
     this.updateHUD();
+
+    // 3-Phasen Teleport-Animation starten (Lila Loch -> Spieler sinkt -> Blackout -> Lila Loch Zielort -> Spieler springt heraus)
+    player.startTeleportSequence(worldX, worldY);
   }
 
   handleTeleportClick(clientX, clientY) {
@@ -1699,6 +1722,40 @@ export class MagicManager {
                 });
               }
             }
+          }
+        }
+      }
+
+      // Check collision with remote players (LAN Multiplayer PvP)
+      if (this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
+        for (const remotePlayer of this.game.remotePlayers.values()) {
+          if (remotePlayer.id === this.game.network.clientId) continue;
+          if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
+          if (spell.hitEnemies.has(remotePlayer.id)) continue;
+
+          const dx = remotePlayer.x - spell.x;
+          const dy = remotePlayer.y - spell.y;
+          const dotFlight = dx * spell.dirX + dy * spell.dirY;
+          const dotPerp = Math.abs(dx * (-spell.dirY) + dy * spell.dirX);
+
+          const collisionDist = Math.max(35, spell.speed * dt * 1.5);
+          if (Math.abs(dotFlight) <= collisionDist && dotPerp <= (spell.width / 2 + (remotePlayer.radius || 10))) {
+            spell.hitEnemies.add(remotePlayer.id);
+
+            const kbX = spell.dirX * 130;
+            const kbY = spell.dirY * 130;
+
+            let actualDmg = spell.damage;
+            if (remotePlayer.shield && remotePlayer.shield.active && remotePlayer.shield.energy > 0) {
+              actualDmg = Math.round(spell.damage * 0.35);
+              combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 16);
+              combatManager?.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 20, '#38bdf8');
+            } else {
+              combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#ef4444', 20);
+              combatManager?.addFloatingText(`🔥 -${actualDmg}`, remotePlayer.x, remotePlayer.y - 20, '#ef4444', 1.0);
+            }
+
+            this.game.network.sendPvPHit(remotePlayer.id, actualDmg, kbX, kbY);
           }
         }
       }

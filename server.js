@@ -166,6 +166,7 @@ const server = http.createServer(async (req, res) => {
 const wss = new WebSocketServer({ server });
 
 let nextClientId = 1;
+let masterClientId = null;
 
 wss.on('connection', (ws) => {
   const clientId = `p_${nextClientId++}_${Math.random().toString(36).substr(2, 5)}`;
@@ -198,6 +199,11 @@ wss.on('connection', (ws) => {
         }
 
         if (clientRole === 'player') {
+          if (!masterClientId) {
+            masterClientId = clientId;
+            console.log(`[Multiplayer] 🤖 Master-Client für Monster-Simulation: ${clientId}`);
+          }
+
           const playerRecord = {
             id: clientId,
             ws,
@@ -246,7 +252,8 @@ wss.on('connection', (ws) => {
           port: PORT,
           joinUrl: `http://${LAN_IP}:${PORT}`,
           players: otherPlayers,
-          hasHost: Boolean(roomState.hostWs && roomState.hostWs.readyState === WebSocket.OPEN)
+          hasHost: Boolean(roomState.hostWs && roomState.hostWs.readyState === WebSocket.OPEN),
+          masterClientId
         });
         break;
       }
@@ -393,6 +400,29 @@ wss.on('connection', (ws) => {
         break;
       }
 
+      case 'enemies_update': {
+        if (clientId === masterClientId) {
+          broadcast({
+            type: 'enemies_update',
+            enemies: msg.enemies
+          }, ws);
+        }
+        break;
+      }
+
+      case 'damage_enemy': {
+        broadcast({
+          type: 'damage_enemy',
+          attackerId: clientId,
+          enemyId: msg.enemyId,
+          damage: msg.damage,
+          angle: msg.angle,
+          knockback: msg.knockback,
+          isRange: msg.isRange
+        }, ws);
+        break;
+      }
+
       // -----------------------------------------------------------------------
       // HOST COMMANDS
       // -----------------------------------------------------------------------
@@ -497,6 +527,17 @@ wss.on('connection', (ws) => {
       if (p) {
         console.log(`[Multiplayer] 🚪 Spieler hat verlassen: ${p.name} [ID: ${clientId}]`);
         roomState.players.delete(clientId);
+        if (clientId === masterClientId) {
+          const remaining = Array.from(roomState.players.keys());
+          masterClientId = remaining.length > 0 ? remaining[0] : null;
+          console.log(`[Multiplayer] 🤖 Neuer Master-Client für Monster-Simulation: ${masterClientId}`);
+          if (masterClientId) {
+            broadcast({
+              type: 'master_client',
+              masterClientId
+            });
+          }
+        }
         broadcast({
           type: 'player_left',
           id: clientId,

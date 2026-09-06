@@ -104,6 +104,7 @@ export class Player {
     this.isBearForm = false;
     this.bearFormTimer = 0;
     this.bearFormMaxTimer = 60;
+    this.teleportSequence = null; // 3-Phasen Teleport-Animation { phase, timer, targetX, targetY, vortexAngle }
   }
 
   respawn() {
@@ -203,6 +204,62 @@ export class Player {
         setSelectedSkin(skinId);
       }
     }
+  }
+
+  startTeleportSequence(targetX, targetY) {
+    if (this.isDead) return;
+    this.teleportSequence = {
+      phase: 'sink', // 'sink' | 'blackout' | 'emerge'
+      timer: 0,
+      targetX,
+      targetY,
+      originX: this.x,
+      originY: this.y,
+      vortexAngle: 0
+    };
+    this.invulnTimer = 1.2;
+    this.isMoving = false;
+    this.currentSpeed = 0;
+  }
+
+  getTeleportBlackoutAlpha() {
+    if (!this.teleportSequence) return 0;
+    if (this.teleportSequence.phase === 'blackout') return 1.0;
+    if (this.teleportSequence.phase === 'sink' && this.teleportSequence.timer > 0.22) {
+      return Math.min(1.0, (this.teleportSequence.timer - 0.22) / 0.13);
+    }
+    if (this.teleportSequence.phase === 'emerge' && this.teleportSequence.timer < 0.15) {
+      return Math.max(0.0, 1.0 - (this.teleportSequence.timer / 0.15));
+    }
+    return 0;
+  }
+
+  renderVoidVortexHole(ctx, x, y, progress, angle = 0) {
+    const radius = 22 * Math.max(0.1, progress);
+    ctx.save();
+    // Dunkles Leeren-Zentrum
+    ctx.fillStyle = '#0f051d';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 4, radius, radius * 0.52, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Violetter Strudel-Rand
+    ctx.strokeStyle = '#c084fc';
+    ctx.lineWidth = 2.4;
+    ctx.shadowColor = 'rgba(192, 132, 252, 0.85)';
+    ctx.shadowBlur = 9;
+    ctx.beginPath();
+    ctx.ellipse(x, y + 4, radius, radius * 0.52, 0, angle, angle + Math.PI * 1.6);
+    ctx.stroke();
+
+    // Rosa Innenwirbel
+    ctx.strokeStyle = '#f472b6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(x, y + 4, radius * 0.6, radius * 0.32, 0, -angle * 1.5, -angle * 1.5 + Math.PI * 1.3);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   hasActiveArtifact() {
@@ -679,6 +736,46 @@ export class Player {
   update(dt, input) {
     this.updateParticles(dt);
 
+    // 3-Phasen Teleport-Animation (Sink -> Blackout -> Emerge)
+    if (this.teleportSequence) {
+      this.teleportSequence.timer += dt;
+      this.teleportSequence.vortexAngle = (this.teleportSequence.vortexAngle || 0) + dt * 10;
+
+      if (this.teleportSequence.phase === 'sink') {
+        if (this.teleportSequence.timer >= 0.35) {
+          this.teleportSequence.phase = 'blackout';
+          this.teleportSequence.timer = 0;
+          this.x = this.teleportSequence.targetX;
+          this.y = this.teleportSequence.targetY;
+          const targetTileX = Math.floor(this.x / TILE_SIZE);
+          const targetTileY = Math.floor(this.y / TILE_SIZE);
+          this.elevation = this.map ? this.map.getElevation(targetTileX, targetTileY) : 0;
+          this.visualElevation = this.elevation;
+          if (this.game && this.game.camera) {
+            this.game.camera.follow(this.x, this.y);
+          }
+        }
+      } else if (this.teleportSequence.phase === 'blackout') {
+        if (this.teleportSequence.timer >= 0.22) {
+          this.teleportSequence.phase = 'emerge';
+          this.teleportSequence.timer = 0;
+          if (this.game && this.game.camera) {
+            this.game.camera.follow(this.x, this.y);
+          }
+        }
+      } else if (this.teleportSequence.phase === 'emerge') {
+        if (this.teleportSequence.timer >= 0.40) {
+          this.teleportSequence = null;
+          this.invulnTimer = 0.3;
+          if (this.game && this.game.combat) {
+            this.game.combat.addFloatingText('🌀 TELEPORTIERT!', this.x, this.y - 24, '#c084fc', 1.2);
+            this.game.combat.addHitSparks(this.x, this.y, '#c084fc', 20);
+          }
+        }
+      }
+      return;
+    }
+
     // Druid Bear Form Duration Countdown & Green Forest Aura Emitters
     if (this.isBearForm) {
       this.bearFormTimer -= dt;
@@ -1099,14 +1196,15 @@ export class Player {
       const newElev = this.map.getElevation(newTileX, newTileY);
 
       if (newElev < prevElev) {
+        this.elevation = newElev;
         if (dx !== 0) {
-          const hopX = this.x + Math.sign(dx) * 6;
+          const hopX = this.x + Math.sign(dx) * 8;
           if (!this.checkCollision(hopX, this.y)) {
             this.x = hopX;
           }
         }
         if (dy !== 0) {
-          const hopY = this.y + Math.sign(dy) * 6;
+          const hopY = this.y + Math.sign(dy) * 8;
           if (!this.checkCollision(this.x, hopY)) {
             this.y = hopY;
           }
@@ -1136,7 +1234,7 @@ export class Player {
       this.currentSpeed = 0;
     }
 
-    // Check deadly abyss & update elevation
+    // Check deadly abyss & water drowning
     const curTileX = Math.floor(this.x / TILE_SIZE);
     const curTileY = Math.floor(this.y / TILE_SIZE);
 
@@ -1145,8 +1243,33 @@ export class Player {
       this.lastTransitionTile = null;
     }
 
-    if (this.map.isDeadly(curTileX, curTileY)) {
-      this.die('void');
+    const currentGround = this.map.getGroundTile ? this.map.getGroundTile(curTileX, curTileY) : 0;
+    const isWater = (currentGround === TILES.WATER || currentGround === TILES.SWAMP_WATER || currentGround === TILES.CAVE_WATER);
+    const isBridge = (currentGround === TILES.BRIDGE_H || currentGround === TILES.BRIDGE_V || currentGround === TILES.RAINBOW_BRIDGE_H || currentGround === TILES.RAINBOW_BRIDGE_V);
+
+    if (!isBridge && !this.transition && !this.teleportSequence) {
+      if (this.map.isDeadly(curTileX, curTileY)) {
+        this.die('void');
+      } else if (isWater) {
+        if (this.game && this.game.combat) {
+          this.game.combat.addFloatingText('🌊 ERTRUNKEN!', this.x, this.y - 28, '#0ea5e9', 1.5);
+          for (let i = 0; i < 24; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const sp = Math.random() * 50 + 20;
+            this.game.combat.hitSparks.push({
+              x: this.x,
+              y: this.y,
+              vx: Math.cos(angle) * sp,
+              vy: Math.sin(angle) * sp - 15,
+              color: '#38bdf8',
+              size: Math.random() * 3.5 + 1.5,
+              life: 0.6,
+              maxLife: 0.6
+            });
+          }
+        }
+        this.die('drown');
+      }
     }
 
     const tileElev = this.map.getElevation(curTileX, curTileY);
@@ -1613,7 +1736,16 @@ export class Player {
     // Nur Punkte auf der vorderen Kante (Leading Edge) in Bewegungsrichtung prüfen.
     // Verhindert das Hängenbleiben an Kanten, von denen man sich wegbewegt.
     let checkPoints = [];
-    if (moveDx > 0) {
+    if (moveDx !== 0 && moveDy !== 0) {
+      // Diagonale Bewegung: vorderer Eckpunkt und Kantenpunkte beider Achsen
+      const sx = Math.sign(moveDx);
+      const sy = Math.sign(moveDy);
+      checkPoints = [
+        { x: targetX + sx * r, y: targetY + sy * r },
+        { x: targetX + sx * r, y: targetY },
+        { x: targetX, y: targetY + sy * r }
+      ];
+    } else if (moveDx > 0) {
       checkPoints = [
         { x: targetX + r, y: targetY - r * 0.7 },
         { x: targetX + r, y: targetY },
@@ -1655,9 +1787,13 @@ export class Player {
       // Gleiche Kachel wie Spielerzentrum -> kein Höhenwechsel
       if (tx === curTileX && ty === curTileY) continue;
 
-      // Kantenkollision prüfen
-      if (!this.map.isElevationPassable(curTileX, curTileY, tx, ty)) {
-        return true;
+      // Kantenkollision prüfen: Nur wenn Zielkachel HÖHER liegt als die aktuelle Spieler-Ebene!
+      // Wenn targetElev <= this.elevation, steigt man herab oder bleibt gleich -> niemals blockieren
+      const targetElev = this.map.getElevation ? this.map.getElevation(tx, ty) : 0;
+      if (targetElev > this.elevation) {
+        if (!this.map.isElevationPassable(curTileX, curTileY, tx, ty)) {
+          return true;
+        }
       }
     }
 
@@ -1767,6 +1903,26 @@ export class Player {
           transScale = 0.6 + (prog - 0.5) * 0.8;
           transAlpha = 0.6 + (prog - 0.5) * 0.8;
         }
+      }
+    }
+
+    if (this.teleportSequence) {
+      const { phase, timer, vortexAngle } = this.teleportSequence;
+      if (phase === 'sink') {
+        const prog = Math.min(1.0, timer / 0.35);
+        this.renderVoidVortexHole(ctx, px, Math.round(this.y) - elevY, Math.min(1.0, prog * 1.5), vortexAngle);
+        transScale = Math.max(0.05, 1.0 - prog * 0.95);
+        transOffset = -prog * 12;
+        transAlpha = Math.max(0.0, 1.0 - prog);
+      } else if (phase === 'blackout') {
+        transAlpha = 0.0;
+        return;
+      } else if (phase === 'emerge') {
+        const prog = Math.min(1.0, timer / 0.40);
+        this.renderVoidVortexHole(ctx, px, Math.round(this.y) - elevY, Math.max(0.1, 1.0 - prog * 0.75), vortexAngle);
+        transScale = Math.min(1.0, 0.2 + prog * 0.8);
+        transOffset = Math.sin(prog * Math.PI) * 18;
+        transAlpha = Math.min(1.0, prog * 2.0);
       }
     }
 

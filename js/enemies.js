@@ -161,6 +161,39 @@ export class EnemyEntity {
   update(dt, player, map, enemyManager, combatManager) {
     if (this.state === 'dead') return;
 
+    // Wasser-Ertrinken für nicht-fliegende Gegner (falls durch Knockback oder Wanderung im Wasser gelandet)
+    if (!isFlyingEnemy(this.typeId) && map) {
+      const tx = Math.floor(this.x / TILE_SIZE);
+      const ty = Math.floor(this.y / TILE_SIZE);
+      const ground = map.getGroundTile ? map.getGroundTile(tx, ty) : 0;
+      const isWater = (ground === TILES.WATER || ground === TILES.SWAMP_WATER || ground === TILES.CAVE_WATER || ground === TILES.VOID_LAKE);
+      const isBridge = (ground === TILES.BRIDGE_H || ground === TILES.BRIDGE_V || ground === TILES.RAINBOW_BRIDGE_H || ground === TILES.RAINBOW_BRIDGE_V);
+      if (isWater && !isBridge) {
+        this.hp = 0;
+        this.state = 'dead';
+        this.die(combatManager);
+        if (combatManager) {
+          combatManager.addFloatingText('🌊 ERTRUNKEN!', this.x, this.y - 20, '#38bdf8', 1.3);
+          for (let s = 0; s < 18; s++) {
+            const spAng = Math.random() * Math.PI * 2;
+            const sp = Math.random() * 60 + 20;
+            combatManager.hitSparks.push({
+              dimension: this.dimension,
+              x: this.x,
+              y: this.y,
+              vx: Math.cos(spAng) * sp,
+              vy: Math.sin(spAng) * sp - 15,
+              color: Math.random() > 0.3 ? '#38bdf8' : '#e0f2fe',
+              size: Math.random() * 3 + 1.5,
+              life: 0.5,
+              maxLife: 0.5
+            });
+          }
+        }
+        return;
+      }
+    }
+
     // Einfrier-Zustand durch Eisnebel-Artefakt: Vollständige Lähmung (keine Bewegung, keine Angriffe)
     if (this.freezeTimer > 0) {
       this.freezeTimer -= dt;
@@ -177,6 +210,13 @@ export class EnemyEntity {
 
     // Nur in der aktiven Dimension berechnen
     if (this.dimension !== enemyManager.game.currentDimension) return;
+
+    // Wenn der Client im LAN-Modus NICHT der Master-Client ist:
+    // Der Master-Client simuliert Bewegung, KI und Angriffe autoritativ.
+    // Nicht-Master-Clients führen nur die Animation aus und interpolieren Koordinaten!
+    if (enemyManager && enemyManager.isMasterClient === false) {
+      return;
+    }
 
     // Distanz zum Spieler
     const dx = player.x - this.x;
@@ -358,6 +398,20 @@ export class EnemyEntity {
     const ty2 = Math.floor((nextY + (dirY > 0 ? this.radius : -this.radius)) / TILE_SIZE);
     if (!map.isSolid || !map.isSolid(tx2, ty2)) {
       this.y = nextY;
+    }
+
+    // Ertrinken im tiefen Wasser
+    if (!isFlyingEnemy(this.typeId) && map) {
+      const curTx = Math.floor(this.x / TILE_SIZE);
+      const curTy = Math.floor(this.y / TILE_SIZE);
+      const ground = map.getGroundTile ? map.getGroundTile(curTx, curTy) : 0;
+      const isWater = (ground === TILES.WATER || ground === TILES.SWAMP_WATER || ground === TILES.CAVE_WATER || ground === TILES.VOID_LAKE);
+      const isBridge = (ground === TILES.BRIDGE_H || ground === TILES.BRIDGE_V || ground === TILES.RAINBOW_BRIDGE_H || ground === TILES.RAINBOW_BRIDGE_V);
+      if (isWater && !isBridge) {
+        this.hp = 0;
+        this.state = 'dead';
+        this.die(this.enemyManager?.game?.combat);
+      }
     }
   }
 
@@ -739,6 +793,13 @@ export class EnemyEntity {
   takeDamage(amount, knockbackAngle, knockbackForce, combatManager, isRange = false) {
     if (this.state === 'dead') return;
 
+    // Wenn nicht Master-Client im LAN: Schaden an Master senden
+    const net = combatManager?.game?.network;
+    const isMaster = combatManager?.game?.enemyManager?.isMasterClient ?? true;
+    if (!isMaster && net && net.connected) {
+      net.sendDamageEnemy(this.id, amount, knockbackAngle, knockbackForce, isRange);
+    }
+
     this.hp -= amount;
     this.hitFlash = 0.25;
 
@@ -757,6 +818,42 @@ export class EnemyEntity {
       const kbMult = (this.typeId === 'green_slime' || this.scale < 0.6) ? 0.24 : 0.08;
       this.x += Math.cos(knockbackAngle) * (knockbackForce * kbMult);
       this.y += Math.sin(knockbackAngle) * (knockbackForce * kbMult);
+
+      // Prüfen, ob nicht-fliegende Gegner durch Knockback ins Wasser gestoßen wurden -> Sofortiges Ertrinken!
+      if (!isFlyingEnemy(this.typeId)) {
+        const map = combatManager?.game?.currentMap || combatManager?.game?.map || null;
+        if (map) {
+          const tx = Math.floor(this.x / TILE_SIZE);
+          const ty = Math.floor(this.y / TILE_SIZE);
+          const ground = map.getGroundTile ? map.getGroundTile(tx, ty) : 0;
+          const isWater = (ground === TILES.WATER || ground === TILES.SWAMP_WATER || ground === TILES.CAVE_WATER || ground === TILES.VOID_LAKE);
+          const isBridge = (ground === TILES.BRIDGE_H || ground === TILES.BRIDGE_V || ground === TILES.RAINBOW_BRIDGE_H || ground === TILES.RAINBOW_BRIDGE_V);
+          if (isWater && !isBridge) {
+            this.hp = 0;
+            this.state = 'dead';
+            this.die(combatManager);
+            if (combatManager) {
+              combatManager.addFloatingText('🌊 ERTRUNKEN!', this.x, this.y - 20, '#38bdf8', 1.3);
+              for (let s = 0; s < 18; s++) {
+                const spAng = Math.random() * Math.PI * 2;
+                const sp = Math.random() * 60 + 20;
+                combatManager.hitSparks.push({
+                  dimension: this.dimension,
+                  x: this.x,
+                  y: this.y,
+                  vx: Math.cos(spAng) * sp,
+                  vy: Math.sin(spAng) * sp - 15,
+                  color: Math.random() > 0.3 ? '#38bdf8' : '#e0f2fe',
+                  size: Math.random() * 3 + 1.5,
+                  life: 0.5,
+                  maxLife: 0.5
+                });
+              }
+            }
+            return;
+          }
+        }
+      }
     }
 
     // Treffer-Partikel
@@ -924,6 +1021,7 @@ export class EnemyManager {
     this.xpOrbs = [];
     this.respawnQueue = [];
     this.aiActive = true;
+    this.isMasterClient = true; // Im LAN: Master simuliert KI; Nicht-Master interpoliert
 
     this.initSpawns();
   }
@@ -941,201 +1039,250 @@ export class EnemyManager {
     const h = map?.height || 200;
 
     // =========================================================================
-    // OVERWORLD SPAWNS NACH BIOMEN & GRUPPEN (290x200 Riesenwelt)
+    // OVERWORLD SPAWNS (Verdoppelt auf ~240 Mobs, Deterministische IDs)
     // =========================================================================
 
-    // 1. Grasland & Lichtungen (Außerhalb der sicheren Spawn-Lichtung Radius 15)
-    // RIESIGER 28er-Massen-Schwarm winziger Tau-Tropfen Blobs
-    this.spawnPack('green_slime', (sp.x + 18) * TILE_SIZE, (sp.y + 4) * TILE_SIZE, 28, 55, DIMENSIONS.OVERWORLD, 'pack_slimes', {
+    // 1. Grasland & Lichtungen
+    // Massenschwarm Blobs bei Spawn
+    this.spawnPack('green_slime', (sp.x + 18) * TILE_SIZE, (sp.y + 4) * TILE_SIZE, 32, 55, DIMENSIONS.OVERWORLD, 'pack_slimes', {
       scale: 0.48, hp: 12, atk: 5, xpValue: 2
     });
+    // Zweiter Blob-Schwarm südlich
+    this.spawnPack('green_slime', (sp.x + 35) * TILE_SIZE, (sp.y + 40) * TILE_SIZE, 24, 50, DIMENSIONS.OVERWORLD, 'pack_slimes_south', {
+      scale: 0.48, hp: 12, atk: 5, xpValue: 2
+    });
+    // Hügelschleime auf Hochebene
+    this.spawnPack('green_slime', (sp.x + 22) * TILE_SIZE, (sp.y - 14) * TILE_SIZE, 8, 28, DIMENSIONS.OVERWORLD, 'pack_hill_slimes', {
+      scale: 0.55, hp: 16, atk: 6, xpValue: 3, elevation: 1
+    });
 
-    // 3er-Gruppe Waldhüter-Wildschweine (Tusk Boars)
-    this.spawnPack('tusk_boar', (sp.x - 18) * TILE_SIZE, (sp.y - 10) * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_boars', {
+    // Waldhüter-Wildschweine
+    this.spawnPack('tusk_boar', (sp.x - 18) * TILE_SIZE, (sp.y - 10) * TILE_SIZE, 6, 34, DIMENSIONS.OVERWORLD, 'pack_boars', {
+      scale: 0.88, hp: 55, atk: 18, xpValue: 10
+    });
+    this.spawnPack('tusk_boar', (sp.x + 12) * TILE_SIZE, (sp.y - 35) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_boars_north', {
+      scale: 0.88, hp: 55, atk: 18, xpValue: 10
+    });
+    this.spawnPack('tusk_boar', Math.round(w * 0.48) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_boars_south', {
       scale: 0.88, hp: 55, atk: 18, xpValue: 10
     });
 
-    // 3er-Gruppe Waldläufer-Schützen (Moss Archers) am Waldrand
-    this.spawnPack('moss_archer', (sp.x - 20) * TILE_SIZE, (sp.y + 14) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_archers', {
+    // Waldläufer-Schützen
+    this.spawnPack('moss_archer', (sp.x - 20) * TILE_SIZE, (sp.y + 14) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_archers', {
+      scale: 0.95, hp: 65, atk: 18, xpValue: 15
+    });
+    this.spawnPack('moss_archer', Math.round(w * 0.36) * TILE_SIZE, Math.round(h * 0.35) * TILE_SIZE, 5, 28, DIMENSIONS.OVERWORLD, 'pack_river_archers', {
+      scale: 0.95, hp: 65, atk: 18, xpValue: 15
+    });
+    this.spawnPack('moss_archer', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.48) * TILE_SIZE, 4, 26, DIMENSIONS.OVERWORLD, 'pack_lake_archers', {
       scale: 0.95, hp: 65, atk: 18, xpValue: 15
     });
 
     // 2. Dichter Urwald & Forste
-    // 4er-Rudel Okami-Schattenwölfe (Dire Wolves) im Nordwest-Wald
-    this.spawnPack('dire_wolf', Math.round(w * 0.18) * TILE_SIZE, Math.round(h * 0.22) * TILE_SIZE, 4, 32, DIMENSIONS.OVERWORLD, 'pack_wolves_nw', {
+    // Okami-Schattenwölfe
+    this.spawnPack('dire_wolf', Math.round(w * 0.18) * TILE_SIZE, Math.round(h * 0.22) * TILE_SIZE, 6, 34, DIMENSIONS.OVERWORLD, 'pack_wolves_nw', {
       scale: 0.85, hp: 45, atk: 16, xpValue: 8
     });
-
-    // Zweites Wolfsrudel im Südwest-Hain
-    this.spawnPack('dire_wolf', Math.round(w * 0.22) * TILE_SIZE, Math.round(h * 0.68) * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_wolves_sw', {
+    this.spawnPack('dire_wolf', Math.round(w * 0.22) * TILE_SIZE, Math.round(h * 0.68) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_wolves_sw', {
+      scale: 0.85, hp: 45, atk: 16, xpValue: 8
+    });
+    this.spawnPack('dire_wolf', Math.round(w * 0.78) * TILE_SIZE, Math.round(h * 0.52) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_wolves_east', {
+      scale: 0.85, hp: 45, atk: 16, xpValue: 8
+    });
+    this.spawnPack('dire_wolf', Math.round(w * 0.32) * TILE_SIZE, Math.round(h * 0.18) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_wolves_north', {
       scale: 0.85, hp: 45, atk: 16, xpValue: 8
     });
 
     // 3. Wüste & Treibsand (Südwesten)
-    // RIESIGER APEX-PREDATOR: Dünen-Schlund (Dune Maw)
-    this.spawnEnemy('dune_maw', Math.round(w * 0.18) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    // 2x APEX-PREDATOR: Dünen-Schlund
+    this.spawnEnemy('dune_maw', Math.round(w * 0.18) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_dune_maw_1', {
+      scale: 1.55, hp: 340, atk: 36, xpValue: 60
+    });
+    this.spawnEnemy('dune_maw', Math.round(w * 0.28) * TILE_SIZE, Math.round(h * 0.90) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_dune_maw_2', {
       scale: 1.55, hp: 340, atk: 36, xpValue: 60
     });
 
-    // 2er-Gruppe Kaiser-Skorpione (Emperor Scorpions)
-    this.spawnPack('emperor_scorpion', Math.round(w * 0.14) * TILE_SIZE, Math.round(h * 0.84) * TILE_SIZE, 2, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions', {
+    // Kaiser-Skorpione (3 Rudel)
+    this.spawnPack('emperor_scorpion', Math.round(w * 0.14) * TILE_SIZE, Math.round(h * 0.84) * TILE_SIZE, 4, 34, DIMENSIONS.OVERWORLD, 'pack_scorpions_1', {
       scale: 1.05, hp: 90, atk: 24, xpValue: 20
     });
-    this.spawnPack('emperor_scorpion', Math.round(w * 0.26) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 2, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions_deep', {
+    this.spawnPack('emperor_scorpion', Math.round(w * 0.26) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 4, 34, DIMENSIONS.OVERWORLD, 'pack_scorpions_2', {
       scale: 1.05, hp: 90, atk: 24, xpValue: 20
+    });
+    this.spawnPack('emperor_scorpion', Math.round(w * 0.10) * TILE_SIZE, Math.round(h * 0.75) * TILE_SIZE, 4, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions_3', {
+      scale: 1.05, hp: 90, atk: 24, xpValue: 20
+    });
+
+    // Wüstendünen-Vipern
+    this.spawnPack('slithering_viper', Math.round(w * 0.12) * TILE_SIZE, Math.round(h * 0.88) * TILE_SIZE, 6, 28, DIMENSIONS.OVERWORLD, 'pack_dune_vipers', {
+      scale: 0.9, hp: 55, atk: 18, xpValue: 12
+    });
+    this.spawnPack('slithering_viper', Math.round(w * 0.22) * TILE_SIZE, Math.round(h * 0.76) * TILE_SIZE, 5, 28, DIMENSIONS.OVERWORLD, 'pack_oasis_vipers', {
+      scale: 0.9, hp: 55, atk: 18, xpValue: 12
     });
 
     // 4. Schnee & Eisberge (Nordosten)
-    // RIESIGER KOLOSS: Yeti-Wächter (Frost Giant)
-    this.spawnEnemy('frost_giant', Math.round(w * 0.78) * TILE_SIZE, Math.round(h * 0.20) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    // 2x RIESIGER KOLOSS: Frost Giant
+    this.spawnEnemy('frost_giant', Math.round(w * 0.78) * TILE_SIZE, Math.round(h * 0.20) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_frost_giant_1', {
+      scale: 1.65, hp: 1500, atk: 65, xpValue: 220, elevation: 1
+    });
+    this.spawnEnemy('frost_giant', Math.round(w * 0.88) * TILE_SIZE, Math.round(h * 0.28) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_frost_giant_2', {
       scale: 1.65, hp: 1500, atk: 65, xpValue: 220, elevation: 1
     });
 
-    // 3er-Wache Origami-Krieger am Eispass
-    this.spawnPack('cursed_knight', Math.round(w * 0.72) * TILE_SIZE, Math.round(h * 0.26) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_ice_knights', {
+    // Origami-Krieger
+    this.spawnPack('cursed_knight', Math.round(w * 0.72) * TILE_SIZE, Math.round(h * 0.26) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_ice_knights', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
+    });
+    this.spawnPack('cursed_knight', Math.round(w * 0.82) * TILE_SIZE, Math.round(h * 0.15) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_glacier_knights', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
+    });
+    this.spawnPack('cursed_knight', Math.round(w * 0.62) * TILE_SIZE, Math.round(h * 0.20) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_north_knights', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25
+    });
+    this.spawnPack('cursed_knight', Math.round(w * 0.84) * TILE_SIZE, Math.round(h * 0.58) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_highland_knights', {
       scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
     });
 
     // 5. Düsterer Sumpf (Südosten)
-    // 3er-Gruppe Sporen-Spucker (Spore Spitters)
-    this.spawnPack('spore_spitter', Math.round(w * 0.62) * TILE_SIZE, Math.round(h * 0.68) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_spores', {
+    // Sporen-Spucker
+    this.spawnPack('spore_spitter', Math.round(w * 0.62) * TILE_SIZE, Math.round(h * 0.68) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_spores_1', {
+      scale: 0.85, hp: 40, atk: 14, xpValue: 8
+    });
+    this.spawnPack('spore_spitter', Math.round(w * 0.70) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_spores_2', {
       scale: 0.85, hp: 40, atk: 14, xpValue: 8
     });
 
-    // 3er-Gruppe Smaragd-Nattern (Slithering Vipers) am Sumpfteich
-    this.spawnPack('slithering_viper', Math.round(w * 0.70) * TILE_SIZE, Math.round(h * 0.66) * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_vipers', {
+    // Smaragd-Nattern
+    this.spawnPack('slithering_viper', Math.round(w * 0.70) * TILE_SIZE, Math.round(h * 0.66) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_vipers_swamp', {
       scale: 1.0, hp: 70, atk: 20, xpValue: 15
     });
 
-    // 3er-Gruppe Teer-Schlamm Geister (Tar Mire)
-    this.spawnPack('tar_mire', Math.round(w * 0.76) * TILE_SIZE, Math.round(h * 0.74) * TILE_SIZE, 3, 26, DIMENSIONS.OVERWORLD, 'pack_tar', {
+    // Teer-Schlamm Geister
+    this.spawnPack('tar_mire', Math.round(w * 0.76) * TILE_SIZE, Math.round(h * 0.74) * TILE_SIZE, 6, 30, DIMENSIONS.OVERWORLD, 'pack_tar_1', {
+      scale: 0.82, hp: 45, atk: 12, xpValue: 8
+    });
+    this.spawnPack('tar_mire', Math.round(w * 0.64) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 5, 28, DIMENSIONS.OVERWORLD, 'pack_tar_2', {
       scale: 0.82, hp: 45, atk: 12, xpValue: 8
     });
 
     // 6. Felsgebirge & Bergpfade (Höhenebene +1, +2)
-    // RIESIGER KOLOSS: Moos-Koloss (Boulder Troll) am Bergpass
-    this.spawnEnemy('boulder_troll', Math.round(w * 0.58) * TILE_SIZE, Math.round(h * 0.32) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    // 2x Moos-Koloss
+    this.spawnEnemy('boulder_troll', Math.round(w * 0.58) * TILE_SIZE, Math.round(h * 0.32) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_boulder_troll_1', {
+      scale: 1.60, hp: 1400, atk: 60, xpValue: 200, elevation: 1
+    });
+    this.spawnEnemy('boulder_troll', Math.round(w * 0.48) * TILE_SIZE, Math.round(h * 0.24) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_boulder_troll_2', {
       scale: 1.60, hp: 1400, atk: 60, xpValue: 200, elevation: 1
     });
 
-    // 2er-Wache Origami-Krieger (Cursed Paper Knights)
-    this.spawnPack('cursed_knight', Math.round(w * 0.64) * TILE_SIZE, Math.round(h * 0.36) * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_samurai', {
+    // Wache Origami-Krieger auf Hochebenen
+    this.spawnPack('cursed_knight', Math.round(w * 0.64) * TILE_SIZE, Math.round(h * 0.36) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_samurai_1', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
+    });
+    this.spawnPack('cursed_knight', Math.round(w * 0.52) * TILE_SIZE, Math.round(h * 0.38) * TILE_SIZE, 4, 28, DIMENSIONS.OVERWORLD, 'pack_samurai_2', {
       scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
     });
 
-    // 7. Die Leere / Void (Genau an der Rand-Void-Zone)
-    // 2er-Patrouille Leeren-Verschlinger (Void Reapers)
-    this.spawnPack('void_reaper', (vz.x - 7) * TILE_SIZE, (vz.y - 5) * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers', {
+    // 7. Die Leere / Void
+    // Leeren-Verschlinger
+    this.spawnPack('void_reaper', (vz.x - 7) * TILE_SIZE, (vz.y - 5) * TILE_SIZE, 4, 30, DIMENSIONS.OVERWORLD, 'pack_void_reapers_1', {
+      scale: 1.15, hp: 540, atk: 55, xpValue: 90
+    });
+    this.spawnPack('void_reaper', (vz.x + 4) * TILE_SIZE, (vz.y + 7) * TILE_SIZE, 4, 30, DIMENSIONS.OVERWORLD, 'pack_void_reapers_2', {
       scale: 1.15, hp: 540, atk: 55, xpValue: 90
     });
 
-    // Zweite Patrouille Leeren-Verschlinger
-    this.spawnPack('void_reaper', (vz.x + 4) * TILE_SIZE, (vz.y + 7) * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers_south', {
-      scale: 1.15, hp: 540, atk: 55, xpValue: 90
-    });
-
-    // RIESIGER TITAN: Schwebende Mondqualle: Auge des Abgrunds (Gazer of the Void)
-    this.spawnEnemy('gazer_of_the_void', vz.x * TILE_SIZE, vz.y * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    // TITAN: Auge des Abgrunds
+    this.spawnEnemy('gazer_of_the_void', vz.x * TILE_SIZE, vz.y * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_gazer_of_the_void', {
       scale: 1.55, hp: 1350, atk: 75, xpValue: 220
     });
 
-    // Brunnen-Fallen: Schatten-Tentakel (Abyss Tentacles)
-    this.spawnEnemy('abyss_tentacle', (vz.x - 6) * TILE_SIZE, (vz.y + 5) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    // Brunnen-Fallen: Schatten-Tentakel
+    this.spawnEnemy('abyss_tentacle', (vz.x - 6) * TILE_SIZE, (vz.y + 5) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'tentacle_1', {
       scale: 1.25, hp: 480, atk: 50, xpValue: 80
     });
-    this.spawnEnemy('abyss_tentacle', (vz.x + 6) * TILE_SIZE, (vz.y - 5) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    this.spawnEnemy('abyss_tentacle', (vz.x + 6) * TILE_SIZE, (vz.y - 5) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'tentacle_2', {
+      scale: 1.25, hp: 480, atk: 50, xpValue: 80
+    });
+    this.spawnEnemy('abyss_tentacle', (vz.x + 1) * TILE_SIZE, (vz.y + 8) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'tentacle_3', {
       scale: 1.25, hp: 480, atk: 50, xpValue: 80
     });
 
-    // 8. Brand- & Vulkanzone (Zwischen Felsen und Wüste)
-    // Laternen-Pyromant mit 5 Calcifer-Feuerdämonen
-    this.spawnEnemy('pyromancer', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.76) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire', {
+    // 8. Brand- & Vulkanzone
+    this.spawnEnemy('pyromancer', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.76) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_pyromancer_1', {
       scale: 1.10, hp: 130, atk: 30, xpValue: 35
     });
-    this.spawnPack('lava_core', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, 5, 24, DIMENSIONS.OVERWORLD, 'pack_fire', {
+    this.spawnEnemy('pyromancer', Math.round(w * 0.50) * TILE_SIZE, Math.round(h * 0.74) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_pyromancer_2', {
+      scale: 1.10, hp: 130, atk: 30, xpValue: 35
+    });
+    this.spawnPack('lava_core', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, 8, 28, DIMENSIONS.OVERWORLD, 'pack_fire_1', {
       scale: 0.75, hp: 25, atk: 12, xpValue: 4
     });
-
-    // 9. Ausgewogene zusätzliche Patrouillen in den weiten Gefilden der 290x200 Welt
-    // Ostwald-Wolfsrudel (Goldblätterwald)
-    this.spawnPack('dire_wolf', Math.round(w * 0.78) * TILE_SIZE, Math.round(h * 0.52) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_wolves_east', {
-      scale: 0.85, hp: 45, atk: 16, xpValue: 8
-    });
-
-    // Südliche Wildschwein-Familie im Blütendickicht
-    this.spawnPack('tusk_boar', Math.round(w * 0.48) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_boars_south', {
-      scale: 0.88, hp: 55, atk: 18, xpValue: 10
-    });
-
-    // Brücken-Wächter am großen Binnensee
-    this.spawnPack('moss_archer', Math.round(w * 0.42) * TILE_SIZE, Math.round(h * 0.48) * TILE_SIZE, 2, 24, DIMENSIONS.OVERWORLD, 'pack_lake_archers', {
-      scale: 0.95, hp: 65, atk: 18, xpValue: 15
-    });
-
-    // Plateau-Hügelwache am Spawn
-    this.spawnPack('green_slime', (sp.x + 22) * TILE_SIZE, (sp.y - 12) * TILE_SIZE, 4, 22, DIMENSIONS.OVERWORLD, 'pack_hill_slimes', {
-      scale: 0.55, hp: 16, atk: 6, xpValue: 3, elevation: 1
-    });
-
-    // Wachen auf dem Ostplateau (+1)
-    this.spawnPack('cursed_knight', Math.round(w * 0.84) * TILE_SIZE, Math.round(h * 0.58) * TILE_SIZE, 2, 26, DIMENSIONS.OVERWORLD, 'pack_highland_knights', {
-      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
-    });
-
-    // Wüstendünen-Vipern
-    this.spawnPack('slithering_viper', Math.round(w * 0.12) * TILE_SIZE, Math.round(h * 0.88) * TILE_SIZE, 3, 26, DIMENSIONS.OVERWORLD, 'pack_dune_vipers', {
-      scale: 0.9, hp: 55, atk: 18, xpValue: 12
-    });
-
-    // Nordhang-Patrouille (Kiefernforst)
-    this.spawnPack('cursed_knight', Math.round(w * 0.62) * TILE_SIZE, Math.round(h * 0.20) * TILE_SIZE, 2, 26, DIMENSIONS.OVERWORLD, 'pack_north_knights', {
-      scale: 1.10, hp: 110, atk: 28, xpValue: 25
+    this.spawnPack('lava_core', Math.round(w * 0.52) * TILE_SIZE, Math.round(h * 0.76) * TILE_SIZE, 6, 26, DIMENSIONS.OVERWORLD, 'pack_fire_2', {
+      scale: 0.75, hp: 25, atk: 12, xpValue: 4
     });
 
     // =========================================================================
     // HÖHLEN-SPAWNS (CAVES DIMENSION)
     // =========================================================================
-    // 6er-Schwarm Höhlen-Krallenspinnen (Cave Weavers) in main_complex
-    this.spawnPack('cave_weaver', 32 * TILE_SIZE, 26 * TILE_SIZE, 6, 36, DIMENSIONS.CAVES, 'pack_cave_spiders', {
+    // Haupthöhlen (main_complex)
+    this.spawnPack('cave_weaver', 32 * TILE_SIZE, 26 * TILE_SIZE, 8, 36, DIMENSIONS.CAVES, 'pack_cave_spiders_main1', {
+      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_weaver', 55 * TILE_SIZE, 42 * TILE_SIZE, 6, 32, DIMENSIONS.CAVES, 'pack_cave_spiders_main2', {
+      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    });
+
+    // Moosige Grotte
+    this.spawnPack('cave_weaver', 12 * TILE_SIZE, 12 * TILE_SIZE, 6, 28, DIMENSIONS.CAVES, 'pack_cave_spiders_forest', {
+      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    });
+
+    // Eis-Grotte
+    this.spawnPack('cave_weaver', 12 * TILE_SIZE, 12 * TILE_SIZE, 6, 28, DIMENSIONS.CAVES, 'pack_cave_spiders_snow', {
+      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    });
+
+    // Astrale Kluft
+    this.spawnPack('cave_weaver', 12 * TILE_SIZE, 12 * TILE_SIZE, 6, 28, DIMENSIONS.CAVES, 'pack_cave_spiders_void', {
       scale: 0.72, hp: 24, atk: 10, xpValue: 4
     });
 
     // =========================================================================
-    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION - ASYMMETRISCHES INSELREICH)
+    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION)
     // =========================================================================
     const cloudMap = this.getMapForDimension(DIMENSIONS.CLOUDS);
     if (cloudMap && cloudMap.islands && cloudMap.islands.length > 0) {
       cloudMap.islands.forEach((isl, idx) => {
         if (idx % 2 === 0) {
-          this.spawnPack('sky_harpy', isl.x * TILE_SIZE, isl.y * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, `pack_sky_${idx}`, {
+          this.spawnPack('sky_harpy', isl.x * TILE_SIZE, isl.y * TILE_SIZE, 3, 24, DIMENSIONS.CLOUDS, `pack_sky_${idx}`, {
             scale: 1.05, hp: 390, atk: 50, xpValue: 65
           });
         }
-        if (idx % 3 === 0) {
-          this.spawnEnemy('star_astromancer', (isl.x + 2) * TILE_SIZE, (isl.y - 1) * TILE_SIZE, DIMENSIONS.CLOUDS, `pack_sky_${idx}`, {
+        if (idx % 2 === 1) {
+          this.spawnEnemy('star_astromancer', (isl.x + 2) * TILE_SIZE, (isl.y - 1) * TILE_SIZE, DIMENSIONS.CLOUDS, `pack_sky_astro_${idx}`, {
             scale: 1.18, hp: 500, atk: 62, xpValue: 90
           });
         }
       });
     } else {
-      // Fallback Spawns across clouds
       const cloudSpawns = [
         { x: Math.round(w * 0.15), y: Math.round(h * 0.15) },
         { x: Math.round(w * 0.35), y: Math.round(h * 0.12) },
         { x: Math.round(w * 0.55), y: Math.round(h * 0.20) },
         { x: Math.round(w * 0.50), y: Math.round(h * 0.48) },
         { x: Math.round(w * 0.78), y: Math.round(h * 0.45) },
-        { x: Math.round(w * 0.60), y: Math.round(h * 0.72) }
+        { x: Math.round(w * 0.60), y: Math.round(h * 0.72) },
+        { x: Math.round(w * 0.25), y: Math.round(h * 0.68) },
+        { x: Math.round(w * 0.85), y: Math.round(h * 0.80) }
       ];
       cloudSpawns.forEach((cs, i) => {
-        this.spawnPack('sky_harpy', cs.x * TILE_SIZE, cs.y * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, `pack_sky_fb_${i}`, {
+        this.spawnPack('sky_harpy', cs.x * TILE_SIZE, cs.y * TILE_SIZE, 3, 24, DIMENSIONS.CLOUDS, `pack_sky_fb_${i}`, {
           scale: 1.05, hp: 390, atk: 50, xpValue: 65
         });
-        if (i % 2 === 0) {
-          this.spawnEnemy('star_astromancer', cs.x * TILE_SIZE, cs.y * TILE_SIZE, DIMENSIONS.CLOUDS, `pack_sky_fb_${i}`, {
-            scale: 1.15, hp: 480, atk: 60, xpValue: 85
-          });
-        }
+        this.spawnEnemy('star_astromancer', (cs.x + 3) * TILE_SIZE, (cs.y + 1) * TILE_SIZE, DIMENSIONS.CLOUDS, `pack_sky_astro_fb_${i}`, {
+          scale: 1.15, hp: 480, atk: 60, xpValue: 85
+        });
       });
     }
   }
@@ -1152,7 +1299,6 @@ export class EnemyManager {
   }
 
   findWalkablePosition(typeId, rawX, rawY, dimension) {
-    // Fliegende Gegner dürfen frei über Abgründen/Wasser schweben
     if (isFlyingEnemy(typeId)) {
       return { x: rawX, y: rawY };
     }
@@ -1163,31 +1309,38 @@ export class EnemyManager {
     const tx = Math.floor(rawX / TILE_SIZE);
     const ty = Math.floor(rawY / TILE_SIZE);
 
-    // Finde nächste freie begehbare Land-Kachel (kein Wasser, kein Felsen, kein Baum, kein Abgrund)
+    // Finde nächste freie begehbare Land-Kachel (deterministisch)
     const safeTile = findNearestWalkableTile(map, tx, ty, 14);
     return {
-      x: safeTile.tx * TILE_SIZE + 8 + (Math.random() - 0.5) * 4,
-      y: safeTile.ty * TILE_SIZE + 8 + (Math.random() - 0.5) * 4
+      x: safeTile.tx * TILE_SIZE + 8,
+      y: safeTile.ty * TILE_SIZE + 8
     };
   }
 
   spawnEnemy(typeId, x, y, dimension = DIMENSIONS.OVERWORLD, packId = null, options = {}) {
     const pos = this.findWalkablePosition(typeId, x, y, dimension);
-    const enemy = new EnemyEntity(typeId, pos.x, pos.y, dimension, packId, options);
+    const id = options.id || (packId ? `${packId}_0` : `${typeId}_${Math.round(x)}_${Math.round(y)}`);
+    const enemy = new EnemyEntity(typeId, pos.x, pos.y, dimension, packId, {
+      ...options,
+      id
+    });
     this.enemies.push(enemy);
     return enemy;
   }
 
   spawnPack(typeId, centerX, centerY, count = 2, radius = 26, dimension = DIMENSIONS.OVERWORLD, packId = null, options = {}) {
-    const pack = packId || `pack_${typeId}_${Math.random().toString(36).substr(2, 5)}`;
+    const pack = packId || `pack_${typeId}_${Math.round(centerX)}_${Math.round(centerY)}`;
     const created = [];
     for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-      const dist = Math.random() * radius * 0.7 + radius * 0.3;
+      const angle = (i / count) * Math.PI * 2 + (Math.sin(i * 1.5) * 0.25);
+      const dist = ((i % 3) * 0.3 + 0.4) * radius;
       const rawX = centerX + Math.cos(angle) * dist;
       const rawY = centerY + Math.sin(angle) * dist;
       const pos = this.findWalkablePosition(typeId, rawX, rawY, dimension);
-      const enemy = new EnemyEntity(typeId, pos.x, pos.y, dimension, pack, options);
+      const enemy = new EnemyEntity(typeId, pos.x, pos.y, dimension, pack, {
+        ...options,
+        id: `${pack}_${i}`
+      });
       this.enemies.push(enemy);
       created.push(enemy);
     }
@@ -1212,12 +1365,12 @@ export class EnemyManager {
   dropLoot(x, y, enemy = null) {
     const dimension = enemy?.dimension || this.game?.currentDimension || DIMENSIONS.OVERWORLD;
 
-    // Drop-Raten: XP droppen immer (100%), Pfeile und Herzen nur manchmal / selten!
+    // Drop-Raten: XP droppen immer (100%), Pfeile und Herzen nach Nutzer-Balancing
     const isBoss = enemy && (enemy.category === 'boss' || enemy.maxHp >= 100);
     const isRanged = enemy && (enemy.category === 'range' || enemy.typeId === 'moss_archer');
 
-    // 1. Herz-Beere (❤️ +25 HP) - selten (ca. 8% bei normalen Gegnern, 25% bei Bossen)
-    const heartChance = isBoss ? 0.25 : 0.08;
+    // 1. Herz-Beere (❤️ +25 HP) - leicht erhöht (14% normal, 40% bei Bossen)
+    const heartChance = isBoss ? 0.40 : 0.14;
     if (Math.random() < heartChance) {
       this.lootItems.push({
         type: LOOT_TYPES.HEART,
@@ -1229,21 +1382,23 @@ export class EnemyManager {
       });
     }
 
-    // 2. Köcher-Pfeile (🏹 +3 Pfeile) - selten (ca. 10% bei normalen Gegnern, 25% bei Bogenschützen/Bossen)
-    const arrowChance = isBoss ? 0.25 : (isRanged ? 0.25 : 0.10);
+    // 2. Köcher-Pfeile (🏹 +3-5 Pfeile) - deutlich erhöht (35% normal, 60% Bogenschützen, 50% Bosse)
+    const arrowChance = isBoss ? 0.50 : (isRanged ? 0.60 : 0.35);
     if (Math.random() < arrowChance) {
+      const amount = Math.floor(Math.random() * 3) + 3; // 3 bis 5 Pfeile
       this.lootItems.push({
         type: LOOT_TYPES.ARROW,
         dimension,
         x: x + (Math.random() - 0.5) * 14,
         y: y + (Math.random() - 0.5) * 14,
+        amount,
         life: 25.0,
         bobOffset: Math.random() * Math.PI * 2
       });
     }
 
-    // 3. Sternenstaub / Geist-Juwel (⭐ Glanzpartikel) - selten (ca. 5% bei normalen Gegnern, 35% bei Bossen)
-    const gemChance = isBoss ? 0.35 : 0.05;
+    // 3. Sternenstaub / Geist-Juwel (⭐ Glanzpartikel) - selten (ca. 6% bei normalen Gegnern, 35% bei Bossen)
+    const gemChance = isBoss ? 0.35 : 0.06;
     if (Math.random() < gemChance) {
       this.lootItems.push({
         type: LOOT_TYPES.SPIRIT_GEM,
@@ -1268,9 +1423,9 @@ export class EnemyManager {
     );
 
     if (isHeavyMonster) {
-      // 50% Chance bei schweren Monstern, 100% bei extremen Bossen (>= 1000 HP)
-      const artifactChance = (enemy.maxHp >= 1000) ? 1.0 : 0.50;
-      if (Math.random() < artifactChance && this.game && this.game.magicManager) {
+      const roll = Math.random();
+      const dropChance = enemy.category === 'boss' ? 0.35 : 0.15;
+      if (roll < dropChance && this.game?.magicManager) {
         this.game.magicManager.dropMonsterArtifact(x, y, dimension);
       }
     }
@@ -1384,8 +1539,9 @@ export class EnemyManager {
           }
         } else if (item.type === LOOT_TYPES.ARROW) {
           if (player.ranged && player.ranged.ammo < 30) {
-            player.ranged.ammo = Math.min(30, player.ranged.ammo + 3);
-            combatManager?.addFloatingText('🏹 +3 PFEILE', player.x, player.y - 20, '#38bdf8');
+            const gain = item.amount || 4;
+            player.ranged.ammo = Math.min(30, player.ranged.ammo + gain);
+            combatManager?.addFloatingText(`🏹 +${gain} PFEILE`, player.x, player.y - 20, '#38bdf8');
             combatManager?.addHitSparks(player.x, player.y, '#38bdf8', 10);
             this.lootItems.splice(i, 1);
           }
@@ -1550,4 +1706,66 @@ export class EnemyManager {
       ctx.restore();
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // LAN-MULTIPLAYER MOB-SYNCHRONISATION
+  // ---------------------------------------------------------------------------
+  serializeEnemiesState() {
+    return this.enemies.map(e => ({
+      id: e.id,
+      x: Math.round(e.x * 10) / 10,
+      y: Math.round(e.y * 10) / 10,
+      vx: Math.round((e.vx || 0) * 10) / 10,
+      vy: Math.round((e.vy || 0) * 10) / 10,
+      hp: e.hp,
+      maxHp: e.maxHp,
+      state: e.state,
+      animTime: Math.round(e.animTime * 10) / 10,
+      facing: e.facing,
+      elevation: e.elevation || 0,
+      isDead: e.state === 'dead',
+      freezeTimer: Math.round((e.freezeTimer || 0) * 10) / 10,
+      isCharging: Boolean(e.isCharging)
+    }));
+  }
+
+  applyEnemiesState(remoteList) {
+    if (!Array.isArray(remoteList)) return;
+    const enemyMap = new Map();
+    for (const e of this.enemies) {
+      enemyMap.set(e.id, e);
+    }
+
+    for (const remote of remoteList) {
+      const local = enemyMap.get(remote.id);
+      if (local) {
+        if (remote.isDead && local.state !== 'dead') {
+          local.state = 'dead';
+          local.hp = 0;
+          local.die(this.game?.combat);
+        } else if (!remote.isDead) {
+          // Smooth interpolation der Position
+          local.x += (remote.x - local.x) * 0.45;
+          local.y += (remote.y - local.y) * 0.45;
+          local.hp = remote.hp;
+          local.maxHp = remote.maxHp || local.maxHp;
+          local.state = remote.state;
+          local.facing = remote.facing || local.facing;
+          local.elevation = remote.elevation ?? local.elevation;
+          local.freezeTimer = remote.freezeTimer || 0;
+          local.isCharging = Boolean(remote.isCharging);
+          local.animTime = remote.animTime || local.animTime;
+        }
+      }
+    }
+  }
+
+  handleRemoteDamage(msg) {
+    if (!msg || !msg.enemyId) return;
+    const enemy = this.enemies.find(e => e.id === msg.enemyId);
+    if (enemy && enemy.state !== 'dead') {
+      enemy.takeDamage(msg.damage, msg.angle || 0, msg.knockback || 0, this.game?.combat, msg.isRange);
+    }
+  }
 }
+

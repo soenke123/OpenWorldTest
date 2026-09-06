@@ -455,30 +455,39 @@ export class WorldMap {
 
   populateBiomeTreesAndFlora() {
     const n = this.noise;
-    for (let ty = 6; ty < this.height - 6; ty += 5) {
-      for (let tx = 6; tx < this.width - 6; tx += 5) {
+    for (let ty = 6; ty < this.height - 6; ty += 4) {
+      for (let tx = 6; tx < this.width - 6; tx += 4) {
         if (!this.isValid(tx, ty)) continue;
         if (this.canopy[ty][tx] === CANOPY.TREE_CROWN) continue;
         if (Math.hypot(tx - this.spawnPoint.x, ty - this.spawnPoint.y) < this.preset.spawnClearingRadius) continue;
 
         const g = this.ground[ty][tx];
-        const jx = tx + n.noise(tx * 1.4, ty * 1.4) * 1.6;
-        const jy = ty + n.noise(tx * 2.2, ty * 2.2) * 1.6;
+        const jx = tx + n.noise(tx * 1.4, ty * 1.4) * 1.8;
+        const jy = ty + n.noise(tx * 2.2, ty * 2.2) * 1.8;
         const rx = Math.round(jx);
         const ry = Math.round(jy);
         if (!this.isValid(rx, ry)) continue;
         if (this.objects[ry][rx] !== OBJECTS.NONE) continue;
+        if (this.canopy[ry][rx] === CANOPY.TREE_CROWN) continue;
 
-        if (g === TILES.SNOW && n.fbm(rx * 0.1, ry * 0.1, 2) > 0.15) {
-          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.SNOWY_PINE, Math.abs(rx) % 2);
-        } else if (g === TILES.SAND && n.fbm(rx * 0.1, ry * 0.1, 2) > 0.25) {
-          // Date Palm or Cactus
-          if (n.noise(rx * 0.5, ry * 0.5) > 0.1) {
+        const noiseVal = n.fbm(rx * 0.11, ry * 0.11, 2);
+
+        if ((g === TILES.GRASS || g === TILES.DIRT) && noiseVal > 0.10) {
+          // Standalone Oak / Blossom trees across grasslands & meadows
+          const treeVariant = (Math.abs(rx + ry) % 2 === 0) ? TREES.OAK : TREES.BIRCH;
+          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, treeVariant, Math.abs(rx) % 3);
+        } else if (g === TILES.SNOW && noiseVal > 0.08) {
+          // Standalone Snowy Pines on mountain slopes & tundra
+          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.SNOWY_PINE, Math.abs(rx) % 3);
+        } else if (g === TILES.SAND && noiseVal > 0.18) {
+          // Date Palm or Desert Cactus
+          if (n.noise(rx * 0.5, ry * 0.5) > 0.05) {
             this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.PALM, Math.abs(rx) % 2);
           } else {
             this.objects[ry][rx] = OBJECTS.CACTUS;
           }
-        } else if (g === TILES.SWAMP_GROUND && n.fbm(rx * 0.1, ry * 0.1, 2) > 0.18) {
+        } else if (g === TILES.SWAMP_GROUND && noiseVal > 0.12) {
+          // Mossy Swamp Willow in marsh pockets
           this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.SWAMP_WILLOW, Math.abs(rx) % 2);
         }
       }
@@ -488,63 +497,9 @@ export class WorldMap {
   placeOverworldShrines() {
     this.shrines = [];
     const p = this.preset;
-    const count = p.shrineCount || 8;
 
-    const shrineCandidates = [
-      { x: this.spawnPoint.x + 22, y: this.spawnPoint.y - 10, name: 'Schrein des Erwachens' },
-      { x: Math.round(this.width * 0.38), y: Math.round(this.height * 0.26), name: 'Schrein der Waldgeister' },
-      { x: Math.round(this.width * 0.55), y: Math.round(this.height * 0.38), name: 'Schrein des Binnensees' },
-      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.22), name: 'Schrein des Ewigen Eises' },
-      { x: Math.round(this.width * 0.25), y: Math.round(this.height * 0.70), name: 'Schrein der Sonnendüne' },
-      { x: Math.round(this.width * 0.70), y: Math.round(this.height * 0.72), name: 'Schrein der Nebelmoore' },
-      { x: Math.round(this.width * 0.84), y: Math.round(this.height * 0.54), name: 'Schrein der Morgendämmerung' },
-      { x: Math.round(this.width * 0.45), y: Math.round(this.height * 0.84), name: 'Schrein der Blütentäler' }
-    ].slice(0, count);
-
-    for (const sc of shrineCandidates) {
-      if (this.isValid(sc.x, sc.y)) {
-        this.ground[sc.y][sc.x] = TILES.DIRT;
-        this.objects[sc.y][sc.x] = OBJECTS.SHRINE;
-        this.canopy[sc.y][sc.x] = CANOPY.NONE;
-        this.shrines.push({ x: sc.x, y: sc.y, name: sc.name });
-
-        // Ensure surrounding 3x3 tiles are cleared and walkable dirt path
-        for (let dy = -2; dy <= 2; dy++) {
-          for (let dx = -2; dx <= 2; dx++) {
-            const nx = sc.x + dx;
-            const ny = sc.y + dy;
-            if (!this.isValid(nx, ny)) continue;
-            this.canopy[ny][nx] = CANOPY.NONE;
-            if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && !(dx === 0 && dy === 0)) {
-              this.ground[ny][nx] = TILES.DIRT;
-              this.objects[ny][nx] = OBJECTS.NONE;
-            }
-          }
-        }
-
-        // Clear tree trunks and crowns in 44px radius around shrine
-        const shrinePx = sc.x * TILE_SIZE + 8;
-        const shrinePy = sc.y * TILE_SIZE + 8;
-        this.trees = this.trees.filter(t => Math.hypot(t.x - shrinePx, t.y - shrinePy) > 38);
-        this.canopyCrowns = this.canopyCrowns.filter(c => Math.hypot(c.x - shrinePx, c.y - shrinePy) > 42);
-
-        // Torii Gate on approach and flanking stone lanterns
-        if (this.isValid(sc.x, sc.y + 2)) {
-          this.objects[sc.y + 2][sc.x] = OBJECTS.TORII_GATE;
-          this.ground[sc.y + 2][sc.x] = TILES.DIRT;
-        }
-        if (this.isValid(sc.x - 2, sc.y + 1)) {
-          this.objects[sc.y + 1][sc.x - 2] = OBJECTS.STONE_TORO;
-          this.ground[sc.y + 1][sc.x - 2] = TILES.DIRT;
-        }
-        if (this.isValid(sc.x + 2, sc.y + 1)) {
-          this.objects[sc.y + 1][sc.x + 2] = OBJECTS.STONE_TORO;
-          this.ground[sc.y + 1][sc.x + 2] = TILES.DIRT;
-        }
-      }
-    }
-
-    // Ancient Void Shrine inside Void Zone
+    // Gemäß Nutzeranforderung: In der Oberwelt gibt es NUR den Schrein im VOID!
+    // Alle anderen Schreine liegen ausschließlich im Himmel (Clouds) und in Höhlen (Caves).
     const vz = p.voidZone;
     const vx = vz.x - 2;
     const vy = vz.y - 2;
@@ -565,24 +520,43 @@ export class WorldMap {
       if (this.isValid(vx + 2, vy + 1)) {
         this.objects[vy + 1][vx + 2] = OBJECTS.GLOW_CRYSTAL;
       }
+      if (this.isValid(vx, vy + 2)) {
+        this.objects[vy + 2][vx] = OBJECTS.TORII_GATE;
+        this.ground[vy + 2][vx] = TILES.VOID_GROUND;
+      }
     }
   }
 
   placeTrampolines() {
     this.trampolines = [];
-    const count = this.preset.trampolineCount || 8;
+    const count = this.preset.trampolineCount || 18;
 
+    // 18 strategische Standorte quer über die 290x200 Riesenwelt, inkl. mitten im Wald
     const trampolineSpots = [
+      // 1. Grasland & Spawn-Nähe
       { x: this.spawnPoint.x + 14, y: this.spawnPoint.y + 14 },
-      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.24) },
-      { x: Math.round(this.width * 0.44), y: Math.round(this.height * 0.18) },
-      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.28) },
-      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.78) },
-      { x: Math.round(this.width * 0.48), y: Math.round(this.height * 0.65) },
-      { x: Math.round(this.width * 0.76), y: Math.round(this.height * 0.72) },
-      { x: Math.round(this.width * 0.88), y: Math.round(this.height * 0.45) },
-      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.52) },
-      { x: Math.round(this.width * 0.62), y: Math.round(this.height * 0.85) }
+      { x: this.spawnPoint.x - 16, y: this.spawnPoint.y + 18 },
+      // 2. Mitten in den dichten Wäldern (Wald-Lichtungen für Trampoline!)
+      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.22) }, // Nordwest-Urwald
+      { x: Math.round(this.width * 0.26), y: Math.round(this.height * 0.65) }, // Südwest-Waldhain
+      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.52) }, // Goldblätterwald
+      { x: Math.round(this.width * 0.60), y: Math.round(this.height * 0.90) }, // Südwald
+      // 3. Nordosten: Schnee, Gipfel & Eispass
+      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.26) },
+      { x: Math.round(this.width * 0.86), y: Math.round(this.height * 0.18) },
+      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.14) },
+      // 4. Südwesten: Wüste, Oasen & Plateaus
+      { x: Math.round(this.width * 0.16), y: Math.round(this.height * 0.76) },
+      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.86) },
+      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.90) },
+      // 5. Südosten: Sumpf & Nebelmoore
+      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.70) },
+      { x: Math.round(this.width * 0.76), y: Math.round(this.height * 0.82) },
+      // 6. Zentrales Tal & Binnensee-Küste
+      { x: Math.round(this.width * 0.44), y: Math.round(this.height * 0.20) },
+      { x: Math.round(this.width * 0.38), y: Math.round(this.height * 0.54) },
+      { x: Math.round(this.width * 0.58), y: Math.round(this.height * 0.46) },
+      { x: Math.round(this.width * 0.88), y: Math.round(this.height * 0.45) }
     ].slice(0, count);
 
     for (const ts of trampolineSpots) {
@@ -592,18 +566,69 @@ export class WorldMap {
 
       this.objects[ts.y][ts.x] = OBJECTS.TRAMPOLINE;
       this.canopy[ts.y][ts.x] = CANOPY.NONE;
+
+      // Wenn im Wald platziert: Baumkrone und naheliegende Stämme räumen,
+      // damit der Spieler freie Sprungbahn in den Himmel hat!
+      const px = ts.x * TILE_SIZE + 8;
+      const py = ts.y * TILE_SIZE + 8;
+      this.trees = this.trees.filter(t => Math.hypot(t.x - px, t.y - py) > 22);
+      this.canopyCrowns = this.canopyCrowns.filter(c => Math.hypot(c.x - px, c.y - py) > 26);
+
+      // 3x3 Bereich um das Trampolin von Baumkronen befreien
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = ts.x + dx;
+          const ny = ts.y + dy;
+          if (this.isValid(nx, ny)) {
+            this.canopy[ny][nx] = CANOPY.NONE;
+          }
+        }
+      }
+
       this.trampolines.push({ x: ts.x, y: ts.y });
     }
   }
 
   placeCaveEntrances() {
+    // 26 vielfältige Höhleneingänge über die gesamte 290x200 Oberwelt verteilt
     this.holeEntrances = [
-      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Loch (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 11, name: 'Wald-Loch (Moosige Grotte)' },
+      // 1. West- & Spawn-Region (Grasland & Vorwälder)
+      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Kluft (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 11, name: 'Mooswald-Loch (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.30), targetCave: 'forest_grotto', targetX: 14, targetY: 14, name: 'Alteiche-Schacht (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.28), y: Math.round(this.height * 0.18), targetCave: 'main_complex', targetX: 30, targetY: 14, name: 'Nordwest-Stollen (Tiefenhöhlen)' },
+      { x: this.spawnPoint.x + 18, y: this.spawnPoint.y - 14, targetCave: 'main_complex', targetX: 22, targetY: 20, name: 'Spawn-Gipfelspalte (Tiefenhöhlen)' },
+      { x: this.spawnPoint.x - 14, y: this.spawnPoint.y + 24, targetCave: 'main_complex', targetX: 18, targetY: 35, name: 'Lichtungsschacht (Tiefenhöhlen)' },
+
+      // 2. Wüsten- & Canyon-Region (Südwesten)
       { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.84), targetCave: 'main_complex', targetX: 20, targetY: 53, name: 'Wüsten-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.14), y: Math.round(this.height * 0.74), targetCave: 'main_complex', targetX: 24, targetY: 60, name: 'Dünen-Erdloch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.78), targetCave: 'main_complex', targetX: 35, targetY: 58, name: 'Sandstein-Riss (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.10), y: Math.round(this.height * 0.86), targetCave: 'main_complex', targetX: 12, targetY: 50, name: 'Oasen-Senke (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.94), targetCave: 'main_complex', targetX: 28, targetY: 66, name: 'Südwest-Schlucht (Tiefenhöhlen)' },
+
+      // 3. Schnee- & Gletscher-Region (Nordosten)
       { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.16), targetCave: 'snow_grotto', targetX: 11, targetY: 11, name: 'Schnee-Eisspalte (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.86), y: Math.round(this.height * 0.24), targetCave: 'snow_grotto', targetX: 16, targetY: 14, name: 'Gletscher-Höhle (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.22), targetCave: 'main_complex', targetX: 62, targetY: 18, name: 'Eispass-Stollen (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.32), targetCave: 'main_complex', targetX: 70, targetY: 22, name: 'Frostkamm-Einsturz (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.92), y: Math.round(this.height * 0.14), targetCave: 'snow_grotto', targetX: 13, targetY: 18, name: 'Nordkap-Kluft (Eis-Grotte)' },
+
+      // 4. Sumpf- & Nebelmoor-Region (Südosten)
+      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.72), targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.72), y: Math.round(this.height * 0.80), targetCave: 'main_complex', targetX: 80, targetY: 56, name: 'Schilf-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.58), y: Math.round(this.height * 0.76), targetCave: 'main_complex', targetX: 66, targetY: 52, name: 'Moorloch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.80), y: Math.round(this.height * 0.88), targetCave: 'main_complex', targetX: 84, targetY: 62, name: 'Teerpfuhl-Grotte (Tiefenhöhlen)' },
+
+      // 5. Void-Zone & Umfeld
       { x: this.preset.voidZone.x - 6, y: this.preset.voidZone.y + 4, targetCave: 'void_grotto', targetX: 12, targetY: 11, name: 'Leeren-Riss (Astrale Kluft)' },
-      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.72), targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' }
+      { x: this.preset.voidZone.x + 5, y: this.preset.voidZone.y - 4, targetCave: 'void_grotto', targetX: 18, targetY: 15, name: 'Schatten-Schlund (Astrale Kluft)' },
+
+      // 6. Zentrales Tal, Seenplatte & Hochebenen
+      { x: Math.round(this.width * 0.46), y: Math.round(this.height * 0.34), targetCave: 'main_complex', targetX: 45, targetY: 28, name: 'Flusstal-Klamm (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.56), y: Math.round(this.height * 0.40), targetCave: 'main_complex', targetX: 54, targetY: 34, name: 'Seeterrassen-Schacht (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.46), targetCave: 'main_complex', targetX: 78, targetY: 38, name: 'Ostplateau-Grotte (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.40), y: Math.round(this.height * 0.68), targetCave: 'main_complex', targetX: 42, targetY: 48, name: 'Südübergang-Höhle (Tiefenhöhlen)' }
     ];
 
     for (const entrance of this.holeEntrances) {
@@ -1195,7 +1220,7 @@ export class WorldMap {
     const toElev = this.getElevation(toX, toY);
     const diff = toElev - fromElev;
 
-    if (diff === 0) return true;
+    if (diff <= 0) return true;
 
     if (diff === 1) {
       const fromRamp = this.getRamp(fromX, fromY);
@@ -1210,10 +1235,6 @@ export class WorldMap {
       if (moveDx > 0 && (toRamp === RAMPS.UP_EAST || fromRamp === RAMPS.UP_EAST)) return true;
 
       return false;
-    }
-
-    if (diff === -1) {
-      return true;
     }
 
     return false;

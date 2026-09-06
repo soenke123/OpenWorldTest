@@ -4247,8 +4247,8 @@ const WORLD_PRESETS = [
     description: 'Eine sonnendurchflutete grüne Landschaft mit weiten Lichtungen, 5 großen Waldhainen, zwei mächtigen Flüssen mit Holzbrücken und seltenem Schnee im Norden.',
     voidZone: { x: 268, y: 40, radius: 18, name: 'Nordost-Rift' },
     forestCount: 5,
-    trampolineCount: 8,
-    shrineCount: 7
+    trampolineCount: 18,
+    shrineCount: 1
   },
   {
     id: 2,
@@ -4263,8 +4263,8 @@ const WORLD_PRESETS = [
     description: 'Eine eisige Welt aus Schnee, Gletscherspalten und dichten Kiefernwäldern. Ein riesiger zugefrorener Bergsee dominiert das Zentrum. Die Leere liegt am fernen Südrand.',
     voidZone: { x: 265, y: 175, radius: 18, name: 'Südost-Gletscherabgrund' },
     forestCount: 6,
-    trampolineCount: 7,
-    shrineCount: 8
+    trampolineCount: 17,
+    shrineCount: 1
   },
   {
     id: 3,
@@ -4279,8 +4279,8 @@ const WORLD_PRESETS = [
     description: 'Glühende Wüstenmeere mit tückischem Treibsand, schattigen Palmenoasen und weiten Sandsteinplateaus. Im Osten klafft ein verlassener Leerenkrater.',
     voidZone: { x: 272, y: 110, radius: 17, name: 'Östlicher Dünenkrater' },
     forestCount: 4,
-    trampolineCount: 6,
-    shrineCount: 6
+    trampolineCount: 16,
+    shrineCount: 1
   },
   {
     id: 4,
@@ -4295,8 +4295,8 @@ const WORLD_PRESETS = [
     description: 'Ein von zwei gewaltigen Flüssen durchzogenes Tal mit üppiger Vegetation, 6 Mischwäldern und einem weitläufigen Binnensee mit Insel.',
     voidZone: { x: 145, y: 186, radius: 18, name: 'Südliches Bruch-Rift' },
     forestCount: 6,
-    trampolineCount: 9,
-    shrineCount: 7
+    trampolineCount: 18,
+    shrineCount: 1
   },
   {
     id: 5,
@@ -4311,8 +4311,8 @@ const WORLD_PRESETS = [
     description: 'Imposante Höhenstufen und Steilwände aus weißem Eis. Schneebedeckte Haine und geheime Grottenzugänge prägen die Bergketten.',
     voidZone: { x: 20, y: 170, radius: 17, name: 'Südwestlicher Abgrund' },
     forestCount: 5,
-    trampolineCount: 7,
-    shrineCount: 8
+    trampolineCount: 16,
+    shrineCount: 1
   },
   {
     id: 6,
@@ -4327,8 +4327,8 @@ const WORLD_PRESETS = [
     description: 'Tief eingeschnittene rote Canyons, gewundene Schluchten mit kleinen Quellflüssen und seltsamen Felsformationen. Die Leere liegt ganz im Norden.',
     voidZone: { x: 150, y: 16, radius: 17, name: 'Nördliche Kluft' },
     forestCount: 5,
-    trampolineCount: 6,
-    shrineCount: 6
+    trampolineCount: 16,
+    shrineCount: 1
   },
   {
     id: 7,
@@ -4343,8 +4343,8 @@ const WORLD_PRESETS = [
     description: 'Ein märchenhafter Riesenwald mit rosa Kirschblüten, Moosbächen und uralten Holzbrücken. Ein dichter Sumpf liegt versteckt im Südosten.',
     voidZone: { x: 270, y: 165, radius: 18, name: 'Südost-Schattenforst' },
     forestCount: 7,
-    trampolineCount: 10,
-    shrineCount: 8
+    trampolineCount: 18,
+    shrineCount: 1
   },
   {
     id: 8,
@@ -4359,8 +4359,8 @@ const WORLD_PRESETS = [
     description: 'Majestätische Doppelgipfel auf Ebene +2 mit zahlreichen Kletterrampen, eisblauen Bergseen und 8 geheimen Schreinen für tapfere Entdecker.',
     voidZone: { x: 268, y: 55, radius: 18, name: 'Nordost-Eisspalte' },
     forestCount: 6,
-    trampolineCount: 8,
-    shrineCount: 8
+    trampolineCount: 17,
+    shrineCount: 1
   },
   {
     id: 9,
@@ -4375,8 +4375,8 @@ const WORLD_PRESETS = [
     description: 'Eine atemberaubende, weitläufige Wüstenwelt mit verbundenen Oasen, Palmenhainen und verborgenen Grotteneingängen.',
     voidZone: { x: 275, y: 100, radius: 18, name: 'Östliches Astraltor' },
     forestCount: 4,
-    trampolineCount: 6,
-    shrineCount: 6
+    trampolineCount: 16,
+    shrineCount: 1
   },
   {
     id: 10,
@@ -4391,8 +4391,8 @@ const WORLD_PRESETS = [
     description: 'Eine harmonische Großwelt, die weite Grasländer, dichte Laub- und Tannenwälder, weite Flüsse und kleine Wüstenausläufer perfekt vereint.',
     voidZone: { x: 270, y: 180, radius: 18, name: 'Südost-Urzeit-Abgrund' },
     forestCount: 7,
-    trampolineCount: 9,
-    shrineCount: 8
+    trampolineCount: 18,
+    shrineCount: 1
   }
 ];
 
@@ -7340,30 +7340,39 @@ class WorldMap {
 
   populateBiomeTreesAndFlora() {
     const n = this.noise;
-    for (let ty = 6; ty < this.height - 6; ty += 5) {
-      for (let tx = 6; tx < this.width - 6; tx += 5) {
+    for (let ty = 6; ty < this.height - 6; ty += 4) {
+      for (let tx = 6; tx < this.width - 6; tx += 4) {
         if (!this.isValid(tx, ty)) continue;
         if (this.canopy[ty][tx] === CANOPY.TREE_CROWN) continue;
         if (Math.hypot(tx - this.spawnPoint.x, ty - this.spawnPoint.y) < this.preset.spawnClearingRadius) continue;
 
         const g = this.ground[ty][tx];
-        const jx = tx + n.noise(tx * 1.4, ty * 1.4) * 1.6;
-        const jy = ty + n.noise(tx * 2.2, ty * 2.2) * 1.6;
+        const jx = tx + n.noise(tx * 1.4, ty * 1.4) * 1.8;
+        const jy = ty + n.noise(tx * 2.2, ty * 2.2) * 1.8;
         const rx = Math.round(jx);
         const ry = Math.round(jy);
         if (!this.isValid(rx, ry)) continue;
         if (this.objects[ry][rx] !== OBJECTS.NONE) continue;
+        if (this.canopy[ry][rx] === CANOPY.TREE_CROWN) continue;
 
-        if (g === TILES.SNOW && n.fbm(rx * 0.1, ry * 0.1, 2) > 0.15) {
-          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.SNOWY_PINE, Math.abs(rx) % 2);
-        } else if (g === TILES.SAND && n.fbm(rx * 0.1, ry * 0.1, 2) > 0.25) {
-          // Date Palm or Cactus
-          if (n.noise(rx * 0.5, ry * 0.5) > 0.1) {
+        const noiseVal = n.fbm(rx * 0.11, ry * 0.11, 2);
+
+        if ((g === TILES.GRASS || g === TILES.DIRT) && noiseVal > 0.10) {
+          // Standalone Oak / Blossom trees across grasslands & meadows
+          const treeVariant = (Math.abs(rx + ry) % 2 === 0) ? TREES.OAK : TREES.BIRCH;
+          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, treeVariant, Math.abs(rx) % 3);
+        } else if (g === TILES.SNOW && noiseVal > 0.08) {
+          // Standalone Snowy Pines on mountain slopes & tundra
+          this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.SNOWY_PINE, Math.abs(rx) % 3);
+        } else if (g === TILES.SAND && noiseVal > 0.18) {
+          // Date Palm or Desert Cactus
+          if (n.noise(rx * 0.5, ry * 0.5) > 0.05) {
             this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.PALM, Math.abs(rx) % 2);
           } else {
             this.objects[ry][rx] = OBJECTS.CACTUS;
           }
-        } else if (g === TILES.SWAMP_GROUND && n.fbm(rx * 0.1, ry * 0.1, 2) > 0.18) {
+        } else if (g === TILES.SWAMP_GROUND && noiseVal > 0.12) {
+          // Mossy Swamp Willow in marsh pockets
           this.addTree(rx * TILE_SIZE + 8, ry * TILE_SIZE + 12, TREES.SWAMP_WILLOW, Math.abs(rx) % 2);
         }
       }
@@ -7373,63 +7382,9 @@ class WorldMap {
   placeOverworldShrines() {
     this.shrines = [];
     const p = this.preset;
-    const count = p.shrineCount || 8;
 
-    const shrineCandidates = [
-      { x: this.spawnPoint.x + 22, y: this.spawnPoint.y - 10, name: 'Schrein des Erwachens' },
-      { x: Math.round(this.width * 0.38), y: Math.round(this.height * 0.26), name: 'Schrein der Waldgeister' },
-      { x: Math.round(this.width * 0.55), y: Math.round(this.height * 0.38), name: 'Schrein des Binnensees' },
-      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.22), name: 'Schrein des Ewigen Eises' },
-      { x: Math.round(this.width * 0.25), y: Math.round(this.height * 0.70), name: 'Schrein der Sonnendüne' },
-      { x: Math.round(this.width * 0.70), y: Math.round(this.height * 0.72), name: 'Schrein der Nebelmoore' },
-      { x: Math.round(this.width * 0.84), y: Math.round(this.height * 0.54), name: 'Schrein der Morgendämmerung' },
-      { x: Math.round(this.width * 0.45), y: Math.round(this.height * 0.84), name: 'Schrein der Blütentäler' }
-    ].slice(0, count);
-
-    for (const sc of shrineCandidates) {
-      if (this.isValid(sc.x, sc.y)) {
-        this.ground[sc.y][sc.x] = TILES.DIRT;
-        this.objects[sc.y][sc.x] = OBJECTS.SHRINE;
-        this.canopy[sc.y][sc.x] = CANOPY.NONE;
-        this.shrines.push({ x: sc.x, y: sc.y, name: sc.name });
-
-        // Ensure surrounding 3x3 tiles are cleared and walkable dirt path
-        for (let dy = -2; dy <= 2; dy++) {
-          for (let dx = -2; dx <= 2; dx++) {
-            const nx = sc.x + dx;
-            const ny = sc.y + dy;
-            if (!this.isValid(nx, ny)) continue;
-            this.canopy[ny][nx] = CANOPY.NONE;
-            if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && !(dx === 0 && dy === 0)) {
-              this.ground[ny][nx] = TILES.DIRT;
-              this.objects[ny][nx] = OBJECTS.NONE;
-            }
-          }
-        }
-
-        // Clear tree trunks and crowns in 44px radius around shrine
-        const shrinePx = sc.x * TILE_SIZE + 8;
-        const shrinePy = sc.y * TILE_SIZE + 8;
-        this.trees = this.trees.filter(t => Math.hypot(t.x - shrinePx, t.y - shrinePy) > 38);
-        this.canopyCrowns = this.canopyCrowns.filter(c => Math.hypot(c.x - shrinePx, c.y - shrinePy) > 42);
-
-        // Torii Gate on approach and flanking stone lanterns
-        if (this.isValid(sc.x, sc.y + 2)) {
-          this.objects[sc.y + 2][sc.x] = OBJECTS.TORII_GATE;
-          this.ground[sc.y + 2][sc.x] = TILES.DIRT;
-        }
-        if (this.isValid(sc.x - 2, sc.y + 1)) {
-          this.objects[sc.y + 1][sc.x - 2] = OBJECTS.STONE_TORO;
-          this.ground[sc.y + 1][sc.x - 2] = TILES.DIRT;
-        }
-        if (this.isValid(sc.x + 2, sc.y + 1)) {
-          this.objects[sc.y + 1][sc.x + 2] = OBJECTS.STONE_TORO;
-          this.ground[sc.y + 1][sc.x + 2] = TILES.DIRT;
-        }
-      }
-    }
-
-    // Ancient Void Shrine inside Void Zone
+    // Gemäß Nutzeranforderung: In der Oberwelt gibt es NUR den Schrein im VOID!
+    // Alle anderen Schreine liegen ausschließlich im Himmel (Clouds) und in Höhlen (Caves).
     const vz = p.voidZone;
     const vx = vz.x - 2;
     const vy = vz.y - 2;
@@ -7450,24 +7405,43 @@ class WorldMap {
       if (this.isValid(vx + 2, vy + 1)) {
         this.objects[vy + 1][vx + 2] = OBJECTS.GLOW_CRYSTAL;
       }
+      if (this.isValid(vx, vy + 2)) {
+        this.objects[vy + 2][vx] = OBJECTS.TORII_GATE;
+        this.ground[vy + 2][vx] = TILES.VOID_GROUND;
+      }
     }
   }
 
   placeTrampolines() {
     this.trampolines = [];
-    const count = this.preset.trampolineCount || 8;
+    const count = this.preset.trampolineCount || 18;
 
+    // 18 strategische Standorte quer über die 290x200 Riesenwelt, inkl. mitten im Wald
     const trampolineSpots = [
+      // 1. Grasland & Spawn-Nähe
       { x: this.spawnPoint.x + 14, y: this.spawnPoint.y + 14 },
-      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.24) },
-      { x: Math.round(this.width * 0.44), y: Math.round(this.height * 0.18) },
-      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.28) },
-      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.78) },
-      { x: Math.round(this.width * 0.48), y: Math.round(this.height * 0.65) },
-      { x: Math.round(this.width * 0.76), y: Math.round(this.height * 0.72) },
-      { x: Math.round(this.width * 0.88), y: Math.round(this.height * 0.45) },
-      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.52) },
-      { x: Math.round(this.width * 0.62), y: Math.round(this.height * 0.85) }
+      { x: this.spawnPoint.x - 16, y: this.spawnPoint.y + 18 },
+      // 2. Mitten in den dichten Wäldern (Wald-Lichtungen für Trampoline!)
+      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.22) }, // Nordwest-Urwald
+      { x: Math.round(this.width * 0.26), y: Math.round(this.height * 0.65) }, // Südwest-Waldhain
+      { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.52) }, // Goldblätterwald
+      { x: Math.round(this.width * 0.60), y: Math.round(this.height * 0.90) }, // Südwald
+      // 3. Nordosten: Schnee, Gipfel & Eispass
+      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.26) },
+      { x: Math.round(this.width * 0.86), y: Math.round(this.height * 0.18) },
+      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.14) },
+      // 4. Südwesten: Wüste, Oasen & Plateaus
+      { x: Math.round(this.width * 0.16), y: Math.round(this.height * 0.76) },
+      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.86) },
+      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.90) },
+      // 5. Südosten: Sumpf & Nebelmoore
+      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.70) },
+      { x: Math.round(this.width * 0.76), y: Math.round(this.height * 0.82) },
+      // 6. Zentrales Tal & Binnensee-Küste
+      { x: Math.round(this.width * 0.44), y: Math.round(this.height * 0.20) },
+      { x: Math.round(this.width * 0.38), y: Math.round(this.height * 0.54) },
+      { x: Math.round(this.width * 0.58), y: Math.round(this.height * 0.46) },
+      { x: Math.round(this.width * 0.88), y: Math.round(this.height * 0.45) }
     ].slice(0, count);
 
     for (const ts of trampolineSpots) {
@@ -7477,18 +7451,69 @@ class WorldMap {
 
       this.objects[ts.y][ts.x] = OBJECTS.TRAMPOLINE;
       this.canopy[ts.y][ts.x] = CANOPY.NONE;
+
+      // Wenn im Wald platziert: Baumkrone und naheliegende Stämme räumen,
+      // damit der Spieler freie Sprungbahn in den Himmel hat!
+      const px = ts.x * TILE_SIZE + 8;
+      const py = ts.y * TILE_SIZE + 8;
+      this.trees = this.trees.filter(t => Math.hypot(t.x - px, t.y - py) > 22);
+      this.canopyCrowns = this.canopyCrowns.filter(c => Math.hypot(c.x - px, c.y - py) > 26);
+
+      // 3x3 Bereich um das Trampolin von Baumkronen befreien
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = ts.x + dx;
+          const ny = ts.y + dy;
+          if (this.isValid(nx, ny)) {
+            this.canopy[ny][nx] = CANOPY.NONE;
+          }
+        }
+      }
+
       this.trampolines.push({ x: ts.x, y: ts.y });
     }
   }
 
   placeCaveEntrances() {
+    // 26 vielfältige Höhleneingänge über die gesamte 290x200 Oberwelt verteilt
     this.holeEntrances = [
-      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Loch (Tiefenhöhlen)' },
-      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 11, name: 'Wald-Loch (Moosige Grotte)' },
+      // 1. West- & Spawn-Region (Grasland & Vorwälder)
+      { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.36), targetCave: 'main_complex', targetX: 16, targetY: 17, name: 'Grasland-Kluft (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.18), y: Math.round(this.height * 0.16), targetCave: 'forest_grotto', targetX: 11, targetY: 11, name: 'Mooswald-Loch (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.12), y: Math.round(this.height * 0.30), targetCave: 'forest_grotto', targetX: 14, targetY: 14, name: 'Alteiche-Schacht (Moosige Grotte)' },
+      { x: Math.round(this.width * 0.28), y: Math.round(this.height * 0.18), targetCave: 'main_complex', targetX: 30, targetY: 14, name: 'Nordwest-Stollen (Tiefenhöhlen)' },
+      { x: this.spawnPoint.x + 18, y: this.spawnPoint.y - 14, targetCave: 'main_complex', targetX: 22, targetY: 20, name: 'Spawn-Gipfelspalte (Tiefenhöhlen)' },
+      { x: this.spawnPoint.x - 14, y: this.spawnPoint.y + 24, targetCave: 'main_complex', targetX: 18, targetY: 35, name: 'Lichtungsschacht (Tiefenhöhlen)' },
+
+      // 2. Wüsten- & Canyon-Region (Südwesten)
       { x: Math.round(this.width * 0.24), y: Math.round(this.height * 0.84), targetCave: 'main_complex', targetX: 20, targetY: 53, name: 'Wüsten-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.14), y: Math.round(this.height * 0.74), targetCave: 'main_complex', targetX: 24, targetY: 60, name: 'Dünen-Erdloch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.32), y: Math.round(this.height * 0.78), targetCave: 'main_complex', targetX: 35, targetY: 58, name: 'Sandstein-Riss (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.10), y: Math.round(this.height * 0.86), targetCave: 'main_complex', targetX: 12, targetY: 50, name: 'Oasen-Senke (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.22), y: Math.round(this.height * 0.94), targetCave: 'main_complex', targetX: 28, targetY: 66, name: 'Südwest-Schlucht (Tiefenhöhlen)' },
+
+      // 3. Schnee- & Gletscher-Region (Nordosten)
       { x: Math.round(this.width * 0.78), y: Math.round(this.height * 0.16), targetCave: 'snow_grotto', targetX: 11, targetY: 11, name: 'Schnee-Eisspalte (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.86), y: Math.round(this.height * 0.24), targetCave: 'snow_grotto', targetX: 16, targetY: 14, name: 'Gletscher-Höhle (Eis-Grotte)' },
+      { x: Math.round(this.width * 0.68), y: Math.round(this.height * 0.22), targetCave: 'main_complex', targetX: 62, targetY: 18, name: 'Eispass-Stollen (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.74), y: Math.round(this.height * 0.32), targetCave: 'main_complex', targetX: 70, targetY: 22, name: 'Frostkamm-Einsturz (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.92), y: Math.round(this.height * 0.14), targetCave: 'snow_grotto', targetX: 13, targetY: 18, name: 'Nordkap-Kluft (Eis-Grotte)' },
+
+      // 4. Sumpf- & Nebelmoor-Region (Südosten)
+      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.72), targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.72), y: Math.round(this.height * 0.80), targetCave: 'main_complex', targetX: 80, targetY: 56, name: 'Schilf-Trichter (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.58), y: Math.round(this.height * 0.76), targetCave: 'main_complex', targetX: 66, targetY: 52, name: 'Moorloch (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.80), y: Math.round(this.height * 0.88), targetCave: 'main_complex', targetX: 84, targetY: 62, name: 'Teerpfuhl-Grotte (Tiefenhöhlen)' },
+
+      // 5. Void-Zone & Umfeld
       { x: this.preset.voidZone.x - 6, y: this.preset.voidZone.y + 4, targetCave: 'void_grotto', targetX: 12, targetY: 11, name: 'Leeren-Riss (Astrale Kluft)' },
-      { x: Math.round(this.width * 0.66), y: Math.round(this.height * 0.72), targetCave: 'main_complex', targetX: 74, targetY: 51, name: 'Sumpf-Kuhle (Tiefenhöhlen)' }
+      { x: this.preset.voidZone.x + 5, y: this.preset.voidZone.y - 4, targetCave: 'void_grotto', targetX: 18, targetY: 15, name: 'Schatten-Schlund (Astrale Kluft)' },
+
+      // 6. Zentrales Tal, Seenplatte & Hochebenen
+      { x: Math.round(this.width * 0.46), y: Math.round(this.height * 0.34), targetCave: 'main_complex', targetX: 45, targetY: 28, name: 'Flusstal-Klamm (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.56), y: Math.round(this.height * 0.40), targetCave: 'main_complex', targetX: 54, targetY: 34, name: 'Seeterrassen-Schacht (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.82), y: Math.round(this.height * 0.46), targetCave: 'main_complex', targetX: 78, targetY: 38, name: 'Ostplateau-Grotte (Tiefenhöhlen)' },
+      { x: Math.round(this.width * 0.40), y: Math.round(this.height * 0.68), targetCave: 'main_complex', targetX: 42, targetY: 48, name: 'Südübergang-Höhle (Tiefenhöhlen)' }
     ];
 
     for (const entrance of this.holeEntrances) {
@@ -8080,7 +8105,7 @@ class WorldMap {
     const toElev = this.getElevation(toX, toY);
     const diff = toElev - fromElev;
 
-    if (diff === 0) return true;
+    if (diff <= 0) return true;
 
     if (diff === 1) {
       const fromRamp = this.getRamp(fromX, fromY);
@@ -8095,10 +8120,6 @@ class WorldMap {
       if (moveDx > 0 && (toRamp === RAMPS.UP_EAST || fromRamp === RAMPS.UP_EAST)) return true;
 
       return false;
-    }
-
-    if (diff === -1) {
-      return true;
     }
 
     return false;
@@ -9069,6 +9090,42 @@ class MagicManager {
       }
     }
 
+    // PvP: Treffer auf Mitspieler im LAN-Multiplayer
+    if (this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
+      for (const remotePlayer of this.game.remotePlayers.values()) {
+        if (remotePlayer.id === this.game.network.clientId) continue;
+        if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
+
+        const dx = remotePlayer.x - px;
+        const dy = remotePlayer.y - py;
+        const dist = Math.hypot(dx, dy);
+        if (dist > range + (remotePlayer.radius || 10)) continue;
+
+        const angToRemote = Math.atan2(dy, dx);
+        let diff = angToRemote - facingAngle;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+
+        if (Math.abs(diff) <= halfArc) {
+          const frostDmg = 30;
+          let actualDmg = frostDmg;
+          const kbX = Math.cos(angToRemote) * 50;
+          const kbY = Math.sin(angToRemote) * 50;
+
+          if (remotePlayer.shield && remotePlayer.shield.active && remotePlayer.shield.energy > 0) {
+            actualDmg = 10;
+            combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 14);
+            combatManager?.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 20, '#38bdf8');
+          } else {
+            combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 18);
+            combatManager?.addFloatingText('❄️ EINGEFROREN! (2s)', remotePlayer.x, remotePlayer.y - 20, '#38bdf8', 1.1);
+          }
+
+          this.game.network.sendPvPHit(remotePlayer.id, actualDmg, kbX, kbY);
+        }
+      }
+    }
+
     // Audio-visuelles Feedback
     if (combatManager) {
       combatManager.addFloatingText(`❄️ EISNEBEL! (${player.artifact.charges} übrig)`, px, py - 26, '#38bdf8', 1.2);
@@ -9435,28 +9492,15 @@ class MagicManager {
     // Modal SOFORT schließen, damit der Spieler die volle Animation sieht!
     this.closeTeleportModal();
 
-    const combat = this.game?.combat;
-    if (combat) {
-      combat.spawnVoidTeleportVFX(player.x, player.y, false);
-    }
-
-    player.x = worldX;
-    player.y = worldY;
-    if (this.game?.camera) {
-      this.game.camera.centerOn(worldX, worldY);
-    }
-
-    if (combat) {
-      combat.spawnVoidTeleportVFX(player.x, player.y, true);
-      combat.addFloatingText('🌌 LEEREN-SPRUNG!', player.x, player.y - 28, '#c084fc', 1.3);
-    }
-
     if (player.artifact) {
       player.artifact.charges--;
       player.artifact.cooldownTimer = player.artifact.cooldownMax || 1.0;
     }
 
     this.updateHUD();
+
+    // 3-Phasen Teleport-Animation starten (Lila Loch -> Spieler sinkt -> Blackout -> Lila Loch Zielort -> Spieler springt heraus)
+    player.startTeleportSequence(worldX, worldY);
   }
 
   handleTeleportClick(clientX, clientY) {
@@ -9807,6 +9851,40 @@ class MagicManager {
                 });
               }
             }
+          }
+        }
+      }
+
+      // Check collision with remote players (LAN Multiplayer PvP)
+      if (this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
+        for (const remotePlayer of this.game.remotePlayers.values()) {
+          if (remotePlayer.id === this.game.network.clientId) continue;
+          if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
+          if (spell.hitEnemies.has(remotePlayer.id)) continue;
+
+          const dx = remotePlayer.x - spell.x;
+          const dy = remotePlayer.y - spell.y;
+          const dotFlight = dx * spell.dirX + dy * spell.dirY;
+          const dotPerp = Math.abs(dx * (-spell.dirY) + dy * spell.dirX);
+
+          const collisionDist = Math.max(35, spell.speed * dt * 1.5);
+          if (Math.abs(dotFlight) <= collisionDist && dotPerp <= (spell.width / 2 + (remotePlayer.radius || 10))) {
+            spell.hitEnemies.add(remotePlayer.id);
+
+            const kbX = spell.dirX * 130;
+            const kbY = spell.dirY * 130;
+
+            let actualDmg = spell.damage;
+            if (remotePlayer.shield && remotePlayer.shield.active && remotePlayer.shield.energy > 0) {
+              actualDmg = Math.round(spell.damage * 0.35);
+              combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 16);
+              combatManager?.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 20, '#38bdf8');
+            } else {
+              combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#ef4444', 20);
+              combatManager?.addFloatingText(`🔥 -${actualDmg}`, remotePlayer.x, remotePlayer.y - 20, '#ef4444', 1.0);
+            }
+
+            this.game.network.sendPvPHit(remotePlayer.id, actualDmg, kbX, kbY);
           }
         }
       }
@@ -10547,6 +10625,39 @@ class EnemyEntity {
   update(dt, player, map, enemyManager, combatManager) {
     if (this.state === 'dead') return;
 
+    // Wasser-Ertrinken für nicht-fliegende Gegner (falls durch Knockback oder Wanderung im Wasser gelandet)
+    if (!isFlyingEnemy(this.typeId) && map) {
+      const tx = Math.floor(this.x / TILE_SIZE);
+      const ty = Math.floor(this.y / TILE_SIZE);
+      const ground = map.getGroundTile ? map.getGroundTile(tx, ty) : 0;
+      const isWater = (ground === TILES.WATER || ground === TILES.SWAMP_WATER || ground === TILES.CAVE_WATER || ground === TILES.VOID_LAKE);
+      const isBridge = (ground === TILES.BRIDGE_H || ground === TILES.BRIDGE_V || ground === TILES.RAINBOW_BRIDGE_H || ground === TILES.RAINBOW_BRIDGE_V);
+      if (isWater && !isBridge) {
+        this.hp = 0;
+        this.state = 'dead';
+        this.die(combatManager);
+        if (combatManager) {
+          combatManager.addFloatingText('🌊 ERTRUNKEN!', this.x, this.y - 20, '#38bdf8', 1.3);
+          for (let s = 0; s < 18; s++) {
+            const spAng = Math.random() * Math.PI * 2;
+            const sp = Math.random() * 60 + 20;
+            combatManager.hitSparks.push({
+              dimension: this.dimension,
+              x: this.x,
+              y: this.y,
+              vx: Math.cos(spAng) * sp,
+              vy: Math.sin(spAng) * sp - 15,
+              color: Math.random() > 0.3 ? '#38bdf8' : '#e0f2fe',
+              size: Math.random() * 3 + 1.5,
+              life: 0.5,
+              maxLife: 0.5
+            });
+          }
+        }
+        return;
+      }
+    }
+
     // Einfrier-Zustand durch Eisnebel-Artefakt: Vollständige Lähmung (keine Bewegung, keine Angriffe)
     if (this.freezeTimer > 0) {
       this.freezeTimer -= dt;
@@ -10563,6 +10674,13 @@ class EnemyEntity {
 
     // Nur in der aktiven Dimension berechnen
     if (this.dimension !== enemyManager.game.currentDimension) return;
+
+    // Wenn der Client im LAN-Modus NICHT der Master-Client ist:
+    // Der Master-Client simuliert Bewegung, KI und Angriffe autoritativ.
+    // Nicht-Master-Clients führen nur die Animation aus und interpolieren Koordinaten!
+    if (enemyManager && enemyManager.isMasterClient === false) {
+      return;
+    }
 
     // Distanz zum Spieler
     const dx = player.x - this.x;
@@ -10744,6 +10862,20 @@ class EnemyEntity {
     const ty2 = Math.floor((nextY + (dirY > 0 ? this.radius : -this.radius)) / TILE_SIZE);
     if (!map.isSolid || !map.isSolid(tx2, ty2)) {
       this.y = nextY;
+    }
+
+    // Ertrinken im tiefen Wasser
+    if (!isFlyingEnemy(this.typeId) && map) {
+      const curTx = Math.floor(this.x / TILE_SIZE);
+      const curTy = Math.floor(this.y / TILE_SIZE);
+      const ground = map.getGroundTile ? map.getGroundTile(curTx, curTy) : 0;
+      const isWater = (ground === TILES.WATER || ground === TILES.SWAMP_WATER || ground === TILES.CAVE_WATER || ground === TILES.VOID_LAKE);
+      const isBridge = (ground === TILES.BRIDGE_H || ground === TILES.BRIDGE_V || ground === TILES.RAINBOW_BRIDGE_H || ground === TILES.RAINBOW_BRIDGE_V);
+      if (isWater && !isBridge) {
+        this.hp = 0;
+        this.state = 'dead';
+        this.die(this.enemyManager?.game?.combat);
+      }
     }
   }
 
@@ -11125,6 +11257,13 @@ class EnemyEntity {
   takeDamage(amount, knockbackAngle, knockbackForce, combatManager, isRange = false) {
     if (this.state === 'dead') return;
 
+    // Wenn nicht Master-Client im LAN: Schaden an Master senden
+    const net = combatManager?.game?.network;
+    const isMaster = combatManager?.game?.enemyManager?.isMasterClient ?? true;
+    if (!isMaster && net && net.connected) {
+      net.sendDamageEnemy(this.id, amount, knockbackAngle, knockbackForce, isRange);
+    }
+
     this.hp -= amount;
     this.hitFlash = 0.25;
 
@@ -11143,6 +11282,42 @@ class EnemyEntity {
       const kbMult = (this.typeId === 'green_slime' || this.scale < 0.6) ? 0.24 : 0.08;
       this.x += Math.cos(knockbackAngle) * (knockbackForce * kbMult);
       this.y += Math.sin(knockbackAngle) * (knockbackForce * kbMult);
+
+      // Prüfen, ob nicht-fliegende Gegner durch Knockback ins Wasser gestoßen wurden -> Sofortiges Ertrinken!
+      if (!isFlyingEnemy(this.typeId)) {
+        const map = combatManager?.game?.currentMap || combatManager?.game?.map || null;
+        if (map) {
+          const tx = Math.floor(this.x / TILE_SIZE);
+          const ty = Math.floor(this.y / TILE_SIZE);
+          const ground = map.getGroundTile ? map.getGroundTile(tx, ty) : 0;
+          const isWater = (ground === TILES.WATER || ground === TILES.SWAMP_WATER || ground === TILES.CAVE_WATER || ground === TILES.VOID_LAKE);
+          const isBridge = (ground === TILES.BRIDGE_H || ground === TILES.BRIDGE_V || ground === TILES.RAINBOW_BRIDGE_H || ground === TILES.RAINBOW_BRIDGE_V);
+          if (isWater && !isBridge) {
+            this.hp = 0;
+            this.state = 'dead';
+            this.die(combatManager);
+            if (combatManager) {
+              combatManager.addFloatingText('🌊 ERTRUNKEN!', this.x, this.y - 20, '#38bdf8', 1.3);
+              for (let s = 0; s < 18; s++) {
+                const spAng = Math.random() * Math.PI * 2;
+                const sp = Math.random() * 60 + 20;
+                combatManager.hitSparks.push({
+                  dimension: this.dimension,
+                  x: this.x,
+                  y: this.y,
+                  vx: Math.cos(spAng) * sp,
+                  vy: Math.sin(spAng) * sp - 15,
+                  color: Math.random() > 0.3 ? '#38bdf8' : '#e0f2fe',
+                  size: Math.random() * 3 + 1.5,
+                  life: 0.5,
+                  maxLife: 0.5
+                });
+              }
+            }
+            return;
+          }
+        }
+      }
     }
 
     // Treffer-Partikel
@@ -11310,6 +11485,7 @@ class EnemyManager {
     this.xpOrbs = [];
     this.respawnQueue = [];
     this.aiActive = true;
+    this.isMasterClient = true; // Im LAN: Master simuliert KI; Nicht-Master interpoliert
 
     this.initSpawns();
   }
@@ -11327,201 +11503,250 @@ class EnemyManager {
     const h = map?.height || 200;
 
     // =========================================================================
-    // OVERWORLD SPAWNS NACH BIOMEN & GRUPPEN (290x200 Riesenwelt)
+    // OVERWORLD SPAWNS (Verdoppelt auf ~240 Mobs, Deterministische IDs)
     // =========================================================================
 
-    // 1. Grasland & Lichtungen (Außerhalb der sicheren Spawn-Lichtung Radius 15)
-    // RIESIGER 28er-Massen-Schwarm winziger Tau-Tropfen Blobs
-    this.spawnPack('green_slime', (sp.x + 18) * TILE_SIZE, (sp.y + 4) * TILE_SIZE, 28, 55, DIMENSIONS.OVERWORLD, 'pack_slimes', {
+    // 1. Grasland & Lichtungen
+    // Massenschwarm Blobs bei Spawn
+    this.spawnPack('green_slime', (sp.x + 18) * TILE_SIZE, (sp.y + 4) * TILE_SIZE, 32, 55, DIMENSIONS.OVERWORLD, 'pack_slimes', {
       scale: 0.48, hp: 12, atk: 5, xpValue: 2
     });
+    // Zweiter Blob-Schwarm südlich
+    this.spawnPack('green_slime', (sp.x + 35) * TILE_SIZE, (sp.y + 40) * TILE_SIZE, 24, 50, DIMENSIONS.OVERWORLD, 'pack_slimes_south', {
+      scale: 0.48, hp: 12, atk: 5, xpValue: 2
+    });
+    // Hügelschleime auf Hochebene
+    this.spawnPack('green_slime', (sp.x + 22) * TILE_SIZE, (sp.y - 14) * TILE_SIZE, 8, 28, DIMENSIONS.OVERWORLD, 'pack_hill_slimes', {
+      scale: 0.55, hp: 16, atk: 6, xpValue: 3, elevation: 1
+    });
 
-    // 3er-Gruppe Waldhüter-Wildschweine (Tusk Boars)
-    this.spawnPack('tusk_boar', (sp.x - 18) * TILE_SIZE, (sp.y - 10) * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_boars', {
+    // Waldhüter-Wildschweine
+    this.spawnPack('tusk_boar', (sp.x - 18) * TILE_SIZE, (sp.y - 10) * TILE_SIZE, 6, 34, DIMENSIONS.OVERWORLD, 'pack_boars', {
+      scale: 0.88, hp: 55, atk: 18, xpValue: 10
+    });
+    this.spawnPack('tusk_boar', (sp.x + 12) * TILE_SIZE, (sp.y - 35) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_boars_north', {
+      scale: 0.88, hp: 55, atk: 18, xpValue: 10
+    });
+    this.spawnPack('tusk_boar', Math.round(w * 0.48) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_boars_south', {
       scale: 0.88, hp: 55, atk: 18, xpValue: 10
     });
 
-    // 3er-Gruppe Waldläufer-Schützen (Moss Archers) am Waldrand
-    this.spawnPack('moss_archer', (sp.x - 20) * TILE_SIZE, (sp.y + 14) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_archers', {
+    // Waldläufer-Schützen
+    this.spawnPack('moss_archer', (sp.x - 20) * TILE_SIZE, (sp.y + 14) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_archers', {
+      scale: 0.95, hp: 65, atk: 18, xpValue: 15
+    });
+    this.spawnPack('moss_archer', Math.round(w * 0.36) * TILE_SIZE, Math.round(h * 0.35) * TILE_SIZE, 5, 28, DIMENSIONS.OVERWORLD, 'pack_river_archers', {
+      scale: 0.95, hp: 65, atk: 18, xpValue: 15
+    });
+    this.spawnPack('moss_archer', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.48) * TILE_SIZE, 4, 26, DIMENSIONS.OVERWORLD, 'pack_lake_archers', {
       scale: 0.95, hp: 65, atk: 18, xpValue: 15
     });
 
     // 2. Dichter Urwald & Forste
-    // 4er-Rudel Okami-Schattenwölfe (Dire Wolves) im Nordwest-Wald
-    this.spawnPack('dire_wolf', Math.round(w * 0.18) * TILE_SIZE, Math.round(h * 0.22) * TILE_SIZE, 4, 32, DIMENSIONS.OVERWORLD, 'pack_wolves_nw', {
+    // Okami-Schattenwölfe
+    this.spawnPack('dire_wolf', Math.round(w * 0.18) * TILE_SIZE, Math.round(h * 0.22) * TILE_SIZE, 6, 34, DIMENSIONS.OVERWORLD, 'pack_wolves_nw', {
       scale: 0.85, hp: 45, atk: 16, xpValue: 8
     });
-
-    // Zweites Wolfsrudel im Südwest-Hain
-    this.spawnPack('dire_wolf', Math.round(w * 0.22) * TILE_SIZE, Math.round(h * 0.68) * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_wolves_sw', {
+    this.spawnPack('dire_wolf', Math.round(w * 0.22) * TILE_SIZE, Math.round(h * 0.68) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_wolves_sw', {
+      scale: 0.85, hp: 45, atk: 16, xpValue: 8
+    });
+    this.spawnPack('dire_wolf', Math.round(w * 0.78) * TILE_SIZE, Math.round(h * 0.52) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_wolves_east', {
+      scale: 0.85, hp: 45, atk: 16, xpValue: 8
+    });
+    this.spawnPack('dire_wolf', Math.round(w * 0.32) * TILE_SIZE, Math.round(h * 0.18) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_wolves_north', {
       scale: 0.85, hp: 45, atk: 16, xpValue: 8
     });
 
     // 3. Wüste & Treibsand (Südwesten)
-    // RIESIGER APEX-PREDATOR: Dünen-Schlund (Dune Maw)
-    this.spawnEnemy('dune_maw', Math.round(w * 0.18) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    // 2x APEX-PREDATOR: Dünen-Schlund
+    this.spawnEnemy('dune_maw', Math.round(w * 0.18) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_dune_maw_1', {
+      scale: 1.55, hp: 340, atk: 36, xpValue: 60
+    });
+    this.spawnEnemy('dune_maw', Math.round(w * 0.28) * TILE_SIZE, Math.round(h * 0.90) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_dune_maw_2', {
       scale: 1.55, hp: 340, atk: 36, xpValue: 60
     });
 
-    // 2er-Gruppe Kaiser-Skorpione (Emperor Scorpions)
-    this.spawnPack('emperor_scorpion', Math.round(w * 0.14) * TILE_SIZE, Math.round(h * 0.84) * TILE_SIZE, 2, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions', {
+    // Kaiser-Skorpione (3 Rudel)
+    this.spawnPack('emperor_scorpion', Math.round(w * 0.14) * TILE_SIZE, Math.round(h * 0.84) * TILE_SIZE, 4, 34, DIMENSIONS.OVERWORLD, 'pack_scorpions_1', {
       scale: 1.05, hp: 90, atk: 24, xpValue: 20
     });
-    this.spawnPack('emperor_scorpion', Math.round(w * 0.26) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 2, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions_deep', {
+    this.spawnPack('emperor_scorpion', Math.round(w * 0.26) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 4, 34, DIMENSIONS.OVERWORLD, 'pack_scorpions_2', {
       scale: 1.05, hp: 90, atk: 24, xpValue: 20
+    });
+    this.spawnPack('emperor_scorpion', Math.round(w * 0.10) * TILE_SIZE, Math.round(h * 0.75) * TILE_SIZE, 4, 32, DIMENSIONS.OVERWORLD, 'pack_scorpions_3', {
+      scale: 1.05, hp: 90, atk: 24, xpValue: 20
+    });
+
+    // Wüstendünen-Vipern
+    this.spawnPack('slithering_viper', Math.round(w * 0.12) * TILE_SIZE, Math.round(h * 0.88) * TILE_SIZE, 6, 28, DIMENSIONS.OVERWORLD, 'pack_dune_vipers', {
+      scale: 0.9, hp: 55, atk: 18, xpValue: 12
+    });
+    this.spawnPack('slithering_viper', Math.round(w * 0.22) * TILE_SIZE, Math.round(h * 0.76) * TILE_SIZE, 5, 28, DIMENSIONS.OVERWORLD, 'pack_oasis_vipers', {
+      scale: 0.9, hp: 55, atk: 18, xpValue: 12
     });
 
     // 4. Schnee & Eisberge (Nordosten)
-    // RIESIGER KOLOSS: Yeti-Wächter (Frost Giant)
-    this.spawnEnemy('frost_giant', Math.round(w * 0.78) * TILE_SIZE, Math.round(h * 0.20) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    // 2x RIESIGER KOLOSS: Frost Giant
+    this.spawnEnemy('frost_giant', Math.round(w * 0.78) * TILE_SIZE, Math.round(h * 0.20) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_frost_giant_1', {
+      scale: 1.65, hp: 1500, atk: 65, xpValue: 220, elevation: 1
+    });
+    this.spawnEnemy('frost_giant', Math.round(w * 0.88) * TILE_SIZE, Math.round(h * 0.28) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_frost_giant_2', {
       scale: 1.65, hp: 1500, atk: 65, xpValue: 220, elevation: 1
     });
 
-    // 3er-Wache Origami-Krieger am Eispass
-    this.spawnPack('cursed_knight', Math.round(w * 0.72) * TILE_SIZE, Math.round(h * 0.26) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_ice_knights', {
+    // Origami-Krieger
+    this.spawnPack('cursed_knight', Math.round(w * 0.72) * TILE_SIZE, Math.round(h * 0.26) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_ice_knights', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
+    });
+    this.spawnPack('cursed_knight', Math.round(w * 0.82) * TILE_SIZE, Math.round(h * 0.15) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_glacier_knights', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
+    });
+    this.spawnPack('cursed_knight', Math.round(w * 0.62) * TILE_SIZE, Math.round(h * 0.20) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_north_knights', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25
+    });
+    this.spawnPack('cursed_knight', Math.round(w * 0.84) * TILE_SIZE, Math.round(h * 0.58) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_highland_knights', {
       scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
     });
 
     // 5. Düsterer Sumpf (Südosten)
-    // 3er-Gruppe Sporen-Spucker (Spore Spitters)
-    this.spawnPack('spore_spitter', Math.round(w * 0.62) * TILE_SIZE, Math.round(h * 0.68) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_spores', {
+    // Sporen-Spucker
+    this.spawnPack('spore_spitter', Math.round(w * 0.62) * TILE_SIZE, Math.round(h * 0.68) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_spores_1', {
+      scale: 0.85, hp: 40, atk: 14, xpValue: 8
+    });
+    this.spawnPack('spore_spitter', Math.round(w * 0.70) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_spores_2', {
       scale: 0.85, hp: 40, atk: 14, xpValue: 8
     });
 
-    // 3er-Gruppe Smaragd-Nattern (Slithering Vipers) am Sumpfteich
-    this.spawnPack('slithering_viper', Math.round(w * 0.70) * TILE_SIZE, Math.round(h * 0.66) * TILE_SIZE, 3, 30, DIMENSIONS.OVERWORLD, 'pack_vipers', {
+    // Smaragd-Nattern
+    this.spawnPack('slithering_viper', Math.round(w * 0.70) * TILE_SIZE, Math.round(h * 0.66) * TILE_SIZE, 6, 32, DIMENSIONS.OVERWORLD, 'pack_vipers_swamp', {
       scale: 1.0, hp: 70, atk: 20, xpValue: 15
     });
 
-    // 3er-Gruppe Teer-Schlamm Geister (Tar Mire)
-    this.spawnPack('tar_mire', Math.round(w * 0.76) * TILE_SIZE, Math.round(h * 0.74) * TILE_SIZE, 3, 26, DIMENSIONS.OVERWORLD, 'pack_tar', {
+    // Teer-Schlamm Geister
+    this.spawnPack('tar_mire', Math.round(w * 0.76) * TILE_SIZE, Math.round(h * 0.74) * TILE_SIZE, 6, 30, DIMENSIONS.OVERWORLD, 'pack_tar_1', {
+      scale: 0.82, hp: 45, atk: 12, xpValue: 8
+    });
+    this.spawnPack('tar_mire', Math.round(w * 0.64) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 5, 28, DIMENSIONS.OVERWORLD, 'pack_tar_2', {
       scale: 0.82, hp: 45, atk: 12, xpValue: 8
     });
 
     // 6. Felsgebirge & Bergpfade (Höhenebene +1, +2)
-    // RIESIGER KOLOSS: Moos-Koloss (Boulder Troll) am Bergpass
-    this.spawnEnemy('boulder_troll', Math.round(w * 0.58) * TILE_SIZE, Math.round(h * 0.32) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    // 2x Moos-Koloss
+    this.spawnEnemy('boulder_troll', Math.round(w * 0.58) * TILE_SIZE, Math.round(h * 0.32) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_boulder_troll_1', {
+      scale: 1.60, hp: 1400, atk: 60, xpValue: 200, elevation: 1
+    });
+    this.spawnEnemy('boulder_troll', Math.round(w * 0.48) * TILE_SIZE, Math.round(h * 0.24) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_boulder_troll_2', {
       scale: 1.60, hp: 1400, atk: 60, xpValue: 200, elevation: 1
     });
 
-    // 2er-Wache Origami-Krieger (Cursed Paper Knights)
-    this.spawnPack('cursed_knight', Math.round(w * 0.64) * TILE_SIZE, Math.round(h * 0.36) * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_samurai', {
+    // Wache Origami-Krieger auf Hochebenen
+    this.spawnPack('cursed_knight', Math.round(w * 0.64) * TILE_SIZE, Math.round(h * 0.36) * TILE_SIZE, 5, 30, DIMENSIONS.OVERWORLD, 'pack_samurai_1', {
+      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
+    });
+    this.spawnPack('cursed_knight', Math.round(w * 0.52) * TILE_SIZE, Math.round(h * 0.38) * TILE_SIZE, 4, 28, DIMENSIONS.OVERWORLD, 'pack_samurai_2', {
       scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
     });
 
-    // 7. Die Leere / Void (Genau an der Rand-Void-Zone)
-    // 2er-Patrouille Leeren-Verschlinger (Void Reapers)
-    this.spawnPack('void_reaper', (vz.x - 7) * TILE_SIZE, (vz.y - 5) * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers', {
+    // 7. Die Leere / Void
+    // Leeren-Verschlinger
+    this.spawnPack('void_reaper', (vz.x - 7) * TILE_SIZE, (vz.y - 5) * TILE_SIZE, 4, 30, DIMENSIONS.OVERWORLD, 'pack_void_reapers_1', {
+      scale: 1.15, hp: 540, atk: 55, xpValue: 90
+    });
+    this.spawnPack('void_reaper', (vz.x + 4) * TILE_SIZE, (vz.y + 7) * TILE_SIZE, 4, 30, DIMENSIONS.OVERWORLD, 'pack_void_reapers_2', {
       scale: 1.15, hp: 540, atk: 55, xpValue: 90
     });
 
-    // Zweite Patrouille Leeren-Verschlinger
-    this.spawnPack('void_reaper', (vz.x + 4) * TILE_SIZE, (vz.y + 7) * TILE_SIZE, 2, 28, DIMENSIONS.OVERWORLD, 'pack_void_reapers_south', {
-      scale: 1.15, hp: 540, atk: 55, xpValue: 90
-    });
-
-    // RIESIGER TITAN: Schwebende Mondqualle: Auge des Abgrunds (Gazer of the Void)
-    this.spawnEnemy('gazer_of_the_void', vz.x * TILE_SIZE, vz.y * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    // TITAN: Auge des Abgrunds
+    this.spawnEnemy('gazer_of_the_void', vz.x * TILE_SIZE, vz.y * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_gazer_of_the_void', {
       scale: 1.55, hp: 1350, atk: 75, xpValue: 220
     });
 
-    // Brunnen-Fallen: Schatten-Tentakel (Abyss Tentacles)
-    this.spawnEnemy('abyss_tentacle', (vz.x - 6) * TILE_SIZE, (vz.y + 5) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    // Brunnen-Fallen: Schatten-Tentakel
+    this.spawnEnemy('abyss_tentacle', (vz.x - 6) * TILE_SIZE, (vz.y + 5) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'tentacle_1', {
       scale: 1.25, hp: 480, atk: 50, xpValue: 80
     });
-    this.spawnEnemy('abyss_tentacle', (vz.x + 6) * TILE_SIZE, (vz.y - 5) * TILE_SIZE, DIMENSIONS.OVERWORLD, null, {
+    this.spawnEnemy('abyss_tentacle', (vz.x + 6) * TILE_SIZE, (vz.y - 5) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'tentacle_2', {
+      scale: 1.25, hp: 480, atk: 50, xpValue: 80
+    });
+    this.spawnEnemy('abyss_tentacle', (vz.x + 1) * TILE_SIZE, (vz.y + 8) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'tentacle_3', {
       scale: 1.25, hp: 480, atk: 50, xpValue: 80
     });
 
-    // 8. Brand- & Vulkanzone (Zwischen Felsen und Wüste)
-    // Laternen-Pyromant mit 5 Calcifer-Feuerdämonen
-    this.spawnEnemy('pyromancer', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.76) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'pack_fire', {
+    // 8. Brand- & Vulkanzone
+    this.spawnEnemy('pyromancer', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.76) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_pyromancer_1', {
       scale: 1.10, hp: 130, atk: 30, xpValue: 35
     });
-    this.spawnPack('lava_core', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, 5, 24, DIMENSIONS.OVERWORLD, 'pack_fire', {
+    this.spawnEnemy('pyromancer', Math.round(w * 0.50) * TILE_SIZE, Math.round(h * 0.74) * TILE_SIZE, DIMENSIONS.OVERWORLD, 'boss_pyromancer_2', {
+      scale: 1.10, hp: 130, atk: 30, xpValue: 35
+    });
+    this.spawnPack('lava_core', Math.round(w * 0.44) * TILE_SIZE, Math.round(h * 0.78) * TILE_SIZE, 8, 28, DIMENSIONS.OVERWORLD, 'pack_fire_1', {
       scale: 0.75, hp: 25, atk: 12, xpValue: 4
     });
-
-    // 9. Ausgewogene zusätzliche Patrouillen in den weiten Gefilden der 290x200 Welt
-    // Ostwald-Wolfsrudel (Goldblätterwald)
-    this.spawnPack('dire_wolf', Math.round(w * 0.78) * TILE_SIZE, Math.round(h * 0.52) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_wolves_east', {
-      scale: 0.85, hp: 45, atk: 16, xpValue: 8
-    });
-
-    // Südliche Wildschwein-Familie im Blütendickicht
-    this.spawnPack('tusk_boar', Math.round(w * 0.48) * TILE_SIZE, Math.round(h * 0.82) * TILE_SIZE, 3, 28, DIMENSIONS.OVERWORLD, 'pack_boars_south', {
-      scale: 0.88, hp: 55, atk: 18, xpValue: 10
-    });
-
-    // Brücken-Wächter am großen Binnensee
-    this.spawnPack('moss_archer', Math.round(w * 0.42) * TILE_SIZE, Math.round(h * 0.48) * TILE_SIZE, 2, 24, DIMENSIONS.OVERWORLD, 'pack_lake_archers', {
-      scale: 0.95, hp: 65, atk: 18, xpValue: 15
-    });
-
-    // Plateau-Hügelwache am Spawn
-    this.spawnPack('green_slime', (sp.x + 22) * TILE_SIZE, (sp.y - 12) * TILE_SIZE, 4, 22, DIMENSIONS.OVERWORLD, 'pack_hill_slimes', {
-      scale: 0.55, hp: 16, atk: 6, xpValue: 3, elevation: 1
-    });
-
-    // Wachen auf dem Ostplateau (+1)
-    this.spawnPack('cursed_knight', Math.round(w * 0.84) * TILE_SIZE, Math.round(h * 0.58) * TILE_SIZE, 2, 26, DIMENSIONS.OVERWORLD, 'pack_highland_knights', {
-      scale: 1.10, hp: 110, atk: 28, xpValue: 25, elevation: 1
-    });
-
-    // Wüstendünen-Vipern
-    this.spawnPack('slithering_viper', Math.round(w * 0.12) * TILE_SIZE, Math.round(h * 0.88) * TILE_SIZE, 3, 26, DIMENSIONS.OVERWORLD, 'pack_dune_vipers', {
-      scale: 0.9, hp: 55, atk: 18, xpValue: 12
-    });
-
-    // Nordhang-Patrouille (Kiefernforst)
-    this.spawnPack('cursed_knight', Math.round(w * 0.62) * TILE_SIZE, Math.round(h * 0.20) * TILE_SIZE, 2, 26, DIMENSIONS.OVERWORLD, 'pack_north_knights', {
-      scale: 1.10, hp: 110, atk: 28, xpValue: 25
+    this.spawnPack('lava_core', Math.round(w * 0.52) * TILE_SIZE, Math.round(h * 0.76) * TILE_SIZE, 6, 26, DIMENSIONS.OVERWORLD, 'pack_fire_2', {
+      scale: 0.75, hp: 25, atk: 12, xpValue: 4
     });
 
     // =========================================================================
     // HÖHLEN-SPAWNS (CAVES DIMENSION)
     // =========================================================================
-    // 6er-Schwarm Höhlen-Krallenspinnen (Cave Weavers) in main_complex
-    this.spawnPack('cave_weaver', 32 * TILE_SIZE, 26 * TILE_SIZE, 6, 36, DIMENSIONS.CAVES, 'pack_cave_spiders', {
+    // Haupthöhlen (main_complex)
+    this.spawnPack('cave_weaver', 32 * TILE_SIZE, 26 * TILE_SIZE, 8, 36, DIMENSIONS.CAVES, 'pack_cave_spiders_main1', {
+      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_weaver', 55 * TILE_SIZE, 42 * TILE_SIZE, 6, 32, DIMENSIONS.CAVES, 'pack_cave_spiders_main2', {
+      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    });
+
+    // Moosige Grotte
+    this.spawnPack('cave_weaver', 12 * TILE_SIZE, 12 * TILE_SIZE, 6, 28, DIMENSIONS.CAVES, 'pack_cave_spiders_forest', {
+      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    });
+
+    // Eis-Grotte
+    this.spawnPack('cave_weaver', 12 * TILE_SIZE, 12 * TILE_SIZE, 6, 28, DIMENSIONS.CAVES, 'pack_cave_spiders_snow', {
+      scale: 0.72, hp: 24, atk: 10, xpValue: 4
+    });
+
+    // Astrale Kluft
+    this.spawnPack('cave_weaver', 12 * TILE_SIZE, 12 * TILE_SIZE, 6, 28, DIMENSIONS.CAVES, 'pack_cave_spiders_void', {
       scale: 0.72, hp: 24, atk: 10, xpValue: 4
     });
 
     // =========================================================================
-    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION - ASYMMETRISCHES INSELREICH)
+    // WOLKENREICH-SPAWNS (CLOUDS DIMENSION)
     // =========================================================================
     const cloudMap = this.getMapForDimension(DIMENSIONS.CLOUDS);
     if (cloudMap && cloudMap.islands && cloudMap.islands.length > 0) {
       cloudMap.islands.forEach((isl, idx) => {
         if (idx % 2 === 0) {
-          this.spawnPack('sky_harpy', isl.x * TILE_SIZE, isl.y * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, `pack_sky_${idx}`, {
+          this.spawnPack('sky_harpy', isl.x * TILE_SIZE, isl.y * TILE_SIZE, 3, 24, DIMENSIONS.CLOUDS, `pack_sky_${idx}`, {
             scale: 1.05, hp: 390, atk: 50, xpValue: 65
           });
         }
-        if (idx % 3 === 0) {
-          this.spawnEnemy('star_astromancer', (isl.x + 2) * TILE_SIZE, (isl.y - 1) * TILE_SIZE, DIMENSIONS.CLOUDS, `pack_sky_${idx}`, {
+        if (idx % 2 === 1) {
+          this.spawnEnemy('star_astromancer', (isl.x + 2) * TILE_SIZE, (isl.y - 1) * TILE_SIZE, DIMENSIONS.CLOUDS, `pack_sky_astro_${idx}`, {
             scale: 1.18, hp: 500, atk: 62, xpValue: 90
           });
         }
       });
     } else {
-      // Fallback Spawns across clouds
       const cloudSpawns = [
         { x: Math.round(w * 0.15), y: Math.round(h * 0.15) },
         { x: Math.round(w * 0.35), y: Math.round(h * 0.12) },
         { x: Math.round(w * 0.55), y: Math.round(h * 0.20) },
         { x: Math.round(w * 0.50), y: Math.round(h * 0.48) },
         { x: Math.round(w * 0.78), y: Math.round(h * 0.45) },
-        { x: Math.round(w * 0.60), y: Math.round(h * 0.72) }
+        { x: Math.round(w * 0.60), y: Math.round(h * 0.72) },
+        { x: Math.round(w * 0.25), y: Math.round(h * 0.68) },
+        { x: Math.round(w * 0.85), y: Math.round(h * 0.80) }
       ];
       cloudSpawns.forEach((cs, i) => {
-        this.spawnPack('sky_harpy', cs.x * TILE_SIZE, cs.y * TILE_SIZE, 2, 24, DIMENSIONS.CLOUDS, `pack_sky_fb_${i}`, {
+        this.spawnPack('sky_harpy', cs.x * TILE_SIZE, cs.y * TILE_SIZE, 3, 24, DIMENSIONS.CLOUDS, `pack_sky_fb_${i}`, {
           scale: 1.05, hp: 390, atk: 50, xpValue: 65
         });
-        if (i % 2 === 0) {
-          this.spawnEnemy('star_astromancer', cs.x * TILE_SIZE, cs.y * TILE_SIZE, DIMENSIONS.CLOUDS, `pack_sky_fb_${i}`, {
-            scale: 1.15, hp: 480, atk: 60, xpValue: 85
-          });
-        }
+        this.spawnEnemy('star_astromancer', (cs.x + 3) * TILE_SIZE, (cs.y + 1) * TILE_SIZE, DIMENSIONS.CLOUDS, `pack_sky_astro_fb_${i}`, {
+          scale: 1.15, hp: 480, atk: 60, xpValue: 85
+        });
       });
     }
   }
@@ -11538,7 +11763,6 @@ class EnemyManager {
   }
 
   findWalkablePosition(typeId, rawX, rawY, dimension) {
-    // Fliegende Gegner dürfen frei über Abgründen/Wasser schweben
     if (isFlyingEnemy(typeId)) {
       return { x: rawX, y: rawY };
     }
@@ -11549,31 +11773,38 @@ class EnemyManager {
     const tx = Math.floor(rawX / TILE_SIZE);
     const ty = Math.floor(rawY / TILE_SIZE);
 
-    // Finde nächste freie begehbare Land-Kachel (kein Wasser, kein Felsen, kein Baum, kein Abgrund)
+    // Finde nächste freie begehbare Land-Kachel (deterministisch)
     const safeTile = findNearestWalkableTile(map, tx, ty, 14);
     return {
-      x: safeTile.tx * TILE_SIZE + 8 + (Math.random() - 0.5) * 4,
-      y: safeTile.ty * TILE_SIZE + 8 + (Math.random() - 0.5) * 4
+      x: safeTile.tx * TILE_SIZE + 8,
+      y: safeTile.ty * TILE_SIZE + 8
     };
   }
 
   spawnEnemy(typeId, x, y, dimension = DIMENSIONS.OVERWORLD, packId = null, options = {}) {
     const pos = this.findWalkablePosition(typeId, x, y, dimension);
-    const enemy = new EnemyEntity(typeId, pos.x, pos.y, dimension, packId, options);
+    const id = options.id || (packId ? `${packId}_0` : `${typeId}_${Math.round(x)}_${Math.round(y)}`);
+    const enemy = new EnemyEntity(typeId, pos.x, pos.y, dimension, packId, {
+      ...options,
+      id
+    });
     this.enemies.push(enemy);
     return enemy;
   }
 
   spawnPack(typeId, centerX, centerY, count = 2, radius = 26, dimension = DIMENSIONS.OVERWORLD, packId = null, options = {}) {
-    const pack = packId || `pack_${typeId}_${Math.random().toString(36).substr(2, 5)}`;
+    const pack = packId || `pack_${typeId}_${Math.round(centerX)}_${Math.round(centerY)}`;
     const created = [];
     for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-      const dist = Math.random() * radius * 0.7 + radius * 0.3;
+      const angle = (i / count) * Math.PI * 2 + (Math.sin(i * 1.5) * 0.25);
+      const dist = ((i % 3) * 0.3 + 0.4) * radius;
       const rawX = centerX + Math.cos(angle) * dist;
       const rawY = centerY + Math.sin(angle) * dist;
       const pos = this.findWalkablePosition(typeId, rawX, rawY, dimension);
-      const enemy = new EnemyEntity(typeId, pos.x, pos.y, dimension, pack, options);
+      const enemy = new EnemyEntity(typeId, pos.x, pos.y, dimension, pack, {
+        ...options,
+        id: `${pack}_${i}`
+      });
       this.enemies.push(enemy);
       created.push(enemy);
     }
@@ -11598,12 +11829,12 @@ class EnemyManager {
   dropLoot(x, y, enemy = null) {
     const dimension = enemy?.dimension || this.game?.currentDimension || DIMENSIONS.OVERWORLD;
 
-    // Drop-Raten: XP droppen immer (100%), Pfeile und Herzen nur manchmal / selten!
+    // Drop-Raten: XP droppen immer (100%), Pfeile und Herzen nach Nutzer-Balancing
     const isBoss = enemy && (enemy.category === 'boss' || enemy.maxHp >= 100);
     const isRanged = enemy && (enemy.category === 'range' || enemy.typeId === 'moss_archer');
 
-    // 1. Herz-Beere (❤️ +25 HP) - selten (ca. 8% bei normalen Gegnern, 25% bei Bossen)
-    const heartChance = isBoss ? 0.25 : 0.08;
+    // 1. Herz-Beere (❤️ +25 HP) - leicht erhöht (14% normal, 40% bei Bossen)
+    const heartChance = isBoss ? 0.40 : 0.14;
     if (Math.random() < heartChance) {
       this.lootItems.push({
         type: LOOT_TYPES.HEART,
@@ -11615,21 +11846,23 @@ class EnemyManager {
       });
     }
 
-    // 2. Köcher-Pfeile (🏹 +3 Pfeile) - selten (ca. 10% bei normalen Gegnern, 25% bei Bogenschützen/Bossen)
-    const arrowChance = isBoss ? 0.25 : (isRanged ? 0.25 : 0.10);
+    // 2. Köcher-Pfeile (🏹 +3-5 Pfeile) - deutlich erhöht (35% normal, 60% Bogenschützen, 50% Bosse)
+    const arrowChance = isBoss ? 0.50 : (isRanged ? 0.60 : 0.35);
     if (Math.random() < arrowChance) {
+      const amount = Math.floor(Math.random() * 3) + 3; // 3 bis 5 Pfeile
       this.lootItems.push({
         type: LOOT_TYPES.ARROW,
         dimension,
         x: x + (Math.random() - 0.5) * 14,
         y: y + (Math.random() - 0.5) * 14,
+        amount,
         life: 25.0,
         bobOffset: Math.random() * Math.PI * 2
       });
     }
 
-    // 3. Sternenstaub / Geist-Juwel (⭐ Glanzpartikel) - selten (ca. 5% bei normalen Gegnern, 35% bei Bossen)
-    const gemChance = isBoss ? 0.35 : 0.05;
+    // 3. Sternenstaub / Geist-Juwel (⭐ Glanzpartikel) - selten (ca. 6% bei normalen Gegnern, 35% bei Bossen)
+    const gemChance = isBoss ? 0.35 : 0.06;
     if (Math.random() < gemChance) {
       this.lootItems.push({
         type: LOOT_TYPES.SPIRIT_GEM,
@@ -11654,9 +11887,9 @@ class EnemyManager {
     );
 
     if (isHeavyMonster) {
-      // 50% Chance bei schweren Monstern, 100% bei extremen Bossen (>= 1000 HP)
-      const artifactChance = (enemy.maxHp >= 1000) ? 1.0 : 0.50;
-      if (Math.random() < artifactChance && this.game && this.game.magicManager) {
+      const roll = Math.random();
+      const dropChance = enemy.category === 'boss' ? 0.35 : 0.15;
+      if (roll < dropChance && this.game?.magicManager) {
         this.game.magicManager.dropMonsterArtifact(x, y, dimension);
       }
     }
@@ -11770,8 +12003,9 @@ class EnemyManager {
           }
         } else if (item.type === LOOT_TYPES.ARROW) {
           if (player.ranged && player.ranged.ammo < 30) {
-            player.ranged.ammo = Math.min(30, player.ranged.ammo + 3);
-            combatManager?.addFloatingText('🏹 +3 PFEILE', player.x, player.y - 20, '#38bdf8');
+            const gain = item.amount || 4;
+            player.ranged.ammo = Math.min(30, player.ranged.ammo + gain);
+            combatManager?.addFloatingText(`🏹 +${gain} PFEILE`, player.x, player.y - 20, '#38bdf8');
             combatManager?.addHitSparks(player.x, player.y, '#38bdf8', 10);
             this.lootItems.splice(i, 1);
           }
@@ -11936,7 +12170,69 @@ class EnemyManager {
       ctx.restore();
     });
   }
+
+  // ---------------------------------------------------------------------------
+  // LAN-MULTIPLAYER MOB-SYNCHRONISATION
+  // ---------------------------------------------------------------------------
+  serializeEnemiesState() {
+    return this.enemies.map(e => ({
+      id: e.id,
+      x: Math.round(e.x * 10) / 10,
+      y: Math.round(e.y * 10) / 10,
+      vx: Math.round((e.vx || 0) * 10) / 10,
+      vy: Math.round((e.vy || 0) * 10) / 10,
+      hp: e.hp,
+      maxHp: e.maxHp,
+      state: e.state,
+      animTime: Math.round(e.animTime * 10) / 10,
+      facing: e.facing,
+      elevation: e.elevation || 0,
+      isDead: e.state === 'dead',
+      freezeTimer: Math.round((e.freezeTimer || 0) * 10) / 10,
+      isCharging: Boolean(e.isCharging)
+    }));
+  }
+
+  applyEnemiesState(remoteList) {
+    if (!Array.isArray(remoteList)) return;
+    const enemyMap = new Map();
+    for (const e of this.enemies) {
+      enemyMap.set(e.id, e);
+    }
+
+    for (const remote of remoteList) {
+      const local = enemyMap.get(remote.id);
+      if (local) {
+        if (remote.isDead && local.state !== 'dead') {
+          local.state = 'dead';
+          local.hp = 0;
+          local.die(this.game?.combat);
+        } else if (!remote.isDead) {
+          // Smooth interpolation der Position
+          local.x += (remote.x - local.x) * 0.45;
+          local.y += (remote.y - local.y) * 0.45;
+          local.hp = remote.hp;
+          local.maxHp = remote.maxHp || local.maxHp;
+          local.state = remote.state;
+          local.facing = remote.facing || local.facing;
+          local.elevation = remote.elevation ?? local.elevation;
+          local.freezeTimer = remote.freezeTimer || 0;
+          local.isCharging = Boolean(remote.isCharging);
+          local.animTime = remote.animTime || local.animTime;
+        }
+      }
+    }
+  }
+
+  handleRemoteDamage(msg) {
+    if (!msg || !msg.enemyId) return;
+    const enemy = this.enemies.find(e => e.id === msg.enemyId);
+    if (enemy && enemy.state !== 'dead') {
+      enemy.takeDamage(msg.damage, msg.angle || 0, msg.knockback || 0, this.game?.combat, msg.isRange);
+    }
+  }
 }
+
 
 
 // --- js/player.js ---
@@ -12044,6 +12340,7 @@ class Player {
     this.isBearForm = false;
     this.bearFormTimer = 0;
     this.bearFormMaxTimer = 60;
+    this.teleportSequence = null; // 3-Phasen Teleport-Animation { phase, timer, targetX, targetY, vortexAngle }
   }
 
   respawn() {
@@ -12143,6 +12440,62 @@ class Player {
         setSelectedSkin(skinId);
       }
     }
+  }
+
+  startTeleportSequence(targetX, targetY) {
+    if (this.isDead) return;
+    this.teleportSequence = {
+      phase: 'sink', // 'sink' | 'blackout' | 'emerge'
+      timer: 0,
+      targetX,
+      targetY,
+      originX: this.x,
+      originY: this.y,
+      vortexAngle: 0
+    };
+    this.invulnTimer = 1.2;
+    this.isMoving = false;
+    this.currentSpeed = 0;
+  }
+
+  getTeleportBlackoutAlpha() {
+    if (!this.teleportSequence) return 0;
+    if (this.teleportSequence.phase === 'blackout') return 1.0;
+    if (this.teleportSequence.phase === 'sink' && this.teleportSequence.timer > 0.22) {
+      return Math.min(1.0, (this.teleportSequence.timer - 0.22) / 0.13);
+    }
+    if (this.teleportSequence.phase === 'emerge' && this.teleportSequence.timer < 0.15) {
+      return Math.max(0.0, 1.0 - (this.teleportSequence.timer / 0.15));
+    }
+    return 0;
+  }
+
+  renderVoidVortexHole(ctx, x, y, progress, angle = 0) {
+    const radius = 22 * Math.max(0.1, progress);
+    ctx.save();
+    // Dunkles Leeren-Zentrum
+    ctx.fillStyle = '#0f051d';
+    ctx.beginPath();
+    ctx.ellipse(x, y + 4, radius, radius * 0.52, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Violetter Strudel-Rand
+    ctx.strokeStyle = '#c084fc';
+    ctx.lineWidth = 2.4;
+    ctx.shadowColor = 'rgba(192, 132, 252, 0.85)';
+    ctx.shadowBlur = 9;
+    ctx.beginPath();
+    ctx.ellipse(x, y + 4, radius, radius * 0.52, 0, angle, angle + Math.PI * 1.6);
+    ctx.stroke();
+
+    // Rosa Innenwirbel
+    ctx.strokeStyle = '#f472b6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.ellipse(x, y + 4, radius * 0.6, radius * 0.32, 0, -angle * 1.5, -angle * 1.5 + Math.PI * 1.3);
+    ctx.stroke();
+
+    ctx.restore();
   }
 
   hasActiveArtifact() {
@@ -12619,6 +12972,46 @@ class Player {
   update(dt, input) {
     this.updateParticles(dt);
 
+    // 3-Phasen Teleport-Animation (Sink -> Blackout -> Emerge)
+    if (this.teleportSequence) {
+      this.teleportSequence.timer += dt;
+      this.teleportSequence.vortexAngle = (this.teleportSequence.vortexAngle || 0) + dt * 10;
+
+      if (this.teleportSequence.phase === 'sink') {
+        if (this.teleportSequence.timer >= 0.35) {
+          this.teleportSequence.phase = 'blackout';
+          this.teleportSequence.timer = 0;
+          this.x = this.teleportSequence.targetX;
+          this.y = this.teleportSequence.targetY;
+          const targetTileX = Math.floor(this.x / TILE_SIZE);
+          const targetTileY = Math.floor(this.y / TILE_SIZE);
+          this.elevation = this.map ? this.map.getElevation(targetTileX, targetTileY) : 0;
+          this.visualElevation = this.elevation;
+          if (this.game && this.game.camera) {
+            this.game.camera.follow(this.x, this.y);
+          }
+        }
+      } else if (this.teleportSequence.phase === 'blackout') {
+        if (this.teleportSequence.timer >= 0.22) {
+          this.teleportSequence.phase = 'emerge';
+          this.teleportSequence.timer = 0;
+          if (this.game && this.game.camera) {
+            this.game.camera.follow(this.x, this.y);
+          }
+        }
+      } else if (this.teleportSequence.phase === 'emerge') {
+        if (this.teleportSequence.timer >= 0.40) {
+          this.teleportSequence = null;
+          this.invulnTimer = 0.3;
+          if (this.game && this.game.combat) {
+            this.game.combat.addFloatingText('🌀 TELEPORTIERT!', this.x, this.y - 24, '#c084fc', 1.2);
+            this.game.combat.addHitSparks(this.x, this.y, '#c084fc', 20);
+          }
+        }
+      }
+      return;
+    }
+
     // Druid Bear Form Duration Countdown & Green Forest Aura Emitters
     if (this.isBearForm) {
       this.bearFormTimer -= dt;
@@ -13039,14 +13432,15 @@ class Player {
       const newElev = this.map.getElevation(newTileX, newTileY);
 
       if (newElev < prevElev) {
+        this.elevation = newElev;
         if (dx !== 0) {
-          const hopX = this.x + Math.sign(dx) * 6;
+          const hopX = this.x + Math.sign(dx) * 8;
           if (!this.checkCollision(hopX, this.y)) {
             this.x = hopX;
           }
         }
         if (dy !== 0) {
-          const hopY = this.y + Math.sign(dy) * 6;
+          const hopY = this.y + Math.sign(dy) * 8;
           if (!this.checkCollision(this.x, hopY)) {
             this.y = hopY;
           }
@@ -13076,7 +13470,7 @@ class Player {
       this.currentSpeed = 0;
     }
 
-    // Check deadly abyss & update elevation
+    // Check deadly abyss & water drowning
     const curTileX = Math.floor(this.x / TILE_SIZE);
     const curTileY = Math.floor(this.y / TILE_SIZE);
 
@@ -13085,8 +13479,33 @@ class Player {
       this.lastTransitionTile = null;
     }
 
-    if (this.map.isDeadly(curTileX, curTileY)) {
-      this.die('void');
+    const currentGround = this.map.getGroundTile ? this.map.getGroundTile(curTileX, curTileY) : 0;
+    const isWater = (currentGround === TILES.WATER || currentGround === TILES.SWAMP_WATER || currentGround === TILES.CAVE_WATER);
+    const isBridge = (currentGround === TILES.BRIDGE_H || currentGround === TILES.BRIDGE_V || currentGround === TILES.RAINBOW_BRIDGE_H || currentGround === TILES.RAINBOW_BRIDGE_V);
+
+    if (!isBridge && !this.transition && !this.teleportSequence) {
+      if (this.map.isDeadly(curTileX, curTileY)) {
+        this.die('void');
+      } else if (isWater) {
+        if (this.game && this.game.combat) {
+          this.game.combat.addFloatingText('🌊 ERTRUNKEN!', this.x, this.y - 28, '#0ea5e9', 1.5);
+          for (let i = 0; i < 24; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const sp = Math.random() * 50 + 20;
+            this.game.combat.hitSparks.push({
+              x: this.x,
+              y: this.y,
+              vx: Math.cos(angle) * sp,
+              vy: Math.sin(angle) * sp - 15,
+              color: '#38bdf8',
+              size: Math.random() * 3.5 + 1.5,
+              life: 0.6,
+              maxLife: 0.6
+            });
+          }
+        }
+        this.die('drown');
+      }
     }
 
     const tileElev = this.map.getElevation(curTileX, curTileY);
@@ -13553,7 +13972,16 @@ class Player {
     // Nur Punkte auf der vorderen Kante (Leading Edge) in Bewegungsrichtung prüfen.
     // Verhindert das Hängenbleiben an Kanten, von denen man sich wegbewegt.
     let checkPoints = [];
-    if (moveDx > 0) {
+    if (moveDx !== 0 && moveDy !== 0) {
+      // Diagonale Bewegung: vorderer Eckpunkt und Kantenpunkte beider Achsen
+      const sx = Math.sign(moveDx);
+      const sy = Math.sign(moveDy);
+      checkPoints = [
+        { x: targetX + sx * r, y: targetY + sy * r },
+        { x: targetX + sx * r, y: targetY },
+        { x: targetX, y: targetY + sy * r }
+      ];
+    } else if (moveDx > 0) {
       checkPoints = [
         { x: targetX + r, y: targetY - r * 0.7 },
         { x: targetX + r, y: targetY },
@@ -13595,9 +14023,13 @@ class Player {
       // Gleiche Kachel wie Spielerzentrum -> kein Höhenwechsel
       if (tx === curTileX && ty === curTileY) continue;
 
-      // Kantenkollision prüfen
-      if (!this.map.isElevationPassable(curTileX, curTileY, tx, ty)) {
-        return true;
+      // Kantenkollision prüfen: Nur wenn Zielkachel HÖHER liegt als die aktuelle Spieler-Ebene!
+      // Wenn targetElev <= this.elevation, steigt man herab oder bleibt gleich -> niemals blockieren
+      const targetElev = this.map.getElevation ? this.map.getElevation(tx, ty) : 0;
+      if (targetElev > this.elevation) {
+        if (!this.map.isElevationPassable(curTileX, curTileY, tx, ty)) {
+          return true;
+        }
       }
     }
 
@@ -13707,6 +14139,26 @@ class Player {
           transScale = 0.6 + (prog - 0.5) * 0.8;
           transAlpha = 0.6 + (prog - 0.5) * 0.8;
         }
+      }
+    }
+
+    if (this.teleportSequence) {
+      const { phase, timer, vortexAngle } = this.teleportSequence;
+      if (phase === 'sink') {
+        const prog = Math.min(1.0, timer / 0.35);
+        this.renderVoidVortexHole(ctx, px, Math.round(this.y) - elevY, Math.min(1.0, prog * 1.5), vortexAngle);
+        transScale = Math.max(0.05, 1.0 - prog * 0.95);
+        transOffset = -prog * 12;
+        transAlpha = Math.max(0.0, 1.0 - prog);
+      } else if (phase === 'blackout') {
+        transAlpha = 0.0;
+        return;
+      } else if (phase === 'emerge') {
+        const prog = Math.min(1.0, timer / 0.40);
+        this.renderVoidVortexHole(ctx, px, Math.round(this.y) - elevY, Math.max(0.1, 1.0 - prog * 0.75), vortexAngle);
+        transScale = Math.min(1.0, 0.2 + prog * 0.8);
+        transOffset = Math.sin(prog * Math.PI) * 18;
+        transAlpha = Math.min(1.0, prog * 2.0);
       }
     }
 
@@ -15470,7 +15922,13 @@ class NetworkManager {
         this.clientId = msg.clientId;
         this.lanIp = msg.lanIp;
         this.joinUrl = msg.joinUrl;
-        console.log(`[Network] Initialisiert. Eigene ID: ${this.clientId}, LAN-URL: ${this.joinUrl}`);
+        this.masterClientId = msg.masterClientId || null;
+        console.log(`[Network] Initialisiert. Eigene ID: ${this.clientId}, Master: ${this.masterClientId}, LAN-URL: ${this.joinUrl}`);
+        break;
+
+      case 'master_client':
+        this.masterClientId = msg.masterClientId;
+        console.log(`[Network] Neuer Master-Client für Mobs: ${this.masterClientId}`);
         break;
 
       case 'player_killed':
@@ -15570,6 +16028,26 @@ class NetworkManager {
     this.send({
       type: 'host_start_round',
       worldId
+    });
+  }
+
+  sendEnemiesUpdate(enemies) {
+    if (!this.connected) return;
+    this.send({
+      type: 'enemies_update',
+      enemies
+    });
+  }
+
+  sendDamageEnemy(enemyId, damage, angle = 0, knockback = 0, isRange = false) {
+    if (!this.connected) return;
+    this.send({
+      type: 'damage_enemy',
+      enemyId,
+      damage,
+      angle,
+      knockback,
+      isRange
     });
   }
 }
@@ -16411,6 +16889,35 @@ class CombatManager {
         if (dist <= radius + (enemy.radius || 12)) {
           const angle = dist > 1 ? Math.atan2(dy, dx) : Math.random() * Math.PI * 2;
           enemy.takeDamage(damage, angle, knockback, this);
+        }
+      }
+    }
+
+    // PvP: Treffer auf andere Mitspieler im LAN-Multiplayer
+    if (this.game && this.game.remotePlayers && this.game.network && this.game.network.connected) {
+      for (const remotePlayer of this.game.remotePlayers.values()) {
+        if (remotePlayer.id === this.game.network.clientId) continue;
+        if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== dim)) continue;
+
+        const dx = remotePlayer.x - x;
+        const dy = remotePlayer.y - y;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= radius + (remotePlayer.radius || 10)) {
+          const angle = dist > 1 ? Math.atan2(dy, dx) : Math.random() * Math.PI * 2;
+          const kbX = Math.cos(angle) * knockback;
+          const kbY = Math.sin(angle) * knockback;
+
+          let actualDmg = damage;
+          if (remotePlayer.shield && remotePlayer.shield.active && remotePlayer.shield.energy > 0) {
+            actualDmg = Math.round(damage * 0.3);
+            this.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 16);
+            this.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 20, '#38bdf8');
+          } else {
+            this.addHitSparks(remotePlayer.x, remotePlayer.y, '#ec4899', 18);
+            this.addFloatingText(`-${actualDmg}!`, remotePlayer.x, remotePlayer.y - 20, '#f472b6');
+          }
+
+          this.game.network.sendPvPHit(remotePlayer.id, actualDmg, kbX, kbY);
         }
       }
     }
@@ -18384,6 +18891,15 @@ class Game {
     // Netzwerk-Synchronisation
     if (this.network) {
       this.network.update(dt, this.isHost ? null : this.player);
+
+      // Im LAN-Modus: Wenn dieser Client der Master ist, Snapshot aller Monster an Mitspieler senden (~12.5 Hz)
+      if (this.network.connected && this.enemyManager && this.enemyManager.isMasterClient) {
+        this.enemySyncTimer = (this.enemySyncTimer || 0) + dt;
+        if (this.enemySyncTimer >= 0.08) {
+          this.enemySyncTimer = 0;
+          this.network.sendEnemiesUpdate(this.enemyManager.serializeEnemiesState());
+        }
+      }
     }
   }
 
@@ -18818,6 +19334,17 @@ class Game {
     // 12. Screen Overlay: Floating Shrine Discovery Banner
     if (this.player.shrineMessage) {
       this.renderShrineBanner(this.player.shrineMessage);
+    }
+
+    // 12.5. Screen Overlay: Teleport Blackout Fade (kurze Schwarzüberblende während Kamerasprung)
+    if (this.player && typeof this.player.getTeleportBlackoutAlpha === 'function') {
+      const bAlpha = this.player.getTeleportBlackoutAlpha();
+      if (bAlpha > 0) {
+        this.ctx.save();
+        this.ctx.fillStyle = `rgba(15, 5, 29, ${bAlpha})`;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.restore();
+      }
     }
 
     // 13. LAYER 10: Minimap
@@ -21706,6 +22233,9 @@ class Game {
     this.network.on('init', (msg) => {
       this.remotePlayers.clear();
       const myId = msg.clientId || (this.network ? this.network.clientId : null);
+      if (msg.masterClientId && this.enemyManager) {
+        this.enemyManager.isMasterClient = (myId === msg.masterClientId);
+      }
       if (msg.players) {
         for (const p of msg.players) {
           if (p.id !== myId) {
@@ -21718,6 +22248,25 @@ class Game {
           this.switchWorld(msg.worldId);
         }
         this.updateWizardWorldDisplay(msg.worldId);
+      }
+    });
+
+    this.network.on('master_client', (msg) => {
+      const isMaster = (this.network.clientId === msg.masterClientId);
+      if (this.enemyManager) {
+        this.enemyManager.isMasterClient = isMaster;
+      }
+    });
+
+    this.network.on('enemies_update', (msg) => {
+      if (this.enemyManager && !this.enemyManager.isMasterClient) {
+        this.enemyManager.applyEnemiesState(msg.enemies);
+      }
+    });
+
+    this.network.on('damage_enemy', (msg) => {
+      if (this.enemyManager && this.enemyManager.isMasterClient) {
+        this.enemyManager.handleRemoteDamage(msg);
       }
     });
 
