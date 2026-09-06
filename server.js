@@ -7,7 +7,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import QRCode from 'qrcode';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 let cachedQrDataUrl = null;
 async function getQrDataUrl(url) {
@@ -555,6 +555,17 @@ wss.on('connection', (ws) => {
 // -----------------------------------------------------------------------------
 // START SERVER & LOG BANNER
 // -----------------------------------------------------------------------------
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌ [FEHLER] Port ${PORT} ist bereits belegt!`);
+    console.error(`   Ein anderer Prozess (oder ein altes Server-Fenster) nutzt Port ${PORT}.`);
+    console.error(`   Starte einfach 'start.bat' erneut, um alte Prozesse automatisch zu beenden,\n   oder schließe andere Fenster.\n`);
+  } else {
+    console.error(`\n❌ [Server-Fehler]:`, err);
+  }
+  process.exit(1);
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log('====================================================');
   console.log('       🗡️  OCARINA OF BRAWLS - LAN MULTIPLAYER  🛡️    ');
