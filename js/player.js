@@ -66,7 +66,8 @@ export class Player {
       vy: 0,
       ghosts: [],
       aiming: false,
-      aimAngle: 0
+      aimAngle: 0,
+      hitEnemies: new Set()
     };
 
     this.melee = {
@@ -96,7 +97,10 @@ export class Player {
       charging: false,
       chargeTimer: 0,
       aiming: false,
-      aimAngle: 0
+      aimAngle: 0,
+      autoFireTimer: 0,
+      isAimedShot: false,
+      isHolding: false
     };
 
     // Decoupled Aiming & Movement State
@@ -542,6 +546,7 @@ export class Player {
     this.dash.cooldown = COMBAT_CONFIG.DASH_COOLDOWN;
     this.dash.vx = dirX * speed;
     this.dash.vy = dirY * speed;
+    this.dash.hitEnemies = new Set();
 
     // Ground dust puff particles
     for (let i = 0; i < 8; i++) {
@@ -733,6 +738,25 @@ export class Player {
     }
   }
 
+  fireSingleArrow(isCharged = false) {
+    if (this.isBearForm || this.isDead || this.transition || this.shield.active) return;
+    if (this.ranged.ammo <= 0) {
+      if (this.game && this.game.combat) {
+        this.game.combat.addFloatingText('Keine Pfeile! (0/30) 🏹', this.x, this.y - 22, '#ef4444', 0.65);
+      }
+      return;
+    }
+
+    this.ranged.ammo--;
+    const vec = this.getFacingVector();
+    const dirX = vec.x;
+    const dirY = vec.y;
+
+    if (this.game && this.game.combat) {
+      this.game.combat.fireArrow(this.x, this.y - 6, dirX, dirY, isCharged);
+    }
+  }
+
   startRanged(targetAngle = null) {
     if (this.isBearForm) {
       if (this.game && this.game.combat) {
@@ -744,51 +768,60 @@ export class Player {
     if (typeof targetAngle === 'number' && !isNaN(targetAngle)) {
       this.setAimAngle(targetAngle);
     }
-    this.ranged.charging = true;
+
+    this.ranged.isHolding = true;
+    this.ranged.isAimedShot = false;
+    this.ranged.charging = false;
     this.ranged.aiming = true;
     this.ranged.chargeTimer = 0;
-    if (this.ranged.ammo <= 0) {
-      if (this.game && this.game.combat) {
-        this.game.combat.floatingTexts.push({
-          text: 'Keine Pfeile! (0/30) 🏹',
-          x: this.x,
-          y: this.y - 22,
-          timer: 0,
-          duration: 0.65,
-          color: '#ef4444'
-        });
-      }
+    this.ranged.autoFireTimer = 0.5; // Next auto-fire shot in 0.5s
+
+    // First shot fires immediately upon pressing
+    this.fireSingleArrow(false);
+  }
+
+  setRangedAimedShot(isAimed, angle = null) {
+    if (typeof angle === 'number' && !isNaN(angle)) {
+      this.setAimAngle(angle);
+    }
+    this.ranged.isAimedShot = Boolean(isAimed);
+    this.ranged.charging = Boolean(isAimed);
+    this.ranged.aiming = true;
+    if (isAimed) {
+      this.ranged.autoFireTimer = 999; // Stop auto-fire while charging aimed shot
+    } else if (this.ranged.autoFireTimer > 0.5) {
+      this.ranged.autoFireTimer = 0.5;
     }
   }
 
-  releaseRanged(targetAngle = null) {
-    if (!this.ranged.charging && !this.ranged.aiming) return;
-    this.ranged.charging = false;
-    this.ranged.aiming = false;
+  releaseRanged(targetAngle = null, forceAimed = null) {
+    if (!this.ranged.isHolding && !this.ranged.aiming && !this.ranged.charging) return;
     if (typeof targetAngle === 'number' && !isNaN(targetAngle)) {
       this.setAimAngle(targetAngle);
     }
 
-    if (this.ranged.ammo > 0) {
-      this.syncDirectionFromInput();
-      this.ranged.ammo--;
-      const isCharged = (this.ranged.chargeTimer >= COMBAT_CONFIG.ARROW_CHARGE_TIME);
+    const wasAimed = (forceAimed !== null) ? Boolean(forceAimed) : this.ranged.isAimedShot;
 
-      const vec = this.getFacingVector();
-      const dirX = vec.x;
-      const dirY = vec.y;
-
-      if (this.game && this.game.combat) {
-        this.game.combat.fireArrow(this.x, this.y - 6, dirX, dirY, isCharged);
-      }
-    }
-    this.ranged.chargeTimer = 0;
-  }
-
-  cancelRanged() {
+    this.ranged.isHolding = false;
+    this.ranged.isAimedShot = false;
     this.ranged.charging = false;
     this.ranged.aiming = false;
     this.ranged.chargeTimer = 0;
+    this.ranged.autoFireTimer = 0;
+
+    // If an Aimed Shot was charged (outer zone pulled), release the 1.5x damage charged shot!
+    if (wasAimed) {
+      this.fireSingleArrow(true);
+    }
+  }
+
+  cancelRanged() {
+    this.ranged.isHolding = false;
+    this.ranged.isAimedShot = false;
+    this.ranged.charging = false;
+    this.ranged.aiming = false;
+    this.ranged.chargeTimer = 0;
+    this.ranged.autoFireTimer = 0;
   }
 
   setDashAim(active, angle = null) {
@@ -991,10 +1024,20 @@ export class Player {
       this.setShield(shieldDown);
 
       // Ranged (KeyL or KeyF on PC - mobile touch bow handled via handleTouchButton)
-      const rangedDown = Boolean(input.keys && (input.keys['KeyL'] || input.keys['KeyF']));
-      if (rangedDown && !this.ranged.charging) {
+      const pcRanged = Boolean(input.keys && (input.keys['KeyL'] || input.keys['KeyF']));
+      const isShift = Boolean(input.keys && (input.keys['ShiftLeft'] || input.keys['ShiftRight']));
+      if (pcRanged && !this.ranged.isHolding) {
+        this.ranged.pcTriggered = true;
         this.startRanged();
-      } else if (!rangedDown && this.ranged.charging && !this.ranged.aiming) {
+        if (isShift) {
+          this.setRangedAimedShot(true);
+        }
+      } else if (pcRanged && this.ranged.isHolding) {
+        if (isShift !== this.ranged.isAimedShot) {
+          this.setRangedAimedShot(isShift);
+        }
+      } else if (!pcRanged && this.ranged.isHolding && this.ranged.pcTriggered) {
+        this.ranged.pcTriggered = false;
         this.releaseRanged();
       }
 
@@ -1030,12 +1073,32 @@ export class Player {
         this.y += moveStepY;
       }
 
+      // Check dash impact (knockback on enemies with 0 damage)
+      if (this.game && this.game.combat) {
+        this.game.combat.checkDashImpact(this);
+      }
+
+      // Dust puff particles while dashing
+      if (Math.random() < 0.6) {
+        this.particles.push({
+          x: this.x + (Math.random() * 6 - 3),
+          y: this.y + 4,
+          vx: -this.dash.vx * 0.15 + (Math.random() * 8 - 4),
+          vy: -this.dash.vy * 0.15 + (Math.random() * 8 - 4),
+          size: Math.random() * 2.2 + 1,
+          color: 'rgba(255, 255, 255, 0.6)',
+          life: 0.22,
+          maxLife: 0.22
+        });
+      }
+
       // Ghost trail
       if (Math.random() < 0.6) {
         this.dash.ghosts.push({
           x: this.x,
           y: this.y,
           elevY: Math.round(this.visualElevation * ELEVATION_PIXEL_OFFSET),
+          direction: this.direction,
           alpha: 1.0
         });
       }
@@ -1161,53 +1224,27 @@ export class Player {
       }
     }
 
-    // 4. Ranged charge timer
-    if (this.ranged.charging) {
-      this.ranged.chargeTimer += dt;
-      if (this.ranged.chargeTimer >= COMBAT_CONFIG.ARROW_CHARGE_TIME && Math.random() < 0.35) {
-        this.particles.push({
-          x: this.x + (Math.random() - 0.5) * 12,
-          y: this.y - 12 + (Math.random() - 0.5) * 12,
-          vx: (Math.random() - 0.5) * 15,
-          vy: -Math.random() * 20 - 5,
-          size: Math.random() * 2 + 1,
-          color: '#38bdf8',
-          life: 0.2,
-          maxLife: 0.2
-        });
+    // 4. Ranged auto-fire & charge timer
+    if (this.ranged.isHolding && !this.ranged.isAimedShot && !this.isDead && !this.transition && !this.shield.active) {
+      this.ranged.autoFireTimer -= dt;
+      if (this.ranged.autoFireTimer <= 0) {
+        this.ranged.autoFireTimer = 0.5; // Next arrow every 0.5s in calm rhythm
+        this.fireSingleArrow(false);
       }
     }
 
-    // Dash movement override
-    if (this.dash.active) {
-      const dMoveX = this.dash.vx * dt;
-      const dMoveY = this.dash.vy * dt;
-
-      if (!this.checkCollision(this.x + dMoveX, this.y)) this.x += dMoveX;
-      if (!this.checkCollision(this.x, this.y + dMoveY)) this.y += dMoveY;
-
-      // Dust puff particles while dashing
-      if (Math.random() < 0.6) {
+    if (this.ranged.charging) {
+      this.ranged.chargeTimer += dt;
+      if (Math.random() < 0.45) {
         this.particles.push({
-          x: this.x + (Math.random() * 6 - 3),
-          y: this.y + 4,
-          vx: -this.dash.vx * 0.15 + (Math.random() * 8 - 4),
-          vy: -this.dash.vy * 0.15 + (Math.random() * 8 - 4),
-          size: Math.random() * 2.2 + 1,
-          color: 'rgba(255, 255, 255, 0.6)',
-          life: 0.22,
-          maxLife: 0.22
-        });
-      }
-
-      // Record ghost afterimage
-      if (Math.random() < 0.5) {
-        this.dash.ghosts.push({
-          x: this.x,
-          y: this.y,
-          elevY: Math.round(this.visualElevation * ELEVATION_PIXEL_OFFSET),
-          direction: this.direction,
-          alpha: 0.65
+          x: this.x + (Math.random() - 0.5) * 14,
+          y: this.y - 12 + (Math.random() - 0.5) * 14,
+          vx: (Math.random() - 0.5) * 20,
+          vy: -Math.random() * 25 - 5,
+          size: Math.random() * 2.2 + 1.2,
+          color: '#38bdf8',
+          life: 0.25,
+          maxLife: 0.25
         });
       }
     }
@@ -2140,33 +2177,8 @@ export class Player {
     // 4. COMBAT WEAPONS & ABILITY RENDERING
 
     // 4a. Sword & Melee Attack Rendering (Suppressed in Bear Form)
-    if (!this.isBearForm && this.melee.charging) {
-      const facingRight = this.direction.includes('right');
-      const swordSide = facingRight ? 1 : -1;
-      const hiltX = px + swordSide * 5;
-      const hiltY = py - 14 + bob;
-      const chargeProg = Math.min(1.0, this.melee.chargeTimer / COMBAT_CONFIG.SPIN_CHARGE_TIME);
-
-      // Sword Hilt
-      ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(hiltX, hiltY);
-      ctx.lineTo(hiltX + swordSide * 2, hiltY - 4);
-      ctx.stroke();
-
-      // Gleaming silver paper blade (turns glowing cyan when fully charged)
-      ctx.strokeStyle = chargeProg >= 1.0 ? '#38bdf8' : '#e2e8f0';
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.moveTo(hiltX + swordSide * 2, hiltY - 4);
-      ctx.lineTo(hiltX + swordSide * 5, hiltY - 18);
-      ctx.stroke();
-
-      // Gleam spark at blade tip
-      ctx.fillStyle = chargeProg >= 1.0 ? '#fef08a' : '#38bdf8';
-      ctx.fillRect(hiltX + swordSide * 5 - 1.5, hiltY - 19.5, 3, 3);
-    } else if (!this.isBearForm && this.melee.swingProgress < 1.0 && this.melee.swingType) {
+    // Dynamic swing animations (Slash 1 -> Slash 2 -> Thrust) take precedence so combo is visible while holding!
+    if (!this.isBearForm && this.melee.swingProgress < 1.0 && this.melee.swingType) {
       const swProg = this.melee.swingProgress;
       const swAngle = this.getFacingAngle();
 
@@ -2267,35 +2279,41 @@ export class Player {
       ctx.restore();
     }
 
-    // 4b. Bow & Arrow Aiming
-    if (!this.isBearForm && this.ranged.charging) {
+    // 4b. Bow & Arrow Aiming (Pulled blue & glowing for Aimed Shot)
+    if (!this.isBearForm && (this.ranged.charging || this.ranged.isHolding || this.ranged.aiming)) {
       const bowAngle = this.getFacingAngle();
+      const isAimed = Boolean(this.ranged.isAimedShot);
 
       ctx.save();
       ctx.translate(px, py - 10 + bob);
       ctx.rotate(bowAngle);
 
-      // Curved Bamboo Bow
-      ctx.strokeStyle = '#a16207';
-      ctx.lineWidth = 1.8;
+      if (isAimed) {
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 10;
+      }
+
+      // Curved Bamboo Bow (turns radiant blue when Aimed Shot is active!)
+      ctx.strokeStyle = isAimed ? '#38bdf8' : '#a16207';
+      ctx.lineWidth = isAimed ? 2.4 : 1.8;
       ctx.beginPath();
       ctx.arc(8, 0, 10, -Math.PI * 0.35, Math.PI * 0.35);
       ctx.stroke();
 
       // Pulled Bowstring
-      ctx.strokeStyle = '#f8fafc';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = isAimed ? '#e0f2fe' : '#f8fafc';
+      ctx.lineWidth = isAimed ? 1.4 : 1;
       ctx.beginPath();
       ctx.moveTo(8 + Math.cos(-Math.PI * 0.35) * 10, Math.sin(-Math.PI * 0.35) * 10);
-      ctx.lineTo(2, 0);
+      ctx.lineTo(isAimed ? 0 : 2, 0);
       ctx.lineTo(8 + Math.cos(Math.PI * 0.35) * 10, Math.sin(Math.PI * 0.35) * 10);
       ctx.stroke();
 
       // Nocked Paper Arrow
-      ctx.strokeStyle = (this.ranged.chargeTimer >= COMBAT_CONFIG.ARROW_CHARGE_TIME) ? '#38bdf8' : '#cbd5e1';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = isAimed ? '#38bdf8' : '#cbd5e1';
+      ctx.lineWidth = isAimed ? 2.2 : 1.5;
       ctx.beginPath();
-      ctx.moveTo(2, 0);
+      ctx.moveTo(isAimed ? 0 : 2, 0);
       ctx.lineTo(16, 0);
       ctx.stroke();
 
@@ -2479,28 +2497,35 @@ export class Player {
     }
 
     // 2. Bow Aim Trajectory Preview (sky-blue dashed line with reticle)
-    if (this.ranged && (this.ranged.aiming || (this.ranged.charging && this.isAiming))) {
+    if (this.ranged && (this.ranged.aiming || (this.ranged.charging && this.isAiming) || this.ranged.isAimedShot)) {
       const angle = this.getFacingAngle();
       const startX = px;
       const startY = py - 8;
-      const range = 200 + (this.skills?.range || 0) * 35;
+      const isCharged = Boolean(this.ranged.isAimedShot);
+      const baseRange = isCharged ? COMBAT_CONFIG.ARROW_CHARGED_RANGE : COMBAT_CONFIG.ARROW_RANGE;
+      const range = baseRange + (this.skills?.range || 0) * 35;
       const endX = startX + Math.cos(angle) * range;
       const endY = startY + Math.sin(angle) * range;
 
       ctx.save();
+      if (isCharged) {
+        ctx.shadowColor = '#38bdf8';
+        ctx.shadowBlur = 8;
+      }
+
       // Outer faint aim guide
-      ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
-      ctx.lineWidth = 3.2;
+      ctx.strokeStyle = isCharged ? 'rgba(56, 189, 248, 0.6)' : 'rgba(56, 189, 248, 0.35)';
+      ctx.lineWidth = isCharged ? 4.2 : 3.2;
       ctx.beginPath();
       ctx.moveTo(startX, startY);
       ctx.lineTo(endX, endY);
       ctx.stroke();
 
       // Inner crisp dashed trajectory
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.6;
-      ctx.setLineDash([6, 5]);
-      ctx.lineDashOffset = -animTime * 35;
+      ctx.strokeStyle = isCharged ? '#ffffff' : '#38bdf8';
+      ctx.lineWidth = isCharged ? 2.4 : 1.6;
+      ctx.setLineDash(isCharged ? [10, 4] : [6, 5]);
+      ctx.lineDashOffset = -animTime * (isCharged ? 55 : 35);
       ctx.beginPath();
       ctx.moveTo(startX, startY);
       ctx.lineTo(endX, endY);
@@ -2508,17 +2533,24 @@ export class Player {
       ctx.setLineDash([]);
 
       // Crosshair Reticle at end of range
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = isCharged ? '#38bdf8' : '#ffffff';
+      ctx.lineWidth = isCharged ? 2.2 : 1.6;
       ctx.beginPath();
-      ctx.arc(endX, endY, 5.5, 0, Math.PI * 2);
+      ctx.arc(endX, endY, isCharged ? 7.5 : 5.5, 0, Math.PI * 2);
       ctx.stroke();
 
+      if (isCharged) {
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(endX, endY, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       ctx.beginPath();
-      ctx.moveTo(endX - 8, endY);
-      ctx.lineTo(endX + 8, endY);
-      ctx.moveTo(endX, endY - 8);
-      ctx.lineTo(endX, endY + 8);
+      ctx.moveTo(endX - (isCharged ? 11 : 8), endY);
+      ctx.lineTo(endX + (isCharged ? 11 : 8), endY);
+      ctx.moveTo(endX, endY - (isCharged ? 11 : 8));
+      ctx.lineTo(endX, endY + (isCharged ? 11 : 8));
       ctx.stroke();
 
       ctx.restore();

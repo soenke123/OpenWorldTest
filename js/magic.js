@@ -1812,16 +1812,17 @@ export class MagicManager {
     const touchSub = (typeof document !== 'undefined') ? document.getElementById('touch-magic-sub') : null;
     if (touchMagicBtn) {
       if (!player || !player.artifact || player.artifact.charges <= 0) {
-        touchMagicBtn.style.opacity = '0.4';
+        touchMagicBtn.style.display = 'none';
         touchMagicBtn.style.pointerEvents = 'none';
         if (touchChargesBadge) touchChargesBadge.textContent = '0';
       } else {
+        touchMagicBtn.style.display = 'flex';
         touchMagicBtn.style.opacity = '1';
         touchMagicBtn.style.pointerEvents = 'auto';
         const col = player.artifact.colorTheme || '#ef4444';
         const glow = player.artifact.glowColor || 'rgba(239, 68, 68, 0.5)';
         touchMagicBtn.style.borderColor = col;
-        touchMagicBtn.style.boxShadow = `0 0 12px ${glow}`;
+        touchMagicBtn.style.boxShadow = `0 0 14px ${glow}`;
         const letterEl = touchMagicBtn.querySelector('.btn-letter');
         if (letterEl) letterEl.textContent = player.artifact.icon || '✨';
         if (touchChargesBadge) touchChargesBadge.textContent = player.artifact.charges;

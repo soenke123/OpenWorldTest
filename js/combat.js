@@ -335,6 +335,55 @@ export class CombatManager {
     });
   }
 
+  checkDashImpact(player) {
+    if (!player || !player.dash || !player.dash.active || player.isDead) return;
+
+    if (!player.dash.hitEnemies) {
+      player.dash.hitEnemies = new Set();
+    }
+
+    const px = player.x;
+    const py = player.y - 6;
+    const dashRadius = (player.radius || 8) + 12;
+    const curDim = this.game?.currentDimension || 'overworld';
+
+    // Compute normalized dash direction
+    const spd = Math.hypot(player.dash.vx, player.dash.vy) || COMBAT_CONFIG.DASH_SPEED;
+    const dirX = player.dash.vx / spd;
+    const dirY = player.dash.vy / spd;
+    const kbSpeed = 240; // Strong knockback push!
+
+    if (this.game && this.game.enemyManager) {
+      const enemies = this.game.enemyManager.getActiveEnemies ? this.game.enemyManager.getActiveEnemies() : (this.game.enemyManager.enemies || []);
+      for (const enemy of enemies) {
+        if (enemy.dimension !== curDim || enemy.state === 'dead' || enemy.hp <= 0) continue;
+        if (player.dash.hitEnemies.has(enemy)) continue;
+
+        const dx = enemy.x - px;
+        const dy = enemy.y - py;
+        const dist = Math.hypot(dx, dy);
+        const threshold = dashRadius + (enemy.radius || 10);
+
+        if (dist <= threshold) {
+          player.dash.hitEnemies.add(enemy);
+
+          // Apply strong knockback without damage
+          enemy.vx = dirX * kbSpeed;
+          enemy.vy = dirY * kbSpeed;
+          enemy.state = 'hurt';
+          enemy.stunTimer = Math.max(enemy.stunTimer || 0, 0.35);
+
+          // Visual impact (NO HP deduction!)
+          this.addHitSparks(enemy.x, enemy.y - 6, '#67e8f9', 14, 100);
+          this.addFloatingText('💨 BASH!', enemy.x, enemy.y - 20, '#38bdf8', 0.65);
+          if (this.game.camera) {
+            this.game.camera.shake(3.5, 0.14);
+          }
+        }
+      }
+    }
+  }
+
   checkMeleeHits(hitbox) {
     let hitAny = false;
     const isSpin = hitbox.type === 'spin' || hitbox.type === 'bear_spin';
@@ -690,8 +739,11 @@ export class CombatManager {
               break;
             }
 
-            const dmg = arrow.isCharged ? 45 : 22;
+            const dmg = arrow.isCharged ? 33 : 22; // 1.5x damage for aimed shot
             const kb = arrow.isCharged ? 160 : 85;
+            if (arrow.isCharged) {
+              this.addFloatingText('🎯 AIMED SHOT!', enemy.x, enemy.y - 20, '#38bdf8', 0.65);
+            }
             enemy.takeDamage(dmg, arrow.angle, kb, this, true);
             hitEnemy = true;
             break;
@@ -708,7 +760,7 @@ export class CombatManager {
           if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
 
           if (Math.hypot(remotePlayer.x - arrow.x, remotePlayer.y - arrow.y) <= (remotePlayer.radius + 6)) {
-            let dmg = arrow.isCharged ? 45 : 22;
+            let dmg = arrow.isCharged ? 33 : 22;
             const kb = arrow.isCharged ? 140 : 70;
 
             if (remotePlayer.shieldActive) {
@@ -754,7 +806,7 @@ export class CombatManager {
       const hitWall = this.isArrowObstacle(map, tX, tY);
 
       if (hitDummy || hitEnemy || hitRemotePlayer || hitWall || arrow.distTraveled >= arrow.maxRange) {
-        const curTile = map.getGroundTile ? map.getGroundTile(tX, tY) : (map.ground ? map.ground[tY]?.[tX] : 0);
+        const curTile = map?.getGroundTile ? map.getGroundTile(tX, tY) : (map?.ground ? map.ground[tY]?.[tX] : 0);
         const inWater = this.isWaterOrAbyssTile(curTile) && !hitEnemy && !hitDummy && !hitWall;
 
         if (inWater) {
@@ -802,10 +854,10 @@ export class CombatManager {
       }
 
       // Pickup check by player
-      if (stuck.canCollect) {
+      if (player && stuck.canCollect) {
         const pDist = Math.hypot(player.x - stuck.x, player.y - stuck.y);
         if (pDist <= COMBAT_CONFIG.ARROW_PICKUP_RADIUS) {
-          if (player && player.ranged && player.ranged.ammo < COMBAT_CONFIG.MAX_AMMO) {
+          if (player.ranged && player.ranged.ammo < COMBAT_CONFIG.MAX_AMMO) {
             player.ranged.ammo++;
 
             // Shiny green/gold pickup sparkles

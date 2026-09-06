@@ -209,12 +209,14 @@ export class TouchControls {
         originX,
         originY,
         startTime: performance.now(),
+        circleStartTime: performance.now(),
         isDragging: false,
         dragDistance: 0,
         dragAngle: 0,
         prevAngle: null,
         cumulativeAngle: 0,
         spinFired: false,
+        isAimed: false,
         isCancelled: false
       };
 
@@ -244,22 +246,55 @@ export class TouchControls {
         state.btn.classList.add('aiming-active');
 
         // Visuelle Auslenkung des Buttons (virtueller Analog-Stick-Effekt)
-        const clampDist = Math.min(22, dist);
+        const clampDist = Math.min(24, dist);
         const vx = (dx / dist) * clampDist;
         const vy = (dy / dist) * clampDist;
         state.btn.style.transform = `translate(${vx}px, ${vy}px)`;
 
+        // Range (Button X): Zone 1 (< 45px) = normal fire | Zone 2 (>= 45px) = Aimed Shot
+        if (state.action === 'X') {
+          const isAimed = dist >= 45;
+          state.isAimed = isAimed;
+          if (isAimed) {
+            state.btn.classList.add('btn-aim-charged');
+          } else {
+            state.btn.classList.remove('btn-aim-charged');
+          }
+          if (this.onButtonPress) {
+            this.onButtonPress('X', true, {
+              drag: true,
+              angle: state.dragAngle,
+              dist,
+              isAimed,
+              isCancelled: false
+            });
+          }
+          return;
+        }
+
         // Kreis-Geste für Schwert (Button B: Wirbelattacke)
-        if (state.action === 'B' && !state.spinFired) {
+        // Rolling time window: kann jederzeit auch mitten im Schlagen ausgelöst werden!
+        if (state.action === 'B') {
+          const now = performance.now();
+          if (!state.circleStartTime) state.circleStartTime = now;
+
           if (state.prevAngle !== null) {
             let delta = state.dragAngle - state.prevAngle;
             while (delta > Math.PI) delta -= Math.PI * 2;
             while (delta < -Math.PI) delta += Math.PI * 2;
+
+            // Rolling window von 850ms
+            if (now - state.circleStartTime > 850) {
+              state.cumulativeAngle = 0;
+              state.circleStartTime = now;
+            }
+
             state.cumulativeAngle += delta;
 
-            const elapsed = (performance.now() - state.startTime) / 1000;
-            // Schnelle Kreisbewegung (~290° bis 360°) innerhalb von 0.85s
-            if (Math.abs(state.cumulativeAngle) >= Math.PI * 1.6 && elapsed <= 0.85) {
+            // Schnelle Kreisbewegung (~270° bis 360°)
+            if (Math.abs(state.cumulativeAngle) >= Math.PI * 1.5) {
+              state.cumulativeAngle = 0;
+              state.circleStartTime = now;
               state.spinFired = true;
               state.btn.classList.add('anim-pop-glow');
               setTimeout(() => state.btn.classList.remove('anim-pop-glow'), 400);
@@ -271,7 +306,7 @@ export class TouchControls {
           state.prevAngle = state.dragAngle;
         }
 
-        if (this.onButtonPress && !state.spinFired) {
+        if (this.onButtonPress) {
           this.onButtonPress(state.action, true, {
             drag: true,
             angle: state.dragAngle,
@@ -283,7 +318,7 @@ export class TouchControls {
         // Finger zurück ins Zentrum gezogen -> Abbrechen (Cancel Deadzone)
         state.isCancelled = true;
         state.btn.classList.add('cancel-zone');
-        state.btn.classList.remove('aiming-active');
+        state.btn.classList.remove('aiming-active', 'btn-aim-charged');
         state.btn.style.transform = 'translate(0px, 0px)';
         if (this.onButtonPress) {
           this.onButtonPress(state.action, true, { cancel: true });
@@ -293,7 +328,7 @@ export class TouchControls {
 
     const finishButtonInteraction = (state) => {
       if (!state) return;
-      state.btn.classList.remove('active', 'aiming-active', 'cancel-zone');
+      state.btn.classList.remove('active', 'aiming-active', 'cancel-zone', 'btn-aim-charged');
       state.btn.style.transform = 'translate(0px, 0px)';
       this.input.buttons[state.action] = false;
 
@@ -304,6 +339,8 @@ export class TouchControls {
         this.onButtonPress(state.action, false, {
           isDrag: wasDrag,
           angle: finalAngle,
+          dist: state.dragDistance,
+          isAimed: Boolean(state.isAimed),
           isCancelled: state.isCancelled,
           spinTriggered: state.spinFired
         });
