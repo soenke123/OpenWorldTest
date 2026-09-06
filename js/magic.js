@@ -13,7 +13,7 @@ export const ARTIFACT_TYPES = {
     maxCharges: 5,
     rechargeBonus: 3,
     cooldown: 3.0,
-    damage: 220,
+    damage: PVP_CONFIG.SPELL_PHOENIX_DMG ?? 120,
     widthTiles: 5,
     speed: 360,
     colorTheme: '#ef4444',
@@ -43,7 +43,7 @@ export const ARTIFACT_TYPES = {
     maxCharges: 5,
     rechargeBonus: 3,
     cooldown: 3.0,
-    damage: 45,
+    damage: PVP_CONFIG.SPELL_PLASMA_ORB_DMG ?? 60,
     widthTiles: 3,
     speed: 0,
     colorTheme: '#ec4899',
@@ -73,7 +73,7 @@ export const ARTIFACT_TYPES = {
     maxCharges: 5,
     rechargeBonus: 3,
     cooldown: 2.5,
-    damage: 0,
+    damage: PVP_CONFIG.SPELL_FROST_DMG ?? 10,
     widthTiles: 4,
     speed: 0,
     colorTheme: '#38bdf8',
@@ -969,6 +969,11 @@ export class MagicManager {
 
           enemy.freezeTimer = duration;
           hitCount++;
+
+          const frostDmg = PVP_CONFIG.SPELL_FROST_DMG ?? 10;
+          if (frostDmg > 0) {
+            enemy.takeDamage(frostDmg, facingAngle, 40, combatManager, true);
+          }
 
           if (combatManager) {
             combatManager.addFloatingText(`❄️ EINGEFROREN (${duration.toFixed(1)}s)`, enemy.x, enemy.y - 20, '#38bdf8', 1.1);

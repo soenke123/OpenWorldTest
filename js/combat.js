@@ -443,12 +443,12 @@ export class CombatManager {
 
         if (inRange) {
           hitAny = true;
-          let dmg = 25;
-          if (hitbox.type === 'slash2' || hitbox.type === 'bear_claw2') dmg = 35;
-          if (isThrust) dmg = 52;
-          if (isSpin) dmg = 68;
+          let dmg = PVP_CONFIG.MELEE_SLASH_1_DMG ?? 20;
+          if (hitbox.type === 'slash2' || hitbox.type === 'bear_claw2') dmg = PVP_CONFIG.MELEE_SLASH_2_DMG ?? 20;
+          if (isThrust) dmg = PVP_CONFIG.MELEE_THRUST_DMG ?? 30;
+          if (isSpin) dmg = PVP_CONFIG.MELEE_SPIN_DMG ?? 25;
 
-          const meleeBonus = (this.game?.player?.skills?.melee || 0) * 4;
+          const meleeBonus = (this.game?.player?.skills?.melee || 0) * (PVP_CONFIG.MELEE_DMG_PER_SKILL ?? 4);
           dmg += meleeBonus;
 
           if (hitbox.damageMultiplier) {
@@ -458,7 +458,7 @@ export class CombatManager {
           }
 
           const angle = isSpin ? Math.atan2(enemy.y - hitbox.y, enemy.x - hitbox.x) : hitbox.angle;
-          let kb = hitbox.knockback || (isThrust ? 120 : (isSpin ? 140 : 80));
+          let kb = hitbox.knockback || (isThrust ? (PVP_CONFIG.MELEE_KNOCKBACK_THRUST ?? 150) : (isSpin ? (PVP_CONFIG.MELEE_KNOCKBACK_SPIN ?? 250) : (PVP_CONFIG.MELEE_KNOCKBACK_SLASH ?? 40)));
           if (hitbox.knockbackMultiplier) {
             kb = Math.round(kb * hitbox.knockbackMultiplier);
           }
@@ -567,7 +567,7 @@ export class CombatManager {
     this.createShockwave(x, y - 8, isArrival ? 32 : 24, 0, '#a855f7', false, dim);
   }
 
-  spawnPlasmaExplosion(x, y, radius = 36, damage = 45, knockback = 90) {
+  spawnPlasmaExplosion(x, y, radius = 36, damage = (PVP_CONFIG.SPELL_PLASMA_ORB_DMG ?? 60), knockback = 90) {
     const dim = this.game?.currentDimension || 'overworld';
     this.createShockwave(x, y, radius, 0, '#ec4899', false, dim);
 
@@ -741,8 +741,8 @@ export class CombatManager {
               break;
             }
 
-            const dmg = arrow.isCharged ? 33 : 22; // 1.5x damage for aimed shot
-            const kb = arrow.isCharged ? 160 : 85;
+            const dmg = arrow.isCharged ? (PVP_CONFIG.ARROW_CHARGED_DMG ?? 50) : (PVP_CONFIG.ARROW_NORMAL_DMG ?? 30);
+            const kb = arrow.isCharged ? (PVP_CONFIG.ARROW_KNOCKBACK_CHARGED ?? 100) : (PVP_CONFIG.ARROW_KNOCKBACK_NORMAL ?? 50);
             if (arrow.isCharged) {
               this.addFloatingText('🎯 AIMED SHOT!', enemy.x, enemy.y - 20, '#38bdf8', 0.65);
             }
