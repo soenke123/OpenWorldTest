@@ -1,4 +1,4 @@
-import { TILE_SIZE, COMBAT_CONFIG, OBJECTS, TILES, OBJ_PROPS, TILE_PROPS } from './constants.js';
+import { TILE_SIZE, COMBAT_CONFIG, PVP_CONFIG, OBJECTS, TILES, OBJ_PROPS, TILE_PROPS } from './constants.js';
 
 export class CombatManager {
   constructor(game) {
@@ -494,12 +494,12 @@ export class CombatManager {
 
         if (inRange) {
           hitAny = true;
-          let dmg = 25;
-          if (hitbox.type === 'slash2' || hitbox.type === 'bear_claw2') dmg = 35;
-          if (isThrust) dmg = 52;
-          if (isSpin) dmg = 68;
+          let dmg = PVP_CONFIG.MELEE_SLASH_1_DMG ?? 25;
+          if (hitbox.type === 'slash2' || hitbox.type === 'bear_claw2') dmg = PVP_CONFIG.MELEE_SLASH_2_DMG ?? 35;
+          if (isThrust) dmg = PVP_CONFIG.MELEE_THRUST_DMG ?? 52;
+          if (isSpin) dmg = PVP_CONFIG.MELEE_SPIN_DMG ?? 68;
 
-          const meleeBonus = (this.game?.player?.skills?.melee || 0) * 4;
+          const meleeBonus = (this.game?.player?.skills?.melee || 0) * (PVP_CONFIG.MELEE_DMG_PER_SKILL ?? 4);
           dmg += meleeBonus;
 
           if (hitbox.damageMultiplier) {
@@ -518,7 +518,8 @@ export class CombatManager {
           if (remotePlayer.shieldActive) {
             this.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 16, 90);
             this.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 16, '#38bdf8');
-            dmg = Math.round(dmg * 0.2); // 80% Schadensreduktion
+            const reduction = PVP_CONFIG.SHIELD_MELEE_DAMAGE_REDUCTION ?? 0.80;
+            dmg = Math.round(dmg * (1 - reduction));
           } else {
             this.addHitSparks(remotePlayer.x, remotePlayer.y, '#ef4444', 12, 70);
             this.addFloatingText(`-${dmg}`, remotePlayer.x, remotePlayer.y - 14, '#f87171');
@@ -760,13 +761,14 @@ export class CombatManager {
           if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
 
           if (Math.hypot(remotePlayer.x - arrow.x, remotePlayer.y - arrow.y) <= (remotePlayer.radius + 6)) {
-            let dmg = arrow.isCharged ? 33 : 22;
+            let dmg = arrow.isCharged ? (PVP_CONFIG.ARROW_CHARGED_DMG ?? 33) : (PVP_CONFIG.ARROW_NORMAL_DMG ?? 22);
             const kb = arrow.isCharged ? 140 : 70;
 
             if (remotePlayer.shieldActive) {
               this.addHitSparks(arrow.x, arrow.y, '#38bdf8', 14, 80);
               this.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 18, '#38bdf8');
-              dmg = 0;
+              const reduction = PVP_CONFIG.SHIELD_ARROW_DAMAGE_REDUCTION ?? 1.0;
+              dmg = Math.round(dmg * (1 - reduction));
             } else {
               this.addHitSparks(arrow.x, arrow.y, '#ef4444', 12, 70);
               this.addFloatingText(`-${dmg}`, remotePlayer.x, remotePlayer.y - 14, '#f87171');

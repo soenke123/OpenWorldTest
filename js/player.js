@@ -1,4 +1,4 @@
-import { TILE_SIZE, PLAYER_CONFIG, TILES, OBJECTS, ELEVATION_PIXEL_OFFSET, RAMPS, COMBAT_CONFIG } from './constants.js';
+import { TILE_SIZE, PLAYER_CONFIG, TILES, OBJECTS, ELEVATION_PIXEL_OFFSET, RAMPS, COMBAT_CONFIG, PVP_CONFIG } from './constants.js';
 import { CHARACTERS_MAP, getSelectedSkin, setSelectedSkin, getSelectedPlayerName, setSelectedPlayerName } from './characters.js';
 
 export class Player {
@@ -324,8 +324,11 @@ export class Player {
     this.bearFormMaxTimer = duration;
 
     // 50% mehr Leben während Bärengestalt
-    const baseMax = 100 + (this.skills?.hp || 0) * 15;
-    const targetMax = Math.round(baseMax * 1.5);
+    const hpPerPoint = PVP_CONFIG.HP_PER_SKILL_POINT ?? 15;
+    const baseHp = PVP_CONFIG.PLAYER_BASE_HP ?? 100;
+    const bearMult = PVP_CONFIG.BEAR_HP_MULTIPLIER ?? 1.5;
+    const baseMax = baseHp + (this.skills?.hp || 0) * hpPerPoint;
+    const targetMax = Math.round(baseMax * bearMult);
     const hpRatio = this.hp / Math.max(1, this.maxHp);
     this.maxHp = targetMax;
     this.hp = Math.round(targetMax * Math.max(0.3, hpRatio));
@@ -354,7 +357,9 @@ export class Player {
     this.isBearForm = false;
     this.bearFormTimer = 0;
 
-    const baseMax = 100 + (this.skills?.hp || 0) * 15;
+    const hpPerPoint = PVP_CONFIG.HP_PER_SKILL_POINT ?? 15;
+    const baseHp = PVP_CONFIG.PLAYER_BASE_HP ?? 100;
+    const baseMax = baseHp + (this.skills?.hp || 0) * hpPerPoint;
     const hpRatio = this.hp / Math.max(1, this.maxHp);
     this.maxHp = baseMax;
     this.hp = Math.max(1, Math.min(this.maxHp, Math.round(baseMax * hpRatio)));
@@ -409,9 +414,12 @@ export class Player {
 
     // Apply immediate attribute bonuses
     if (attribute === 'hp') {
-      const baseMax = 100 + this.skills.hp * 15;
-      const newMax = this.isBearForm ? Math.round(baseMax * 1.5) : baseMax;
-      const gain = this.isBearForm ? Math.round(15 * 1.5) : 15;
+      const hpPerPoint = PVP_CONFIG.HP_PER_SKILL_POINT ?? 15;
+      const baseHp = PVP_CONFIG.PLAYER_BASE_HP ?? 100;
+      const bearMult = PVP_CONFIG.BEAR_HP_MULTIPLIER ?? 1.5;
+      const baseMax = baseHp + this.skills.hp * hpPerPoint;
+      const newMax = this.isBearForm ? Math.round(baseMax * bearMult) : baseMax;
+      const gain = this.isBearForm ? Math.round(hpPerPoint * bearMult) : hpPerPoint;
       this.maxHp = newMax;
       this.hp = Math.min(this.maxHp, this.hp + gain);
       if (this.game && this.game.combat) {
@@ -419,8 +427,9 @@ export class Player {
         this.game.combat.addHitSparks(this.x, this.y - 10, '#4ade80', 14);
       }
     } else if (attribute === 'melee') {
+      const dmgBonus = PVP_CONFIG.MELEE_DMG_PER_SKILL ?? 4;
       if (this.game && this.game.combat) {
-        this.game.combat.addFloatingText('⚔️ +4 Nahkampf-Schaden!', this.x, this.y - 24, '#f59e0b', 1.1);
+        this.game.combat.addFloatingText(`⚔️ +${dmgBonus} Nahkampf-Schaden!`, this.x, this.y - 24, '#f59e0b', 1.1);
         this.game.combat.addHitSparks(this.x, this.y - 10, '#f59e0b', 14);
       }
     } else if (attribute === 'range') {
@@ -429,11 +438,12 @@ export class Player {
         this.game.combat.addHitSparks(this.x, this.y - 10, '#38bdf8', 14);
       }
     } else if (attribute === 'shield') {
-      const baseMax = COMBAT_CONFIG.SHIELD_MAX || 100;
-      this.shield.maxEnergy = baseMax + this.skills.shield * 15;
-      this.shield.energy = Math.min(this.shield.maxEnergy, this.shield.energy + 15);
+      const baseMax = PVP_CONFIG.SHIELD_MAX_ENERGY ?? 100;
+      const shieldBonus = PVP_CONFIG.SHIELD_PER_SKILL_POINT ?? 15;
+      this.shield.maxEnergy = baseMax + this.skills.shield * shieldBonus;
+      this.shield.energy = Math.min(this.shield.maxEnergy, this.shield.energy + shieldBonus);
       if (this.game && this.game.combat) {
-        this.game.combat.addFloatingText('🛡️ +15 Schild-Energie!', this.x, this.y - 24, '#06b6d4', 1.1);
+        this.game.combat.addFloatingText(`🛡️ +${shieldBonus} Schild-Energie!`, this.x, this.y - 24, '#06b6d4', 1.1);
         this.game.combat.addHitSparks(this.x, this.y - 10, '#06b6d4', 14);
       }
     }

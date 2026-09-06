@@ -1,7 +1,7 @@
 // =============================================================================
 // MAGIC & ARTIFACT SYSTEM (Zauber- & Artefakt-System)
 // =============================================================================
-import { TILE_SIZE, MAP_WIDTH, MAP_HEIGHT, DIMENSIONS } from './constants.js';
+import { TILE_SIZE, MAP_WIDTH, MAP_HEIGHT, DIMENSIONS, PVP_CONFIG } from './constants.js';
 
 export const ARTIFACT_TYPES = {
   PHOENIX: {
@@ -991,18 +991,19 @@ export class MagicManager {
         while (diff < -Math.PI) diff += Math.PI * 2;
 
         if (Math.abs(diff) <= halfArc) {
-          const frostDmg = 30;
+          const frostDmg = PVP_CONFIG.SPELL_FROST_DMG ?? 30;
           let actualDmg = frostDmg;
           const kbX = Math.cos(angToRemote) * 50;
           const kbY = Math.sin(angToRemote) * 50;
 
           if (remotePlayer.shield && remotePlayer.shield.active && remotePlayer.shield.energy > 0) {
-            actualDmg = 10;
+            actualDmg = Math.round(frostDmg * 0.33);
             combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 14);
             combatManager?.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 20, '#38bdf8');
           } else {
             combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 18);
-            combatManager?.addFloatingText('❄️ EINGEFROREN! (2s)', remotePlayer.x, remotePlayer.y - 20, '#38bdf8', 1.1);
+            const freezeDuration = PVP_CONFIG.SPELL_FROST_FREEZE_TIME ?? 2.0;
+            combatManager?.addFloatingText(`❄️ EINGEFROREN! (${freezeDuration.toFixed(1)}s)`, remotePlayer.x, remotePlayer.y - 20, '#38bdf8', 1.1);
           }
 
           this.game.network.sendPvPHit(remotePlayer.id, actualDmg, kbX, kbY);

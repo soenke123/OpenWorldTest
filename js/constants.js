@@ -188,21 +188,64 @@ export const OBJ_PROPS = {
   [OBJECTS.TRAINING_DUMMY]:      { solid: true,  name: 'Trainingspuppe' }
 };
 
+// =============================================================================
+// PVP & COMBAT BALANCE CONFIG (Zentrale Konfiguration für alle PvP- und Kampf-Werte)
+// =============================================================================
+export const PVP_CONFIG = {
+  // 1. Lebenspunkte (HP)
+  PLAYER_BASE_HP: 100,                  // Start-Lebenspunkte eines Spielers
+  HP_PER_SKILL_POINT: 15,               // Zusätzliche Max-HP pro Skillpunkt
+  BEAR_HP_MULTIPLIER: 1.5,              // Lebenspunkte-Multiplikator im Bären-Modus (1.5 = +50%)
+
+  // 2. Nahkampf-Schaden (Melee)
+  MELEE_SLASH_1_DMG: 25,                // 1. Schlag der Kombo
+  MELEE_SLASH_2_DMG: 35,                // 2. Schlag der Kombo
+  MELEE_THRUST_DMG: 52,                 // 3. Schlag (Stich / Ausfallschritt)
+  MELEE_SPIN_DMG: 68,                   // 360° Wirbelattacke
+  MELEE_DMG_PER_SKILL: 4,               // Bonus-Schaden pro Nahkampf-Skillpunkt
+  BEAR_DMG_MULTIPLIER: 2.0,             // Schadens-Multiplikator im Bären-Modus (2.0 = doppelter Schaden)
+
+  // 3. Fernkampf-Schaden (Bogen & Pfeile)
+  ARROW_NORMAL_DMG: 22,                 // Normaler Schnellschuss
+  ARROW_CHARGED_DMG: 33,                // Aufgeladener Schuss (Aimed Shot)
+
+  // 4. Schild-System
+  SHIELD_MAX_ENERGY: 100,               // Maximale Schild-Energie
+  SHIELD_PER_SKILL_POINT: 15,           // Zusätzliche Schild-Energie pro Skillpunkt
+  SHIELD_DRAIN_PER_SEC: 22,             // Energie-Verbrauch pro Sekunde beim aktiven Halten
+  SHIELD_RECHARGE_PER_SEC: 20,          // Aufladung pro Sekunde nach Pause
+  SHIELD_RECHARGE_DELAY: 1.0,           // Pause in Sekunden vor Beginn der Aufladung
+  SHIELD_STUN_DURATION: 1.2,            // Betäubungsdauer in Sekunden bei Schildbruch (0 Energie)
+  SHIELD_MELEE_DAMAGE_REDUCTION: 0.80,  // Block-Effizienz gegen Nahkampf (0.80 = 80% geblockt, 20% geht durch)
+  SHIELD_ARROW_DAMAGE_REDUCTION: 1.00,  // Block-Effizienz gegen Pfeile (1.00 = 100% geblockt, 0% geht durch)
+
+  // 5. Magie & Artefakte
+  SPELL_FROST_DMG: 30,                  // Schaden des Eisnebels
+  SPELL_FROST_FREEZE_TIME: 2.0,         // Einfrierdauer in Sekunden
+  SPELL_PLASMA_ORB_DMG: 45,             // Schaden pro Plasmakugel
+  SPELL_PHOENIX_DMG: 220,               // Schaden des Phönix-Flammensturms
+
+  // 6. Dash (Ausweichen & I-Frames)
+  DASH_DURATION: 0.18,                  // Dauer des Dashs in Sekunden (vollständige Unverwundbarkeit)
+  DASH_SPEED: 265,                      // Geschwindigkeit während des Dashs
+  DASH_COOLDOWN: 0.42                   // Abklingzeit bis zum nächsten Dash
+};
+
 // Player Settings for 16px Scale
 export const PLAYER_CONFIG = {
   BASE_SPEED: 135,
   SPRINT_MULTIPLIER: 1.5,
   RADIUS: 5.5,
-  MAX_HP: 100,
+  MAX_HP: PVP_CONFIG.PLAYER_BASE_HP,
   CANOPY_REVEAL_RADIUS: 52 // Exakter, scharfer Sichtkreis
 };
 
 // Combat & Ability Settings (Zelda / Smash Bros Inspired)
 export const COMBAT_CONFIG = {
   // Dash
-  DASH_DURATION: 0.18,
-  DASH_SPEED: 265,
-  DASH_COOLDOWN: 0.42,
+  DASH_DURATION: PVP_CONFIG.DASH_DURATION,
+  DASH_SPEED: PVP_CONFIG.DASH_SPEED,
+  DASH_COOLDOWN: PVP_CONFIG.DASH_COOLDOWN,
 
   // Melee & Combo
   COMBO_WINDOW: 0.44,
@@ -217,11 +260,11 @@ export const COMBAT_CONFIG = {
   SPIN_KNOCKBACK: 290,
 
   // Shield
-  SHIELD_MAX: 100,
-  SHIELD_DRAIN_RATE: 22,
-  SHIELD_RECHARGE_RATE: 20,
-  SHIELD_RECHARGE_DELAY: 1.0, // 1.0s Pause bevor Schild auflädt (wenn nicht zerbrochen)
-  SHIELD_STUN_TIME: 1.2,
+  SHIELD_MAX: PVP_CONFIG.SHIELD_MAX_ENERGY,
+  SHIELD_DRAIN_RATE: PVP_CONFIG.SHIELD_DRAIN_PER_SEC,
+  SHIELD_RECHARGE_RATE: PVP_CONFIG.SHIELD_RECHARGE_PER_SEC,
+  SHIELD_RECHARGE_DELAY: PVP_CONFIG.SHIELD_RECHARGE_DELAY,
+  SHIELD_STUN_TIME: PVP_CONFIG.SHIELD_STUN_DURATION,
   SHIELD_RADIUS: 22,
 
   // Ranged (Bow & Arrow)

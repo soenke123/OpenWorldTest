@@ -191,21 +191,64 @@ const OBJ_PROPS = {
   [OBJECTS.TRAINING_DUMMY]:      { solid: true,  name: 'Trainingspuppe' }
 };
 
+// =============================================================================
+// PVP & COMBAT BALANCE CONFIG (Zentrale Konfiguration für alle PvP- und Kampf-Werte)
+// =============================================================================
+const PVP_CONFIG = {
+  // 1. Lebenspunkte (HP)
+  PLAYER_BASE_HP: 100,                  // Start-Lebenspunkte eines Spielers
+  HP_PER_SKILL_POINT: 15,               // Zusätzliche Max-HP pro Skillpunkt
+  BEAR_HP_MULTIPLIER: 1.5,              // Lebenspunkte-Multiplikator im Bären-Modus (1.5 = +50%)
+
+  // 2. Nahkampf-Schaden (Melee)
+  MELEE_SLASH_1_DMG: 25,                // 1. Schlag der Kombo
+  MELEE_SLASH_2_DMG: 35,                // 2. Schlag der Kombo
+  MELEE_THRUST_DMG: 52,                 // 3. Schlag (Stich / Ausfallschritt)
+  MELEE_SPIN_DMG: 68,                   // 360° Wirbelattacke
+  MELEE_DMG_PER_SKILL: 4,               // Bonus-Schaden pro Nahkampf-Skillpunkt
+  BEAR_DMG_MULTIPLIER: 2.0,             // Schadens-Multiplikator im Bären-Modus (2.0 = doppelter Schaden)
+
+  // 3. Fernkampf-Schaden (Bogen & Pfeile)
+  ARROW_NORMAL_DMG: 22,                 // Normaler Schnellschuss
+  ARROW_CHARGED_DMG: 33,                // Aufgeladener Schuss (Aimed Shot)
+
+  // 4. Schild-System
+  SHIELD_MAX_ENERGY: 100,               // Maximale Schild-Energie
+  SHIELD_PER_SKILL_POINT: 15,           // Zusätzliche Schild-Energie pro Skillpunkt
+  SHIELD_DRAIN_PER_SEC: 22,             // Energie-Verbrauch pro Sekunde beim aktiven Halten
+  SHIELD_RECHARGE_PER_SEC: 20,          // Aufladung pro Sekunde nach Pause
+  SHIELD_RECHARGE_DELAY: 1.0,           // Pause in Sekunden vor Beginn der Aufladung
+  SHIELD_STUN_DURATION: 1.2,            // Betäubungsdauer in Sekunden bei Schildbruch (0 Energie)
+  SHIELD_MELEE_DAMAGE_REDUCTION: 0.80,  // Block-Effizienz gegen Nahkampf (0.80 = 80% geblockt, 20% geht durch)
+  SHIELD_ARROW_DAMAGE_REDUCTION: 1.00,  // Block-Effizienz gegen Pfeile (1.00 = 100% geblockt, 0% geht durch)
+
+  // 5. Magie & Artefakte
+  SPELL_FROST_DMG: 30,                  // Schaden des Eisnebels
+  SPELL_FROST_FREEZE_TIME: 2.0,         // Einfrierdauer in Sekunden
+  SPELL_PLASMA_ORB_DMG: 45,             // Schaden pro Plasmakugel
+  SPELL_PHOENIX_DMG: 220,               // Schaden des Phönix-Flammensturms
+
+  // 6. Dash (Ausweichen & I-Frames)
+  DASH_DURATION: 0.18,                  // Dauer des Dashs in Sekunden (vollständige Unverwundbarkeit)
+  DASH_SPEED: 265,                      // Geschwindigkeit während des Dashs
+  DASH_COOLDOWN: 0.42                   // Abklingzeit bis zum nächsten Dash
+};
+
 // Player Settings for 16px Scale
 const PLAYER_CONFIG = {
   BASE_SPEED: 135,
   SPRINT_MULTIPLIER: 1.5,
   RADIUS: 5.5,
-  MAX_HP: 100,
+  MAX_HP: PVP_CONFIG.PLAYER_BASE_HP,
   CANOPY_REVEAL_RADIUS: 52 // Exakter, scharfer Sichtkreis
 };
 
 // Combat & Ability Settings (Zelda / Smash Bros Inspired)
 const COMBAT_CONFIG = {
   // Dash
-  DASH_DURATION: 0.18,
-  DASH_SPEED: 265,
-  DASH_COOLDOWN: 0.42,
+  DASH_DURATION: PVP_CONFIG.DASH_DURATION,
+  DASH_SPEED: PVP_CONFIG.DASH_SPEED,
+  DASH_COOLDOWN: PVP_CONFIG.DASH_COOLDOWN,
 
   // Melee & Combo
   COMBO_WINDOW: 0.44,
@@ -220,11 +263,11 @@ const COMBAT_CONFIG = {
   SPIN_KNOCKBACK: 290,
 
   // Shield
-  SHIELD_MAX: 100,
-  SHIELD_DRAIN_RATE: 22,
-  SHIELD_RECHARGE_RATE: 20,
-  SHIELD_RECHARGE_DELAY: 1.0, // 1.0s Pause bevor Schild auflädt (wenn nicht zerbrochen)
-  SHIELD_STUN_TIME: 1.2,
+  SHIELD_MAX: PVP_CONFIG.SHIELD_MAX_ENERGY,
+  SHIELD_DRAIN_RATE: PVP_CONFIG.SHIELD_DRAIN_PER_SEC,
+  SHIELD_RECHARGE_RATE: PVP_CONFIG.SHIELD_RECHARGE_PER_SEC,
+  SHIELD_RECHARGE_DELAY: PVP_CONFIG.SHIELD_RECHARGE_DELAY,
+  SHIELD_STUN_TIME: PVP_CONFIG.SHIELD_STUN_DURATION,
   SHIELD_RADIUS: 22,
 
   // Ranged (Bow & Arrow)
@@ -9382,18 +9425,19 @@ class MagicManager {
         while (diff < -Math.PI) diff += Math.PI * 2;
 
         if (Math.abs(diff) <= halfArc) {
-          const frostDmg = 30;
+          const frostDmg = PVP_CONFIG.SPELL_FROST_DMG ?? 30;
           let actualDmg = frostDmg;
           const kbX = Math.cos(angToRemote) * 50;
           const kbY = Math.sin(angToRemote) * 50;
 
           if (remotePlayer.shield && remotePlayer.shield.active && remotePlayer.shield.energy > 0) {
-            actualDmg = 10;
+            actualDmg = Math.round(frostDmg * 0.33);
             combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 14);
             combatManager?.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 20, '#38bdf8');
           } else {
             combatManager?.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 18);
-            combatManager?.addFloatingText('❄️ EINGEFROREN! (2s)', remotePlayer.x, remotePlayer.y - 20, '#38bdf8', 1.1);
+            const freezeDuration = PVP_CONFIG.SPELL_FROST_FREEZE_TIME ?? 2.0;
+            combatManager?.addFloatingText(`❄️ EINGEFROREN! (${freezeDuration.toFixed(1)}s)`, remotePlayer.x, remotePlayer.y - 20, '#38bdf8', 1.1);
           }
 
           this.game.network.sendPvPHit(remotePlayer.id, actualDmg, kbX, kbY);
@@ -12918,8 +12962,11 @@ class Player {
     this.bearFormMaxTimer = duration;
 
     // 50% mehr Leben während Bärengestalt
-    const baseMax = 100 + (this.skills?.hp || 0) * 15;
-    const targetMax = Math.round(baseMax * 1.5);
+    const hpPerPoint = PVP_CONFIG.HP_PER_SKILL_POINT ?? 15;
+    const baseHp = PVP_CONFIG.PLAYER_BASE_HP ?? 100;
+    const bearMult = PVP_CONFIG.BEAR_HP_MULTIPLIER ?? 1.5;
+    const baseMax = baseHp + (this.skills?.hp || 0) * hpPerPoint;
+    const targetMax = Math.round(baseMax * bearMult);
     const hpRatio = this.hp / Math.max(1, this.maxHp);
     this.maxHp = targetMax;
     this.hp = Math.round(targetMax * Math.max(0.3, hpRatio));
@@ -12948,7 +12995,9 @@ class Player {
     this.isBearForm = false;
     this.bearFormTimer = 0;
 
-    const baseMax = 100 + (this.skills?.hp || 0) * 15;
+    const hpPerPoint = PVP_CONFIG.HP_PER_SKILL_POINT ?? 15;
+    const baseHp = PVP_CONFIG.PLAYER_BASE_HP ?? 100;
+    const baseMax = baseHp + (this.skills?.hp || 0) * hpPerPoint;
     const hpRatio = this.hp / Math.max(1, this.maxHp);
     this.maxHp = baseMax;
     this.hp = Math.max(1, Math.min(this.maxHp, Math.round(baseMax * hpRatio)));
@@ -13003,9 +13052,12 @@ class Player {
 
     // Apply immediate attribute bonuses
     if (attribute === 'hp') {
-      const baseMax = 100 + this.skills.hp * 15;
-      const newMax = this.isBearForm ? Math.round(baseMax * 1.5) : baseMax;
-      const gain = this.isBearForm ? Math.round(15 * 1.5) : 15;
+      const hpPerPoint = PVP_CONFIG.HP_PER_SKILL_POINT ?? 15;
+      const baseHp = PVP_CONFIG.PLAYER_BASE_HP ?? 100;
+      const bearMult = PVP_CONFIG.BEAR_HP_MULTIPLIER ?? 1.5;
+      const baseMax = baseHp + this.skills.hp * hpPerPoint;
+      const newMax = this.isBearForm ? Math.round(baseMax * bearMult) : baseMax;
+      const gain = this.isBearForm ? Math.round(hpPerPoint * bearMult) : hpPerPoint;
       this.maxHp = newMax;
       this.hp = Math.min(this.maxHp, this.hp + gain);
       if (this.game && this.game.combat) {
@@ -13013,8 +13065,9 @@ class Player {
         this.game.combat.addHitSparks(this.x, this.y - 10, '#4ade80', 14);
       }
     } else if (attribute === 'melee') {
+      const dmgBonus = PVP_CONFIG.MELEE_DMG_PER_SKILL ?? 4;
       if (this.game && this.game.combat) {
-        this.game.combat.addFloatingText('⚔️ +4 Nahkampf-Schaden!', this.x, this.y - 24, '#f59e0b', 1.1);
+        this.game.combat.addFloatingText(`⚔️ +${dmgBonus} Nahkampf-Schaden!`, this.x, this.y - 24, '#f59e0b', 1.1);
         this.game.combat.addHitSparks(this.x, this.y - 10, '#f59e0b', 14);
       }
     } else if (attribute === 'range') {
@@ -13023,11 +13076,12 @@ class Player {
         this.game.combat.addHitSparks(this.x, this.y - 10, '#38bdf8', 14);
       }
     } else if (attribute === 'shield') {
-      const baseMax = COMBAT_CONFIG.SHIELD_MAX || 100;
-      this.shield.maxEnergy = baseMax + this.skills.shield * 15;
-      this.shield.energy = Math.min(this.shield.maxEnergy, this.shield.energy + 15);
+      const baseMax = PVP_CONFIG.SHIELD_MAX_ENERGY ?? 100;
+      const shieldBonus = PVP_CONFIG.SHIELD_PER_SKILL_POINT ?? 15;
+      this.shield.maxEnergy = baseMax + this.skills.shield * shieldBonus;
+      this.shield.energy = Math.min(this.shield.maxEnergy, this.shield.energy + shieldBonus);
       if (this.game && this.game.combat) {
-        this.game.combat.addFloatingText('🛡️ +15 Schild-Energie!', this.x, this.y - 24, '#06b6d4', 1.1);
+        this.game.combat.addFloatingText(`🛡️ +${shieldBonus} Schild-Energie!`, this.x, this.y - 24, '#06b6d4', 1.1);
         this.game.combat.addHitSparks(this.x, this.y - 10, '#06b6d4', 14);
       }
     }
@@ -18078,12 +18132,12 @@ class CombatManager {
 
         if (inRange) {
           hitAny = true;
-          let dmg = 25;
-          if (hitbox.type === 'slash2' || hitbox.type === 'bear_claw2') dmg = 35;
-          if (isThrust) dmg = 52;
-          if (isSpin) dmg = 68;
+          let dmg = PVP_CONFIG.MELEE_SLASH_1_DMG ?? 25;
+          if (hitbox.type === 'slash2' || hitbox.type === 'bear_claw2') dmg = PVP_CONFIG.MELEE_SLASH_2_DMG ?? 35;
+          if (isThrust) dmg = PVP_CONFIG.MELEE_THRUST_DMG ?? 52;
+          if (isSpin) dmg = PVP_CONFIG.MELEE_SPIN_DMG ?? 68;
 
-          const meleeBonus = (this.game?.player?.skills?.melee || 0) * 4;
+          const meleeBonus = (this.game?.player?.skills?.melee || 0) * (PVP_CONFIG.MELEE_DMG_PER_SKILL ?? 4);
           dmg += meleeBonus;
 
           if (hitbox.damageMultiplier) {
@@ -18102,7 +18156,8 @@ class CombatManager {
           if (remotePlayer.shieldActive) {
             this.addHitSparks(remotePlayer.x, remotePlayer.y, '#38bdf8', 16, 90);
             this.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 16, '#38bdf8');
-            dmg = Math.round(dmg * 0.2); // 80% Schadensreduktion
+            const reduction = PVP_CONFIG.SHIELD_MELEE_DAMAGE_REDUCTION ?? 0.80;
+            dmg = Math.round(dmg * (1 - reduction));
           } else {
             this.addHitSparks(remotePlayer.x, remotePlayer.y, '#ef4444', 12, 70);
             this.addFloatingText(`-${dmg}`, remotePlayer.x, remotePlayer.y - 14, '#f87171');
@@ -18344,13 +18399,14 @@ class CombatManager {
           if (remotePlayer.isDead || (remotePlayer.dimension && remotePlayer.dimension !== curDim)) continue;
 
           if (Math.hypot(remotePlayer.x - arrow.x, remotePlayer.y - arrow.y) <= (remotePlayer.radius + 6)) {
-            let dmg = arrow.isCharged ? 33 : 22;
+            let dmg = arrow.isCharged ? (PVP_CONFIG.ARROW_CHARGED_DMG ?? 33) : (PVP_CONFIG.ARROW_NORMAL_DMG ?? 22);
             const kb = arrow.isCharged ? 140 : 70;
 
             if (remotePlayer.shieldActive) {
               this.addHitSparks(arrow.x, arrow.y, '#38bdf8', 14, 80);
               this.addFloatingText('🛡️ GEBLOCKT!', remotePlayer.x, remotePlayer.y - 18, '#38bdf8');
-              dmg = 0;
+              const reduction = PVP_CONFIG.SHIELD_ARROW_DAMAGE_REDUCTION ?? 1.0;
+              dmg = Math.round(dmg * (1 - reduction));
             } else {
               this.addHitSparks(arrow.x, arrow.y, '#ef4444', 12, 70);
               this.addFloatingText(`-${dmg}`, remotePlayer.x, remotePlayer.y - 14, '#f87171');
