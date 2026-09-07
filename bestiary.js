@@ -1634,87 +1634,186 @@ export const BESTIARY_DATA = [
 
   {
     id: 'cave_stalker',
-    name: 'Schatten-Huscher',
-    title: 'Creeping Shadow Lurker',
+    name: 'Schatten-Goblin',
+    title: 'Creeping Cave Goblin',
     category: 'beast',
     categoryName: '🐺 Wilde Bestien',
     biome: 'Höhlensysteme & Dunkle Schlünde',
     biomeBadge: 'Höhle',
     badgeClass: 'badge-cave',
-    variants: ['Blutaugen-Schwarz (Standard)', 'Phantom-Grau (Selten)'],
-    scale: 0.65,
+    variants: ['Glimmaugen-Schwarz (Standard)', 'Moosrücken-Grün (Selten)'],
+    scale: 0.72,
     xpValue: 12,
     stats: { hp: 95, maxHp: 95, atk: 22, spd: 'Extrem schnell (230px/s)', rng: 'Nahkampf (Hit-and-Run)' },
-    behavior: 'Ein unheimlich schnelles, kleines Schattenwesen mit glühenden Schlitzaugen. Lauert am Rande der Finsternis, schnellt mit rasanter Geschwindigkeit auf sein Opfer zu, teilt einen Klauenhieb aus und huscht sofort wieder in die Dunkelheit zurück.',
-    counter: 'Den Ansturm mit erhobenem Schild abfangen und mit einem schnellen Konterschlag bestrafen, bevor es wieder in den Schatten flieht!',
-    lore: 'Bergarbeiter berichten von leisem Huschen über Decken und Felswände. Kurz bevor es zuschlägt, sieht man zwei brennende rote Augen in der Schwärze aufblitzen.',
+    behavior: 'Ein unheimlich flinker, kleiner Höhlen-Goblin mit spitzen Fledermausohren und riesigen, im Dunkeln gleißenden Augen. Lauert geduckt im Halbschatten, flitzt auf leisen Sohlen blitzschnell heran, stößt mit spitzen Klauendolchen zu und huscht sofort wieder kichernd in die Finsternis zurück.',
+    counter: 'Den Ansturm mit erhobenem Schild abfangen und mit einem schnellen Konterschlag bestrafen, bevor er wieder in den Schatten flieht!',
+    lore: 'Uralte Bergwerksstollen sind voll von ihren leisen Schritten. Wenn man in den tiefen Höhlen zwei tellergroße, goldgelb glühende Augen in der Schwärze aufblitzen sieht, sollte man den Schild heben.',
     render(ctx, cx, cy, time, state, hitFlash) {
       const isAttacking = state === 'attack';
-      const bob = Math.sin(time * 8) * (isAttacking ? 3 : 1.5);
+      const bob = Math.sin(time * 9) * (isAttacking ? 2.5 : 1.2);
+      const walkCycle = Math.sin(time * 12);
 
-      drawPaperShadow(ctx, cx, cy + 12, 11, 3.5);
+      drawPaperShadow(ctx, cx, cy + 12, 12, 4);
 
       if (hitFlash > 0) ctx.filter = 'brightness(2.4) saturate(0.2)';
 
-      // Schatten-Schweif / Rauch-Aura
-      for (let i = 0; i < 4; i++) {
-        const sOff = Math.sin(time * 6 + i) * 3;
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+      // Schatten-Aura / Rauch am Boden
+      for (let i = 0; i < 3; i++) {
+        const sOff = Math.sin(time * 5 + i * 2) * 3;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
         ctx.beginPath();
-        ctx.arc(cx - 6 + i * 4 + sOff, cy + 6 + bob, 4 + i * 0.8, 0, Math.PI * 2);
+        ctx.arc(cx - 5 + i * 5 + sOff, cy + 8 + bob, 4 + i * 0.7, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // 4 flinke, dünne Schatten-Krallenbeine
-      for (let i = -1; i <= 1; i += 2) {
-        const legStep = Math.sin(time * 12 + i * 2) * 4;
-        ctx.strokeStyle = '#05070e';
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.moveTo(cx + i * 4, cy + 2 + bob);
-        ctx.lineTo(cx + i * 11, cy - 2 + bob + legStep);
-        ctx.lineTo(cx + i * 13, cy + 10 + bob);
-        ctx.stroke();
+      // 1. Kleine, flinke Goblin-Beine (2 grüne Beine mit Klauen, kein Insekt!)
+      const leftLeg = walkCycle * 4;
+      const rightLeg = -walkCycle * 4;
 
-        // Spitze Klauen
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(cx + i * 13, cy + 10 + bob);
-        ctx.lineTo(cx + i * 15, cy + 12 + bob);
-        ctx.stroke();
-      }
+      ctx.fillStyle = '#4d7c0f'; // Goblin-Moosgrün
+      ctx.strokeStyle = '#1e3a0a';
+      ctx.lineWidth = 1.2;
 
-      // Geduckter, spitzer Schattenkörper
-      ctx.fillStyle = '#090d16';
+      // Linkes Bein + kleiner Fuß
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 2 + bob, 8, 5.5, 0, 0, Math.PI * 2);
+      ctx.roundRect(cx - 6, cy + 5 + bob + leftLeg * 0.5, 3.5, 7, 1.5);
+      ctx.fill();
+      ctx.stroke();
+      // Linker Fuß mit Zehenkrallen
+      ctx.beginPath();
+      ctx.ellipse(cx - 5.5, cy + 12 + bob + leftLeg * 0.5, 3, 1.5, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Glühende, unheimliche Augen (Rot-Gelb leuchtend)
-      const eyeGlow = 0.8 + Math.sin(time * 9) * 0.2;
-      ctx.fillStyle = `rgba(239, 68, 68, ${eyeGlow})`;
+      // Rechtes Bein + kleiner Fuß
       ctx.beginPath();
-      ctx.arc(cx - 3, cy + bob, 2.2, 0, Math.PI * 2);
-      ctx.arc(cx + 3, cy + bob, 2.2, 0, Math.PI * 2);
+      ctx.roundRect(cx + 2.5, cy + 5 + bob + rightLeg * 0.5, 3.5, 7, 1.5);
+      ctx.fill();
+      ctx.stroke();
+      // Rechter Fuß mit Zehenkrallen
+      ctx.beginPath();
+      ctx.ellipse(cx + 4, cy + 12 + bob + rightLeg * 0.5, 3, 1.5, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Pupillen-Kerne
-      ctx.fillStyle = '#fef08a';
+      // 2. Geduckter Goblin-Oberkörper (Hinterhalt-Haltung mit braunem Lederwams)
+      ctx.fillStyle = '#4d7c0f';
       ctx.beginPath();
-      ctx.arc(cx - 3, cy + bob, 1, 0, Math.PI * 2);
-      ctx.arc(cx + 3, cy + bob, 1, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy + 2 + bob, 7, 6, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Bei Angriff: rote Klauenstreifen
+      // Zerlumpter brauner Lederwams & Gürtel
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 1 + bob, 6.2, 4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(cx - 5.5, cy + 4 + bob, 11, 2.5);
+
+      // 3. Goblin-Kopf (grün, mit spitzem Kinn)
+      ctx.fillStyle = '#4d7c0f';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 2 + bob, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Fieses kleines Grinsen mit zwei weißen Hauzähnen
+      ctx.fillStyle = '#14532d';
+      ctx.beginPath();
+      ctx.arc(cx, cy + 1 + bob, 3, 0.2, Math.PI - 0.2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx - 2, cy + 1 + bob, 1.2, 1.8);
+      ctx.fillRect(cx + 0.8, cy + 1 + bob, 1.2, 1.8);
+
+      // 4. Lange spitze Goblin-Ohren (Charakteristisch für Kobolde / Goblins)
+      const earWiggle = Math.sin(time * 6) * 1.5;
+      ctx.fillStyle = '#65a30d'; // Helleres Goblin-Ohrgrün
+      ctx.strokeStyle = '#1e3a0a';
+      ctx.lineWidth = 1.1;
+
+      // Linkes langes spitzes Ohr
+      ctx.beginPath();
+      ctx.moveTo(cx - 4, cy - 3 + bob);
+      ctx.lineTo(cx - 15, cy - 6 + bob + earWiggle);
+      ctx.lineTo(cx - 5, cy + 1.5 + bob);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Rechtes langes spitzes Ohr
+      ctx.beginPath();
+      ctx.moveTo(cx + 4, cy - 3 + bob);
+      ctx.lineTo(cx + 15, cy - 6 + bob - earWiggle);
+      ctx.lineTo(cx + 5, cy + 1.5 + bob);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 5. RIESIGE GLÜHENDE AUGEN (Das Kern-Merkmal!)
+      const eyePulse = 0.85 + Math.sin(time * 8) * 0.15;
+      const eyeR = 3.8;
+
+      // Äußere Glüh-Aura
+      ctx.save();
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 12;
+
+      // Linkes großes Auge
+      ctx.fillStyle = `rgba(250, 204, 21, ${eyePulse})`;
+      ctx.beginPath();
+      ctx.arc(cx - 3.2, cy - 2.5 + bob, eyeR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rechtes großes Auge
+      ctx.beginPath();
+      ctx.arc(cx + 3.2, cy - 2.5 + bob, eyeR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Heller Pupillen-Kern (strahlend weiß-gelb)
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.arc(cx - 3.2, cy - 2.5 + bob, 1.8, 0, Math.PI * 2);
+      ctx.arc(cx + 3.2, cy - 2.5 + bob, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Vertikale Schlitz-Pupillen (Katzen-/Kobold-Look)
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(cx - 3.2, cy - 2.5 + bob, 0.7, 2.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 3.2, cy - 2.5 + bob, 0.7, 2.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // 6. Goblin-Arme & Schattenschlag
+      const armSwing = isAttacking ? 6 : Math.sin(time * 12) * 3;
+      ctx.strokeStyle = '#4d7c0f';
+      ctx.lineWidth = 1.8;
+
+      // Linker Arm
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy + 2 + bob);
+      ctx.lineTo(cx - 10, cy + 6 + bob - armSwing);
+      ctx.stroke();
+
+      // Rechter Arm mit geschwungenem Knochendolch
+      ctx.beginPath();
+      ctx.moveTo(cx + 5, cy + 2 + bob);
+      ctx.lineTo(cx + 10, cy + 5 + bob + armSwing);
+      ctx.stroke();
+
+      // Knochendolch in der rechten Hand
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(cx + 10, cy + 5 + bob + armSwing);
+      ctx.lineTo(cx + 16, cy + 1 + bob + armSwing);
+      ctx.stroke();
+
+      // Rote Klingenfunken bei Angriff
       if (isAttacking) {
-        ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
-        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
+        ctx.lineWidth = 1.6;
         ctx.beginPath();
-        ctx.moveTo(cx - 8, cy - 4);
-        ctx.lineTo(cx + 8, cy + 8);
-        ctx.moveTo(cx - 5, cy - 6);
-        ctx.lineTo(cx + 10, cy + 6);
+        ctx.moveTo(cx - 7, cy - 3);
+        ctx.lineTo(cx + 12, cy + 7);
         ctx.stroke();
       }
 

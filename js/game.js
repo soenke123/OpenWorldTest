@@ -918,6 +918,17 @@ class Game {
     this.canopyCtx.imageSmoothingEnabled = false;
   }
 
+  isCaveDimension() {
+    return (
+      this.currentDimension === DIMENSIONS.CAVES ||
+      this.currentDimension === DIMENSIONS.CAVES_L1 ||
+      this.currentDimension === DIMENSIONS.CAVES_DEEP ||
+      this.currentDimension === 'caves_l1' ||
+      this.currentDimension === 'caves_l2' ||
+      this.currentDimension === 'caves'
+    );
+  }
+
   switchDimension(targetDim, targetX, targetY) {
     if (targetDim === 'overworld') {
       this.map = this.overworldMap;
@@ -1093,7 +1104,7 @@ class Game {
         worldPrefix = '☁️ [Wolkenreich] ';
         this.biomeNameEl.style.color = '#f472b6';
         this.biomeNameEl.textContent = worldPrefix + (this.map.name || 'Rosa Wolkenmeer');
-      } else if (this.currentDimension === DIMENSIONS.CAVES) {
+      } else if (this.isCaveDimension()) {
         worldPrefix = '🪨 [Höhlenwelt] ';
         const cTheme = this.map.getTheme ? this.map.getTheme(tileX, tileY) : 'main';
         if (cTheme === 'snow') this.biomeNameEl.style.color = '#38bdf8';
@@ -1214,7 +1225,7 @@ class Game {
         lanternText = 'Lampions aus';
       }
 
-      if (this.currentDimension === DIMENSIONS.CAVES) {
+      if (this.isCaveDimension()) {
         lanternText = '🏮 Höhlenlampe an';
         lanternCol = '#fbbf24';
       }
@@ -1430,7 +1441,7 @@ class Game {
 
     if (this.currentDimension === DIMENSIONS.CLOUDS) {
       this.renderCloudDimension(this.camera.getVisibleTileBounds(), t);
-    } else if (this.currentDimension === DIMENSIONS.CAVES) {
+    } else if (this.isCaveDimension()) {
       this.renderCaveDimension(this.camera.getVisibleTileBounds(), t);
     } else {
       const { sunlight, sunset, night } = this.getDayNightFactors();
@@ -3351,25 +3362,74 @@ class Game {
           this.ctx.lineTo(px + 12, py + 11);
           this.ctx.stroke();
         }
-        else if (tile === TILES.CAVE_LADDER_DOWN || tile === TILES.CAVE_LADDER_UP) {
-          // Shaft hole with ladder
-          this.ctx.fillStyle = '#090d16';
-          this.ctx.fillRect(px + 2, py + 2, 12, 12);
+        else if (tile === TILES.CAVE_LADDER_DOWN) {
+          // 1. Gemauerter Steinschacht mit Abgangs-Holzleiter
+          this.ctx.fillStyle = '#1e293b';
+          this.ctx.fillRect(px + 1, py + 1, 14, 14);
+          this.ctx.fillStyle = '#020617';
+          this.ctx.fillRect(px + 3, py + 3, 10, 10);
 
-          this.ctx.strokeStyle = '#cbd5e1';
-          this.ctx.lineWidth = 1.5;
+          // Hölzerne Leiterholme
+          this.ctx.strokeStyle = '#92400e';
+          this.ctx.lineWidth = 1.6;
           this.ctx.beginPath();
-          this.ctx.moveTo(px + 4, py);
-          this.ctx.lineTo(px + 4, py + ts);
-          this.ctx.moveTo(px + 12, py);
-          this.ctx.lineTo(px + 12, py + ts);
-          this.ctx.moveTo(px + 4, py + 4);
-          this.ctx.lineTo(px + 12, py + 4);
-          this.ctx.moveTo(px + 4, py + 8);
-          this.ctx.lineTo(px + 12, py + 8);
-          this.ctx.moveTo(px + 4, py + 12);
-          this.ctx.lineTo(px + 12, py + 12);
+          this.ctx.moveTo(px + 4.5, py + 2);
+          this.ctx.lineTo(px + 4.5, py + 14);
+          this.ctx.moveTo(px + 11.5, py + 2);
+          this.ctx.lineTo(px + 11.5, py + 14);
+          // Sprossen
+          this.ctx.moveTo(px + 4.5, py + 4);
+          this.ctx.lineTo(px + 11.5, py + 4);
+          this.ctx.moveTo(px + 4.5, py + 8);
+          this.ctx.lineTo(px + 11.5, py + 8);
+          this.ctx.moveTo(px + 4.5, py + 12);
+          this.ctx.lineTo(px + 11.5, py + 12);
           this.ctx.stroke();
+
+          // Bernsteingoldener Abgangs-Indikator (Pulsierender Pfeil nach unten)
+          const arrowBob = Math.sin(t * 6) * 1.5;
+          this.ctx.fillStyle = '#f59e0b';
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 8, py + 9 + arrowBob);
+          this.ctx.lineTo(px + 6, py + 6 + arrowBob);
+          this.ctx.lineTo(px + 10, py + 6 + arrowBob);
+          this.ctx.closePath();
+          this.ctx.fill();
+        }
+        else if (tile === TILES.CAVE_LADDER_UP) {
+          // 2. Aufstiegs-Leitergerüst mit Himmelslicht
+          this.ctx.fillStyle = '#0f172a';
+          this.ctx.fillRect(px + 1, py + 1, 14, 14);
+
+          // Strahlendes Oberlicht am oberen Schachtrand
+          this.ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+          this.ctx.fillRect(px + 3, py + 2, 10, 4);
+
+          // Stabile Aufstiegsleiter
+          this.ctx.strokeStyle = '#e2e8f0';
+          this.ctx.lineWidth = 1.6;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 4.5, py + 2);
+          this.ctx.lineTo(px + 4.5, py + 14);
+          this.ctx.moveTo(px + 11.5, py + 2);
+          this.ctx.lineTo(px + 11.5, py + 14);
+          this.ctx.moveTo(px + 4.5, py + 4);
+          this.ctx.lineTo(px + 11.5, py + 4);
+          this.ctx.moveTo(px + 4.5, py + 8);
+          this.ctx.lineTo(px + 11.5, py + 8);
+          this.ctx.moveTo(px + 4.5, py + 12);
+          this.ctx.lineTo(px + 11.5, py + 12);
+          this.ctx.stroke();
+
+          // Cyanblauer Aufstiegs-Indikator (Pulsierender Pfeil nach oben)
+          const arrowBob = Math.sin(t * 6) * 1.5;
+          this.ctx.fillStyle = '#38bdf8';
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 8, py + 5 - arrowBob);
+          this.ctx.lineTo(px + 6, py + 8 - arrowBob);
+          this.ctx.lineTo(px + 10, py + 8 - arrowBob);
+          this.ctx.closePath();
+          this.ctx.fill();
         }
       }
     }
@@ -3458,7 +3518,7 @@ class Game {
     }
     if (this.remotePlayers) {
       for (const rp of this.remotePlayers.values()) {
-        if (!rp.isDead && rp.dimension === DIMENSIONS.CAVES) {
+        if (!rp.isDead && (rp.dimension === this.currentDimension || (this.isCaveDimension() && (rp.dimension === 'caves' || rp.dimension === 'caves_l1' || rp.dimension === 'caves_l2')))) {
           rp.render(this.ctx, t, 1.0);
         }
       }
@@ -3476,6 +3536,85 @@ class Game {
 
     // PASS 5: Dynamic Cavern Darkness Mask with Lantern & Crystal Light Holes
     this.renderCaveDarkness(bounds, t);
+
+    // PASS 6: Floating Interactive Prompts (Ladders & Exits rendered above darkness)
+    this.camera.apply(this.ctx);
+    this.renderCaveExitPrompts(bounds, t);
+    this.camera.release(this.ctx);
+  }
+
+  renderCaveExitPrompts(bounds, t) {
+    if (!this.map || !this.map.exits) return;
+    const px = this.player.x;
+    const py = this.player.y;
+
+    for (const exit of this.map.exits) {
+      const exCenter = exit.x * TILE_SIZE + 8;
+      const eyCenter = exit.y * TILE_SIZE + 8;
+      const dist = Math.hypot(px - exCenter, py - eyCenter);
+
+      if (dist <= 64) {
+        const bob = Math.sin(t * 5) * 2;
+        const alpha = Math.min(1.0, Math.max(0, (64 - dist) / 24));
+
+        let icon = '🚪';
+        let text = exit.label || 'Ausgang';
+        let bgCol = 'rgba(15, 23, 42, 0.92)';
+        let borderCol = '#94a3b8';
+        let textCol = '#f8fafc';
+
+        if (exit.targetDim === 'caves_l2') {
+          icon = '⬇️';
+          text = 'LEITER ZU EBENE -2';
+          bgCol = 'rgba(30, 27, 75, 0.94)';
+          borderCol = '#818cf8';
+          textCol = '#e0e7ff';
+        } else if (exit.targetDim === 'caves_l1') {
+          icon = '⬆️';
+          text = 'LEITER ZU EBENE -1';
+          bgCol = 'rgba(20, 83, 45, 0.94)';
+          borderCol = '#4ade80';
+          textCol = '#dcfce7';
+        } else if (exit.targetDim === 'overworld') {
+          icon = '☀️';
+          text = 'AUFSTIEG ZUR OBERWELT';
+          bgCol = 'rgba(67, 20, 7, 0.94)';
+          borderCol = '#f59e0b';
+          textCol = '#fef3c7';
+        }
+
+        this.ctx.save();
+        this.ctx.globalAlpha = alpha;
+        this.ctx.font = 'bold 9px "Press Start 2P", monospace, sans-serif';
+        const badgeText = `${icon} ${text}`;
+        const textWidth = this.ctx.measureText(badgeText).width;
+        const boxW = textWidth + 14;
+        const boxH = 18;
+        const boxX = exCenter - boxW / 2;
+        const boxY = eyCenter - 22 + bob;
+
+        // Shadow & Pill
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        this.ctx.beginPath();
+        this.ctx.roundRect(boxX + 1, boxY + 1.5, boxW, boxH, 4);
+        this.ctx.fill();
+
+        this.ctx.fillStyle = bgCol;
+        this.ctx.strokeStyle = borderCol;
+        this.ctx.lineWidth = 1.3;
+        this.ctx.beginPath();
+        this.ctx.roundRect(boxX, boxY, boxW, boxH, 4);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Badge Text
+        this.ctx.fillStyle = textCol;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(badgeText, exCenter, boxY + boxH / 2);
+        this.ctx.restore();
+      }
+    }
   }
 
   renderGlowCrystal(px, py, t, tx, ty, theme = 'main') {
@@ -3732,6 +3871,30 @@ class Game {
           this.ctx.arc(hx, hy, 58, 0, Math.PI * 2);
           this.ctx.fill();
         }
+        else if (this.map.getGroundTile(x, y) === TILES.CAVE_LADDER_DOWN) {
+          const lx = x * TILE_SIZE + 8;
+          const ly = y * TILE_SIZE + 8;
+          const lGrad = this.ctx.createRadialGradient(lx, ly, 4, lx, ly, 65);
+          lGrad.addColorStop(0, 'rgba(251, 191, 36, 0.55)');
+          lGrad.addColorStop(0.4, 'rgba(245, 158, 11, 0.22)');
+          lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          this.ctx.fillStyle = lGrad;
+          this.ctx.beginPath();
+          this.ctx.arc(lx, ly, 65, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+        else if (this.map.getGroundTile(x, y) === TILES.CAVE_LADDER_UP) {
+          const lx = x * TILE_SIZE + 8;
+          const ly = y * TILE_SIZE + 8;
+          const lGrad = this.ctx.createRadialGradient(lx, ly, 4, lx, ly, 65);
+          lGrad.addColorStop(0, 'rgba(56, 189, 248, 0.55)');
+          lGrad.addColorStop(0.4, 'rgba(129, 140, 248, 0.22)');
+          lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          this.ctx.fillStyle = lGrad;
+          this.ctx.beginPath();
+          this.ctx.arc(lx, ly, 65, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
       }
     }
   }
@@ -3845,6 +4008,18 @@ class Game {
           cCtx.fillStyle = hGrad;
           cCtx.beginPath();
           cCtx.arc(hx, hy, 56, 0, Math.PI * 2);
+          cCtx.fill();
+        }
+        else if (tile === TILES.CAVE_LADDER_DOWN || tile === TILES.CAVE_LADDER_UP) {
+          const lx = x * TILE_SIZE + 8;
+          const ly = y * TILE_SIZE + 8;
+          const lGrad = cCtx.createRadialGradient(lx, ly, 8, lx, ly, 64);
+          lGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          lGrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
+          lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          cCtx.fillStyle = lGrad;
+          cCtx.beginPath();
+          cCtx.arc(lx, ly, 64, 0, Math.PI * 2);
           cCtx.fill();
         }
       }

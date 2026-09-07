@@ -58,11 +58,9 @@ export class CaveMap {
       return 'crystal';
     }
     if (this.id === 'caves_l2' || this.id === 'sub_crystal') {
-      if (y >= 125) return 'desert'; // Magma / Basalt / Fels
-      if (x < 110 && y < 125) return 'forest'; // Deep moss catacomb
-      if (x >= 170 && y < 100) return 'snow'; // Frozen glacial abyss
-      if (x >= 210 && y >= 70 && y <= 130) return 'void'; // Deep void chasm
-      return 'crystal'; // Äther-crystal palace
+      if (y >= 120) return 'desert'; // Magma / Basalt / Glutkammer
+      if (x >= 180) return 'void';   // Astraler Urleeren- & Frostschlund
+      return 'crystal';              // Äther-Kristallgrotte
     }
     if (this.id === 'snow_grotto') return 'snow';
     if (this.id === 'void_grotto') return 'void';
@@ -235,7 +233,7 @@ export class CaveMap {
   }
 
   // ---------------------------------------------------------------------------------------------------
-  // EBENE -1: HÖHLEN & GROTTEN (290x200) – Direkt von der Oberwelt erreichbar
+  // EBENE -1: HÖHLEN & GROTTEN (290x200) – 3 RIESIGE HÖHLENSYSTEME UNTER DER GESAMTEN KARTE
   // ---------------------------------------------------------------------------------------------------
   generateCavesL1() {
     // 1. Hole-Entrances sammeln
@@ -279,86 +277,117 @@ export class CaveMap {
       ];
     }
 
-    // 2. Kammern um jeden Höhleneingang aushöhlen
-    for (const ent of entrances) {
-      this.carveRoom(ent.x, ent.y, 6, 5, 0.2);
-    }
+    // ==========================================================================================
+    // 2. DIE 3 GROSSEN HÖHLENSYSTEME IN EBENE -1 (Spannen unter der gesamten Karte)
+    // ==========================================================================================
 
-    // 3. Regionale Hubs miteinander durch Tunnel vernetzen
-    for (let i = 0; i < entrances.length; i++) {
-      let nearestDist = Infinity;
-      let nearestIdx = -1;
-      for (let j = 0; j < entrances.length; j++) {
-        if (i === j) continue;
-        const d = Math.hypot(entrances[i].x - entrances[j].x, entrances[i].y - entrances[j].y);
-        if (d < nearestDist) {
-          nearestDist = d;
-          nearestIdx = j;
-        }
-      }
-      if (nearestIdx !== -1 && nearestDist <= 48) {
-        this.carveTunnel(entrances[i].x, entrances[i].y, entrances[nearestIdx].x, entrances[nearestIdx].y, 2.7);
-      }
-    }
+    // KOMPLEX 1: MOOS- & URALT-STOLLEN (Nordwesten bis Zentrum)
+    this.carveRoom(55, 48, 22, 16, 0.2);     // Westliche Mooshalle
+    this.carveRoom(70, 72, 22, 16, 0.2);     // Grasland-Kaverne
+    this.carveRoom(45, 32, 18, 14, 0.18);    // Spawn-Untergrund
+    this.carveRoom(125, 75, 26, 18, 0.22);   // Große Seenhalle im Zentrum
+    this.carveTunnel(45, 32, 55, 48, 4.8);
+    this.carveTunnel(55, 48, 70, 72, 5.0);
+    this.carveTunnel(70, 72, 125, 75, 5.0);
+    this.carveTunnel(55, 48, 125, 75, 4.8);
 
-    // 4. Zentraler Unterirdischer See (Große Halle bei 145, 85)
-    const lakeCenter = { x: 145, y: 85 };
-    this.carveRoom(lakeCenter.x, lakeCenter.y, 22, 15, 0.22);
-
-    // Unterirdischen See füllen mit Inseln
-    for (let dy = -9; dy <= 9; dy++) {
-      for (let dx = -14; dx <= 14; dx++) {
+    // Unterirdischer See mit Trittstein-Inseln in der Seenhalle (125, 75)
+    const lakeCenter = { x: 125, y: 75 };
+    for (let dy = -8; dy <= 8; dy++) {
+      for (let dx = -13; dx <= 13; dx++) {
         const lx = lakeCenter.x + dx;
         const ly = lakeCenter.y + dy;
         if (this.isValid(lx, ly) && this.ground[ly][lx] === TILES.CAVE_FLOOR) {
-          if (Math.hypot(dx / 14, dy / 9) <= 0.82) {
+          if (Math.hypot(dx / 13, dy / 8) <= 0.82) {
             this.ground[ly][lx] = TILES.CAVE_WATER;
           }
         }
       }
     }
-    // Trittstein-Inseln im See
     this.ground[lakeCenter.y][lakeCenter.x] = TILES.CAVE_FLOOR;
     this.ground[lakeCenter.y - 1][lakeCenter.x + 2] = TILES.CAVE_FLOOR;
     this.ground[lakeCenter.y + 1][lakeCenter.x - 3] = TILES.CAVE_FLOOR;
     this.ground[lakeCenter.y][lakeCenter.x + 6] = TILES.CAVE_FLOOR;
     this.ground[lakeCenter.y][lakeCenter.x - 6] = TILES.CAVE_FLOOR;
 
-    // 5. Haupt-Tunnel von allen 5 Regionen zum Zentralen See
-    this.carveTunnel(70, 72, lakeCenter.x, lakeCenter.y, 3.2);       // Grasland -> See
-    this.carveTunnel(70, 168, lakeCenter.x, lakeCenter.y, 3.2);      // Wüste -> See
-    this.carveTunnel(197, 44, lakeCenter.x, lakeCenter.y, 3.2);      // Schnee -> See
-    this.carveTunnel(191, 144, lakeCenter.x, lakeCenter.y, 3.2);     // Sumpf -> See
-    this.carveTunnel(243, 106, lakeCenter.x, lakeCenter.y, 3.0);     // Void -> See
-    this.carveTunnel(93, 156, 168, 152, 2.8);                       // Süd-Bypass (Wüste <-> Sumpf)
+    // KOMPLEX 2: GLUT- & BASALT-CANYON (Südwesten bis Süden)
+    this.carveRoom(75, 165, 26, 18, 0.25);   // Magma- & Basalthalle
+    this.carveRoom(40, 155, 20, 15, 0.22);   // Dünen-Kluft
+    this.carveRoom(95, 165, 22, 16, 0.22);   // Sandstein-Grotte
+    this.carveRoom(175, 155, 24, 16, 0.22);  // Moor-Gewölbe
+    this.carveRoom(215, 165, 20, 15, 0.2);   // Teerpfuhl-Kaverne
+    this.carveTunnel(40, 155, 75, 165, 4.8);
+    this.carveTunnel(75, 165, 95, 165, 5.0);
+    this.carveTunnel(95, 165, 175, 155, 4.8);
+    this.carveTunnel(175, 155, 215, 165, 4.8);
 
-    // 6. Fünf Abgänge zu Ebene -2 (Tiefe Höhlenwelt) mit Leitern nach unten
+    // KOMPLEX 3: GLAZIALER STERNENABGRUND (Nordosten bis Osten)
+    this.carveRoom(225, 50, 26, 18, 0.2);    // Großer Gletscher-Palast
+    this.carveRoom(255, 36, 20, 15, 0.18);   // Nordkap-Eisdom
+    this.carveRoom(195, 45, 22, 15, 0.2);    // Eispass-Halle
+    this.carveRoom(245, 95, 24, 16, 0.22);   // Astraler Sternenschlund
+    this.carveTunnel(195, 45, 225, 50, 4.8);
+    this.carveTunnel(225, 50, 255, 36, 4.8);
+    this.carveTunnel(225, 50, 245, 95, 4.8);
+
+    // 3 GROSSE VERBINDUNGS-AUTOBAHNEN (Zwischen den 3 Komplexen)
+    this.carveTunnel(70, 72, 75, 165, 4.5);   // Komplex 1 <-> Komplex 2 (Nordwest nach Südwest)
+    this.carveTunnel(125, 75, 195, 45, 4.5);  // Komplex 1 <-> Komplex 3 (Zentrum nach Nordost)
+    this.carveTunnel(175, 155, 245, 95, 4.5); // Komplex 2 <-> Komplex 3 (Süd nach Ost)
+
+    // Alle 26 Oberwelt-Löcher mit großzügigen Räumen und Anbindungen versehen
+    for (const ent of entrances) {
+      this.carveRoom(ent.x, ent.y, 8, 7, 0.15);
+      // Nächsten Komplexpunkt suchen und anbinden
+      const hubs = [
+        { x: 55, y: 48 }, { x: 70, y: 72 }, { x: 125, y: 75 },
+        { x: 75, y: 165 }, { x: 95, y: 165 }, { x: 175, y: 155 },
+        { x: 225, y: 50 }, { x: 195, y: 45 }, { x: 245, y: 95 }
+      ];
+      let closestHub = hubs[0];
+      let minD = Infinity;
+      for (const h of hubs) {
+        const d = Math.hypot(ent.x - h.x, ent.y - h.y);
+        if (d < minD) {
+          minD = d;
+          closestHub = h;
+        }
+      }
+      this.carveTunnel(ent.x, ent.y, closestHub.x, closestHub.y, 3.8);
+    }
+
+    // ==========================================================================================
+    // 3. GENAU DREI LEITERN NACH UNTEN (Zu den 3 Sanktuarien in Ebene -2)
+    // ==========================================================================================
     const deepLadders = [
-      { x: 145, y: 105, label: 'Abstieg zur Äther-Kristall-Kammer (Ebene -2)' },
-      { x: 55,  y: 48,  label: 'Abstieg in die Moos-Katakomben (Ebene -2)' },
-      { x: 65,  y: 165, label: 'Abstieg in die Magma-Kluft (Ebene -2)' },
-      { x: 220, y: 45,  label: 'Abstieg in den Frostpalast-Schacht (Ebene -2)' },
-      { x: 200, y: 155, label: 'Abstieg in die Tiefensumpf-Krypta (Ebene -2)' }
+      { x: 65,  y: 55,  chamber: 'crystal_sanctuary', label: '⬇️ Leiter zur Äther-Kristallgrotte (Ebene -2)' },
+      { x: 75,  y: 165, chamber: 'magma_sanctuary',   label: '⬇️ Leiter zur Magmakammer (Ebene -2)' },
+      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬇️ Leiter zum Astralen Sternenschlund (Ebene -2)' }
     ];
 
     for (const dl of deepLadders) {
-      this.carveRoom(dl.x, dl.y, 6, 5, 0.2);
+      this.carveRoom(dl.x, dl.y, 8, 7, 0.15);
     }
 
-    // 7. Fünf Schreine in Ebene -1 (Thematisch über die Biome verteilt)
+    // ==========================================================================================
+    // 4. FÜNF SCHREINE IN EBENE -1
+    // ==========================================================================================
     const shrinesL1 = [
-      { x: 145, y: 73,  name: 'Schrein des Tiefenwassers' },
-      { x: 50,  y: 40,  name: 'Schrein des Verborgenen Mooses' },
-      { x: 75,  y: 175, name: 'Schrein der Sandstein-Tiefen' },
-      { x: 235, y: 35,  name: 'Schrein der Ewigen Kälte' },
-      { x: 255, y: 95,  name: 'Schrein der Astralen Stille' }
+      { x: 125, y: 64,  name: 'Schrein des Tiefenwassers' },
+      { x: 45,  y: 44,  name: 'Schrein des Verborgenen Mooses' },
+      { x: 82,  y: 176, name: 'Schrein der Sandstein-Tiefen' },
+      { x: 235, y: 38,  name: 'Schrein der Ewigen Kälte' },
+      { x: 252, y: 98,  name: 'Schrein der Astralen Stille' }
     ];
 
     for (const s of shrinesL1) {
-      this.carveRoom(s.x, s.y, 6, 5, 0.15);
+      this.carveRoom(s.x, s.y, 7, 6, 0.15);
     }
 
-    // 8. JETZT nach allen Tunnelaushöhlungen die Lichtschächte & Exits einprägen (verhindert Überschreiben)
+    // ==========================================================================================
+    // 5. OBJEKTE & EXITS EINPRÄGEN
+    // ==========================================================================================
+    // Lichtschächte zur Oberwelt
     for (const ent of entrances) {
       this.ground[ent.y][ent.x] = TILES.CAVE_HOLE_EXIT;
       this.exits.push({
@@ -374,6 +403,7 @@ export class CaveMap {
       this.placeTorchIfFloor(ent.x + 2, ent.y);
     }
 
+    // Leitern nach unten zu Ebene -2
     for (const dl of deepLadders) {
       this.ground[dl.y][dl.x] = TILES.CAVE_LADDER_DOWN;
       this.exits.push({
@@ -382,13 +412,14 @@ export class CaveMap {
         targetDim: 'caves_l2',
         targetX: dl.x,
         targetY: dl.y,
-        chamber: 'deep_caves',
+        chamber: dl.chamber,
         label: dl.label
       });
       this.placeTorchIfFloor(dl.x - 2, dl.y);
       this.placeTorchIfFloor(dl.x + 2, dl.y);
     }
 
+    // Schreine
     for (const s of shrinesL1) {
       this.ground[s.y][s.x] = TILES.CAVE_FLOOR;
       this.objects[s.y][s.x] = OBJECTS.SHRINE;
@@ -397,72 +428,71 @@ export class CaveMap {
       this.placeTorchIfFloor(s.x + 2, s.y);
     }
 
-    // 9. Dekorationen (Tropfsteine, Kristalle, Leuchtpilze, Wandfackeln)
+    // Dekorationen
     this.decorateCaves();
   }
 
   // ---------------------------------------------------------------------------------------------------
-  // EBENE -2: TIEFE KRISTALL- & MAGMAHÖHLEN (290x200) – Unterhalb von Ebene -1
+  // EBENE -2: TIEFE SANCTUARIEN (290x200) – 3 Besondere kleine Höhlen mit jeweils einem Schrein
   // ---------------------------------------------------------------------------------------------------
   generateCavesL2() {
-    // 1. Die fünf Aufstiegsleitern zu Ebene -1 (exakt identische Koordinaten)
-    const upLadders = [
-      { x: 145, y: 105, label: 'Aufgang zur Haupthalle (Ebene -1)' },
-      { x: 55,  y: 48,  label: 'Aufgang zu den Moosgrotten (Ebene -1)' },
-      { x: 65,  y: 165, label: 'Aufgang zur Sandstein-Kluft (Ebene -1)' },
-      { x: 220, y: 45,  label: 'Aufgang zum Froststollen (Ebene -1)' },
-      { x: 200, y: 155, label: 'Aufgang zur Moor-Kuhle (Ebene -1)' }
-    ];
-
-    for (const ul of upLadders) {
-      this.carveRoom(ul.x, ul.y, 7, 5, 0.2);
-    }
-
-    // 2. Große Kristall-Zentralkammer (Äther-Kristallpalast)
-    const crystalPalace = { x: 145, y: 88 };
-    this.carveRoom(crystalPalace.x, crystalPalace.y, 24, 16, 0.18);
-
-    // Biolumineszierender Kristallpool im Zentrum
-    for (let dy = -4; dy <= 4; dy++) {
-      for (let dx = -7; dx <= 7; dx++) {
-        const px = crystalPalace.x + dx;
-        const py = crystalPalace.y + 4 + dy;
-        if (this.isValid(px, py) && Math.hypot(dx / 7, dy / 4) <= 0.85) {
+    // 1. SANKTUM 1: DIE ÄTHER-KRISTALLGROTTE (bei 65, 55)
+    // Reached via Leiter 1 von (65, 55)
+    this.carveRoom(65, 55, 12, 10, 0.12);
+    // Biolumineszierender Kristallpool
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const px = 65 + dx;
+        const py = 59 + dy;
+        if (this.isValid(px, py) && Math.hypot(dx / 4, dy / 2) <= 0.8) {
           this.ground[py][px] = TILES.CAVE_WATER;
         }
       }
     }
+    // Glühkristalle rund um das Sanktum
+    const crystalSpots = [
+      { x: 58, y: 52 }, { x: 72, y: 52 }, { x: 57, y: 57 }, { x: 73, y: 57 },
+      { x: 61, y: 62 }, { x: 69, y: 62 }
+    ];
+    for (const cs of crystalSpots) {
+      if (this.isValid(cs.x, cs.y) && this.ground[cs.y][cs.x] === TILES.CAVE_FLOOR) {
+        this.objects[cs.y][cs.x] = OBJECTS.GLOW_CRYSTAL;
+      }
+    }
 
-    // 3. Südwestliche Magma- und Obsidianhallen
-    const magmaChamber = { x: 72, y: 170 };
-    this.carveRoom(magmaChamber.x, magmaChamber.y, 18, 13, 0.25);
+    // 2. SANKTUM 2: DIE MAGMA- & OBSIDIANKAMMER (bei 75, 165)
+    // Reached via Leiter 2 von (75, 165)
+    this.carveRoom(75, 165, 13, 11, 0.14);
+    const magmaGlowSpots = [
+      { x: 67, y: 161 }, { x: 83, y: 161 }, { x: 66, y: 168 }, { x: 84, y: 168 },
+      { x: 71, y: 173 }, { x: 79, y: 173 }
+    ];
+    for (const ms of magmaGlowSpots) {
+      if (this.isValid(ms.x, ms.y) && this.ground[ms.y][ms.x] === TILES.CAVE_FLOOR) {
+        this.objects[ms.y][ms.x] = OBJECTS.GLOW_CRYSTAL;
+      }
+    }
 
-    // 4. Nordöstliche Glaziale Abgrund-Kammer
-    const frostAbyss = { x: 225, y: 45 };
-    this.carveRoom(frostAbyss.x, frostAbyss.y, 17, 12, 0.2);
+    // 3. SANKTUM 3: DER ASTRALE URLEEREN-SCHLUND (bei 225, 50)
+    // Reached via Leiter 3 von (225, 50)
+    this.carveRoom(225, 50, 13, 11, 0.14);
+    const voidGlowSpots = [
+      { x: 217, y: 46 }, { x: 233, y: 46 }, { x: 216, y: 54 }, { x: 234, y: 54 },
+      { x: 221, y: 58 }, { x: 229, y: 58 }
+    ];
+    for (const vs of voidGlowSpots) {
+      if (this.isValid(vs.x, vs.y) && this.ground[vs.y][vs.x] === TILES.CAVE_FLOOR) {
+        this.objects[vs.y][vs.x] = OBJECTS.GLOW_CRYSTAL;
+      }
+    }
 
-    // 5. Südöstliche Versunkene Krypta
-    const sunkenCrypt = { x: 195, y: 160 };
-    this.carveRoom(sunkenCrypt.x, sunkenCrypt.y, 16, 12, 0.2);
-
-    // 6. Östliche Astrale Urleeren-Kluft
-    const voidAbyss = { x: 245, y: 95 };
-    this.carveRoom(voidAbyss.x, voidAbyss.y, 18, 13, 0.22);
-
-    // 7. Wandelgänge & tiefe Tunnel zwischen den Großhallen
-    this.carveTunnel(55, 48, crystalPalace.x, crystalPalace.y, 2.9);
-    this.carveTunnel(65, 165, magmaChamber.x, magmaChamber.y, 3.0);
-    this.carveTunnel(magmaChamber.x, magmaChamber.y, crystalPalace.x, crystalPalace.y, 3.0);
-    this.carveTunnel(frostAbyss.x, frostAbyss.y, crystalPalace.x, crystalPalace.y, 2.9);
-    this.carveTunnel(sunkenCrypt.x, sunkenCrypt.y, crystalPalace.x, crystalPalace.y, 2.9);
-    this.carveTunnel(voidAbyss.x, voidAbyss.y, crystalPalace.x, crystalPalace.y, 3.0);
-    this.carveTunnel(magmaChamber.x, magmaChamber.y, sunkenCrypt.x, sunkenCrypt.y, 2.7);
-
-    // 8. Drei Uralte Tiefenschreine in Ebene -2
+    // ==========================================================================================
+    // DIE DREI URALTEN TIEFENSCHREINE IN EBENE -2 (Ein Schrein in jeder besonderen Grotte!)
+    // ==========================================================================================
     const shrinesL2 = [
-      { x: crystalPalace.x, y: crystalPalace.y - 8, name: 'Schrein des Äther-Kristalls' },
-      { x: magmaChamber.x + 4, y: magmaChamber.y,    name: 'Schrein der Magma-Urkraft' },
-      { x: voidAbyss.x + 3,    y: voidAbyss.y - 1,   name: 'Schrein des Tiefsten Vergessens' }
+      { x: 65,  y: 50,  name: 'Schrein des Äther-Kristalls' },
+      { x: 75,  y: 159, name: 'Schrein der Magma-Urkraft' },
+      { x: 225, y: 44,  name: 'Schrein des Tiefsten Vergessens' }
     ];
 
     for (const s of shrinesL2) {
@@ -475,7 +505,15 @@ export class CaveMap {
       }
     }
 
-    // 9. JETZT nach allen Tunneln die Leitern nach oben zu Ebene -1 einprägen
+    // ==========================================================================================
+    // DIE DREI LEITERN NACH OBEN (Exakt korrespondierend zu Ebene -1)
+    // ==========================================================================================
+    const upLadders = [
+      { x: 65,  y: 55,  chamber: 'crystal_sanctuary', label: '⬆️ Leiter zum Moos-Stollen (Ebene -1)' },
+      { x: 75,  y: 165, chamber: 'magma_sanctuary',   label: '⬆️ Leiter zum Basalt-Canyon (Ebene -1)' },
+      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬆️ Leiter zum Gletscher-Palast (Ebene -1)' }
+    ];
+
     for (const ul of upLadders) {
       this.ground[ul.y][ul.x] = TILES.CAVE_LADDER_UP;
       this.exits.push({
@@ -484,14 +522,14 @@ export class CaveMap {
         targetDim: 'caves_l1',
         targetX: ul.x,
         targetY: ul.y,
-        chamber: 'upper_caves',
+        chamber: ul.chamber,
         label: ul.label
       });
       this.placeTorchIfFloor(ul.x - 2, ul.y);
       this.placeTorchIfFloor(ul.x + 2, ul.y);
     }
 
-    // 10. Tiefen-Dekoration
+    // Tiefen-Dekoration (leuchtende Pilze & Fackeln nur in den 3 Sanktuarien)
     this.decorateCaves(true);
   }
 

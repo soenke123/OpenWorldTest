@@ -1532,9 +1532,12 @@ export class Player {
         }
       }
       // 3. Lichtschacht oder Leiter in Höhlen (Ebene -1 oder Ebene -2)
-      else if (this.game && (this.game.currentDimension === 'caves' || this.game.currentDimension === 'caves_l1' || this.game.currentDimension === 'caves_l2')) {
+      else if (this.game && (this.game.isCaveDimension ? this.game.isCaveDimension() : (this.game.currentDimension === 'caves' || this.game.currentDimension === 'caves_l1' || this.game.currentDimension === 'caves_l2' || this.game.currentDimension === 'caves_deep'))) {
         if (this.map.exits) {
-          const exit = this.map.exits.find(e => e.x === curTileX && e.y === curTileY);
+          const exit = this.map.exits.find(e =>
+            (e.x === curTileX && e.y === curTileY) ||
+            Math.hypot(this.x - (e.x * TILE_SIZE + 8), this.y - (e.y * TILE_SIZE + 8)) <= 18
+          );
           if (exit) {
             const tType = exit.targetDim === 'overworld' ? 'cave_exit' : 'ladder';
             let targetX = exit.targetX * TILE_SIZE + 8;

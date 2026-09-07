@@ -348,11 +348,46 @@ export class Minimap {
         }
 
         // Ladder / Exit indicators in caves
-        if (tile === 33 || tile === 34 || tile === 35) {
+        if (tile === 33) {
+          // Lichtschacht zur Oberwelt (Goldener Sonnenkreis)
           const lx = Math.floor(x * sX);
           const ly = Math.floor(y * sY);
-          targetCtx.fillStyle = (tile === 33) ? '#fef08a' : ((tile === 34) ? '#c084fc' : '#38bdf8');
-          targetCtx.fillRect(lx - 1, ly - 1, 3, 3);
+          targetCtx.fillStyle = '#f59e0b';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 3.0, 0, Math.PI * 2);
+          targetCtx.fill();
+          targetCtx.fillStyle = '#fef08a';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 1.8, 0, Math.PI * 2);
+          targetCtx.fill();
+        } else if (tile === 34) {
+          // Leiter nach unten zu Ebene -2 (Leuchtender violetter Abgangs-Diamant)
+          const lx = Math.floor(x * sX);
+          const ly = Math.floor(y * sY);
+          targetCtx.fillStyle = '#4c1d95';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+          targetCtx.fill();
+          targetCtx.fillStyle = '#c084fc';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 2.2, 0, Math.PI * 2);
+          targetCtx.fill();
+          targetCtx.fillStyle = '#ffffff';
+          targetCtx.fillRect(lx - 0.5, ly - 0.5, 1.5, 1.5);
+        } else if (tile === 35) {
+          // Leiter nach oben zu Ebene -1 (Leuchtender cyanblauer Aufstiegs-Diamant)
+          const lx = Math.floor(x * sX);
+          const ly = Math.floor(y * sY);
+          targetCtx.fillStyle = '#0369a1';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+          targetCtx.fill();
+          targetCtx.fillStyle = '#38bdf8';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 2.2, 0, Math.PI * 2);
+          targetCtx.fill();
+          targetCtx.fillStyle = '#ffffff';
+          targetCtx.fillRect(lx - 0.5, ly - 0.5, 1.5, 1.5);
         }
       }
     }

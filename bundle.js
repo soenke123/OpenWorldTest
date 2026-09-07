@@ -3556,87 +3556,186 @@ const BESTIARY_DATA = [
 
   {
     id: 'cave_stalker',
-    name: 'Schatten-Huscher',
-    title: 'Creeping Shadow Lurker',
+    name: 'Schatten-Goblin',
+    title: 'Creeping Cave Goblin',
     category: 'beast',
     categoryName: '🐺 Wilde Bestien',
     biome: 'Höhlensysteme & Dunkle Schlünde',
     biomeBadge: 'Höhle',
     badgeClass: 'badge-cave',
-    variants: ['Blutaugen-Schwarz (Standard)', 'Phantom-Grau (Selten)'],
-    scale: 0.65,
+    variants: ['Glimmaugen-Schwarz (Standard)', 'Moosrücken-Grün (Selten)'],
+    scale: 0.72,
     xpValue: 12,
     stats: { hp: 95, maxHp: 95, atk: 22, spd: 'Extrem schnell (230px/s)', rng: 'Nahkampf (Hit-and-Run)' },
-    behavior: 'Ein unheimlich schnelles, kleines Schattenwesen mit glühenden Schlitzaugen. Lauert am Rande der Finsternis, schnellt mit rasanter Geschwindigkeit auf sein Opfer zu, teilt einen Klauenhieb aus und huscht sofort wieder in die Dunkelheit zurück.',
-    counter: 'Den Ansturm mit erhobenem Schild abfangen und mit einem schnellen Konterschlag bestrafen, bevor es wieder in den Schatten flieht!',
-    lore: 'Bergarbeiter berichten von leisem Huschen über Decken und Felswände. Kurz bevor es zuschlägt, sieht man zwei brennende rote Augen in der Schwärze aufblitzen.',
+    behavior: 'Ein unheimlich flinker, kleiner Höhlen-Goblin mit spitzen Fledermausohren und riesigen, im Dunkeln gleißenden Augen. Lauert geduckt im Halbschatten, flitzt auf leisen Sohlen blitzschnell heran, stößt mit spitzen Klauendolchen zu und huscht sofort wieder kichernd in die Finsternis zurück.',
+    counter: 'Den Ansturm mit erhobenem Schild abfangen und mit einem schnellen Konterschlag bestrafen, bevor er wieder in den Schatten flieht!',
+    lore: 'Uralte Bergwerksstollen sind voll von ihren leisen Schritten. Wenn man in den tiefen Höhlen zwei tellergroße, goldgelb glühende Augen in der Schwärze aufblitzen sieht, sollte man den Schild heben.',
     render(ctx, cx, cy, time, state, hitFlash) {
       const isAttacking = state === 'attack';
-      const bob = Math.sin(time * 8) * (isAttacking ? 3 : 1.5);
+      const bob = Math.sin(time * 9) * (isAttacking ? 2.5 : 1.2);
+      const walkCycle = Math.sin(time * 12);
 
-      drawPaperShadow(ctx, cx, cy + 12, 11, 3.5);
+      drawPaperShadow(ctx, cx, cy + 12, 12, 4);
 
       if (hitFlash > 0) ctx.filter = 'brightness(2.4) saturate(0.2)';
 
-      // Schatten-Schweif / Rauch-Aura
-      for (let i = 0; i < 4; i++) {
-        const sOff = Math.sin(time * 6 + i) * 3;
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
+      // Schatten-Aura / Rauch am Boden
+      for (let i = 0; i < 3; i++) {
+        const sOff = Math.sin(time * 5 + i * 2) * 3;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
         ctx.beginPath();
-        ctx.arc(cx - 6 + i * 4 + sOff, cy + 6 + bob, 4 + i * 0.8, 0, Math.PI * 2);
+        ctx.arc(cx - 5 + i * 5 + sOff, cy + 8 + bob, 4 + i * 0.7, 0, Math.PI * 2);
         ctx.fill();
       }
 
-      // 4 flinke, dünne Schatten-Krallenbeine
-      for (let i = -1; i <= 1; i += 2) {
-        const legStep = Math.sin(time * 12 + i * 2) * 4;
-        ctx.strokeStyle = '#05070e';
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.moveTo(cx + i * 4, cy + 2 + bob);
-        ctx.lineTo(cx + i * 11, cy - 2 + bob + legStep);
-        ctx.lineTo(cx + i * 13, cy + 10 + bob);
-        ctx.stroke();
+      // 1. Kleine, flinke Goblin-Beine (2 grüne Beine mit Klauen, kein Insekt!)
+      const leftLeg = walkCycle * 4;
+      const rightLeg = -walkCycle * 4;
 
-        // Spitze Klauen
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(cx + i * 13, cy + 10 + bob);
-        ctx.lineTo(cx + i * 15, cy + 12 + bob);
-        ctx.stroke();
-      }
+      ctx.fillStyle = '#4d7c0f'; // Goblin-Moosgrün
+      ctx.strokeStyle = '#1e3a0a';
+      ctx.lineWidth = 1.2;
 
-      // Geduckter, spitzer Schattenkörper
-      ctx.fillStyle = '#090d16';
+      // Linkes Bein + kleiner Fuß
       ctx.beginPath();
-      ctx.ellipse(cx, cy + 2 + bob, 8, 5.5, 0, 0, Math.PI * 2);
+      ctx.roundRect(cx - 6, cy + 5 + bob + leftLeg * 0.5, 3.5, 7, 1.5);
+      ctx.fill();
+      ctx.stroke();
+      // Linker Fuß mit Zehenkrallen
+      ctx.beginPath();
+      ctx.ellipse(cx - 5.5, cy + 12 + bob + leftLeg * 0.5, 3, 1.5, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Glühende, unheimliche Augen (Rot-Gelb leuchtend)
-      const eyeGlow = 0.8 + Math.sin(time * 9) * 0.2;
-      ctx.fillStyle = `rgba(239, 68, 68, ${eyeGlow})`;
+      // Rechtes Bein + kleiner Fuß
       ctx.beginPath();
-      ctx.arc(cx - 3, cy + bob, 2.2, 0, Math.PI * 2);
-      ctx.arc(cx + 3, cy + bob, 2.2, 0, Math.PI * 2);
+      ctx.roundRect(cx + 2.5, cy + 5 + bob + rightLeg * 0.5, 3.5, 7, 1.5);
+      ctx.fill();
+      ctx.stroke();
+      // Rechter Fuß mit Zehenkrallen
+      ctx.beginPath();
+      ctx.ellipse(cx + 4, cy + 12 + bob + rightLeg * 0.5, 3, 1.5, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Pupillen-Kerne
-      ctx.fillStyle = '#fef08a';
+      // 2. Geduckter Goblin-Oberkörper (Hinterhalt-Haltung mit braunem Lederwams)
+      ctx.fillStyle = '#4d7c0f';
       ctx.beginPath();
-      ctx.arc(cx - 3, cy + bob, 1, 0, Math.PI * 2);
-      ctx.arc(cx + 3, cy + bob, 1, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy + 2 + bob, 7, 6, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Bei Angriff: rote Klauenstreifen
+      // Zerlumpter brauner Lederwams & Gürtel
+      ctx.fillStyle = '#78350f';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + 1 + bob, 6.2, 4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#451a03';
+      ctx.fillRect(cx - 5.5, cy + 4 + bob, 11, 2.5);
+
+      // 3. Goblin-Kopf (grün, mit spitzem Kinn)
+      ctx.fillStyle = '#4d7c0f';
+      ctx.beginPath();
+      ctx.arc(cx, cy - 2 + bob, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Fieses kleines Grinsen mit zwei weißen Hauzähnen
+      ctx.fillStyle = '#14532d';
+      ctx.beginPath();
+      ctx.arc(cx, cy + 1 + bob, 3, 0.2, Math.PI - 0.2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(cx - 2, cy + 1 + bob, 1.2, 1.8);
+      ctx.fillRect(cx + 0.8, cy + 1 + bob, 1.2, 1.8);
+
+      // 4. Lange spitze Goblin-Ohren (Charakteristisch für Kobolde / Goblins)
+      const earWiggle = Math.sin(time * 6) * 1.5;
+      ctx.fillStyle = '#65a30d'; // Helleres Goblin-Ohrgrün
+      ctx.strokeStyle = '#1e3a0a';
+      ctx.lineWidth = 1.1;
+
+      // Linkes langes spitzes Ohr
+      ctx.beginPath();
+      ctx.moveTo(cx - 4, cy - 3 + bob);
+      ctx.lineTo(cx - 15, cy - 6 + bob + earWiggle);
+      ctx.lineTo(cx - 5, cy + 1.5 + bob);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Rechtes langes spitzes Ohr
+      ctx.beginPath();
+      ctx.moveTo(cx + 4, cy - 3 + bob);
+      ctx.lineTo(cx + 15, cy - 6 + bob - earWiggle);
+      ctx.lineTo(cx + 5, cy + 1.5 + bob);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 5. RIESIGE GLÜHENDE AUGEN (Das Kern-Merkmal!)
+      const eyePulse = 0.85 + Math.sin(time * 8) * 0.15;
+      const eyeR = 3.8;
+
+      // Äußere Glüh-Aura
+      ctx.save();
+      ctx.shadowColor = '#facc15';
+      ctx.shadowBlur = 12;
+
+      // Linkes großes Auge
+      ctx.fillStyle = `rgba(250, 204, 21, ${eyePulse})`;
+      ctx.beginPath();
+      ctx.arc(cx - 3.2, cy - 2.5 + bob, eyeR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rechtes großes Auge
+      ctx.beginPath();
+      ctx.arc(cx + 3.2, cy - 2.5 + bob, eyeR, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Heller Pupillen-Kern (strahlend weiß-gelb)
+      ctx.fillStyle = '#fef9c3';
+      ctx.beginPath();
+      ctx.arc(cx - 3.2, cy - 2.5 + bob, 1.8, 0, Math.PI * 2);
+      ctx.arc(cx + 3.2, cy - 2.5 + bob, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Vertikale Schlitz-Pupillen (Katzen-/Kobold-Look)
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.ellipse(cx - 3.2, cy - 2.5 + bob, 0.7, 2.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx + 3.2, cy - 2.5 + bob, 0.7, 2.2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // 6. Goblin-Arme & Schattenschlag
+      const armSwing = isAttacking ? 6 : Math.sin(time * 12) * 3;
+      ctx.strokeStyle = '#4d7c0f';
+      ctx.lineWidth = 1.8;
+
+      // Linker Arm
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy + 2 + bob);
+      ctx.lineTo(cx - 10, cy + 6 + bob - armSwing);
+      ctx.stroke();
+
+      // Rechter Arm mit geschwungenem Knochendolch
+      ctx.beginPath();
+      ctx.moveTo(cx + 5, cy + 2 + bob);
+      ctx.lineTo(cx + 10, cy + 5 + bob + armSwing);
+      ctx.stroke();
+
+      // Knochendolch in der rechten Hand
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(cx + 10, cy + 5 + bob + armSwing);
+      ctx.lineTo(cx + 16, cy + 1 + bob + armSwing);
+      ctx.stroke();
+
+      // Rote Klingenfunken bei Angriff
       if (isAttacking) {
-        ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
-        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
+        ctx.lineWidth = 1.6;
         ctx.beginPath();
-        ctx.moveTo(cx - 8, cy - 4);
-        ctx.lineTo(cx + 8, cy + 8);
-        ctx.moveTo(cx - 5, cy - 6);
-        ctx.lineTo(cx + 10, cy + 6);
+        ctx.moveTo(cx - 7, cy - 3);
+        ctx.lineTo(cx + 12, cy + 7);
         ctx.stroke();
       }
 
@@ -6448,11 +6547,9 @@ class CaveMap {
       return 'crystal';
     }
     if (this.id === 'caves_l2' || this.id === 'sub_crystal') {
-      if (y >= 125) return 'desert'; // Magma / Basalt / Fels
-      if (x < 110 && y < 125) return 'forest'; // Deep moss catacomb
-      if (x >= 170 && y < 100) return 'snow'; // Frozen glacial abyss
-      if (x >= 210 && y >= 70 && y <= 130) return 'void'; // Deep void chasm
-      return 'crystal'; // Äther-crystal palace
+      if (y >= 120) return 'desert'; // Magma / Basalt / Glutkammer
+      if (x >= 180) return 'void';   // Astraler Urleeren- & Frostschlund
+      return 'crystal';              // Äther-Kristallgrotte
     }
     if (this.id === 'snow_grotto') return 'snow';
     if (this.id === 'void_grotto') return 'void';
@@ -6625,7 +6722,7 @@ class CaveMap {
   }
 
   // ---------------------------------------------------------------------------------------------------
-  // EBENE -1: HÖHLEN & GROTTEN (290x200) – Direkt von der Oberwelt erreichbar
+  // EBENE -1: HÖHLEN & GROTTEN (290x200) – 3 RIESIGE HÖHLENSYSTEME UNTER DER GESAMTEN KARTE
   // ---------------------------------------------------------------------------------------------------
   generateCavesL1() {
     // 1. Hole-Entrances sammeln
@@ -6669,86 +6766,117 @@ class CaveMap {
       ];
     }
 
-    // 2. Kammern um jeden Höhleneingang aushöhlen
-    for (const ent of entrances) {
-      this.carveRoom(ent.x, ent.y, 6, 5, 0.2);
-    }
+    // ==========================================================================================
+    // 2. DIE 3 GROSSEN HÖHLENSYSTEME IN EBENE -1 (Spannen unter der gesamten Karte)
+    // ==========================================================================================
 
-    // 3. Regionale Hubs miteinander durch Tunnel vernetzen
-    for (let i = 0; i < entrances.length; i++) {
-      let nearestDist = Infinity;
-      let nearestIdx = -1;
-      for (let j = 0; j < entrances.length; j++) {
-        if (i === j) continue;
-        const d = Math.hypot(entrances[i].x - entrances[j].x, entrances[i].y - entrances[j].y);
-        if (d < nearestDist) {
-          nearestDist = d;
-          nearestIdx = j;
-        }
-      }
-      if (nearestIdx !== -1 && nearestDist <= 48) {
-        this.carveTunnel(entrances[i].x, entrances[i].y, entrances[nearestIdx].x, entrances[nearestIdx].y, 2.7);
-      }
-    }
+    // KOMPLEX 1: MOOS- & URALT-STOLLEN (Nordwesten bis Zentrum)
+    this.carveRoom(55, 48, 22, 16, 0.2);     // Westliche Mooshalle
+    this.carveRoom(70, 72, 22, 16, 0.2);     // Grasland-Kaverne
+    this.carveRoom(45, 32, 18, 14, 0.18);    // Spawn-Untergrund
+    this.carveRoom(125, 75, 26, 18, 0.22);   // Große Seenhalle im Zentrum
+    this.carveTunnel(45, 32, 55, 48, 4.8);
+    this.carveTunnel(55, 48, 70, 72, 5.0);
+    this.carveTunnel(70, 72, 125, 75, 5.0);
+    this.carveTunnel(55, 48, 125, 75, 4.8);
 
-    // 4. Zentraler Unterirdischer See (Große Halle bei 145, 85)
-    const lakeCenter = { x: 145, y: 85 };
-    this.carveRoom(lakeCenter.x, lakeCenter.y, 22, 15, 0.22);
-
-    // Unterirdischen See füllen mit Inseln
-    for (let dy = -9; dy <= 9; dy++) {
-      for (let dx = -14; dx <= 14; dx++) {
+    // Unterirdischer See mit Trittstein-Inseln in der Seenhalle (125, 75)
+    const lakeCenter = { x: 125, y: 75 };
+    for (let dy = -8; dy <= 8; dy++) {
+      for (let dx = -13; dx <= 13; dx++) {
         const lx = lakeCenter.x + dx;
         const ly = lakeCenter.y + dy;
         if (this.isValid(lx, ly) && this.ground[ly][lx] === TILES.CAVE_FLOOR) {
-          if (Math.hypot(dx / 14, dy / 9) <= 0.82) {
+          if (Math.hypot(dx / 13, dy / 8) <= 0.82) {
             this.ground[ly][lx] = TILES.CAVE_WATER;
           }
         }
       }
     }
-    // Trittstein-Inseln im See
     this.ground[lakeCenter.y][lakeCenter.x] = TILES.CAVE_FLOOR;
     this.ground[lakeCenter.y - 1][lakeCenter.x + 2] = TILES.CAVE_FLOOR;
     this.ground[lakeCenter.y + 1][lakeCenter.x - 3] = TILES.CAVE_FLOOR;
     this.ground[lakeCenter.y][lakeCenter.x + 6] = TILES.CAVE_FLOOR;
     this.ground[lakeCenter.y][lakeCenter.x - 6] = TILES.CAVE_FLOOR;
 
-    // 5. Haupt-Tunnel von allen 5 Regionen zum Zentralen See
-    this.carveTunnel(70, 72, lakeCenter.x, lakeCenter.y, 3.2);       // Grasland -> See
-    this.carveTunnel(70, 168, lakeCenter.x, lakeCenter.y, 3.2);      // Wüste -> See
-    this.carveTunnel(197, 44, lakeCenter.x, lakeCenter.y, 3.2);      // Schnee -> See
-    this.carveTunnel(191, 144, lakeCenter.x, lakeCenter.y, 3.2);     // Sumpf -> See
-    this.carveTunnel(243, 106, lakeCenter.x, lakeCenter.y, 3.0);     // Void -> See
-    this.carveTunnel(93, 156, 168, 152, 2.8);                       // Süd-Bypass (Wüste <-> Sumpf)
+    // KOMPLEX 2: GLUT- & BASALT-CANYON (Südwesten bis Süden)
+    this.carveRoom(75, 165, 26, 18, 0.25);   // Magma- & Basalthalle
+    this.carveRoom(40, 155, 20, 15, 0.22);   // Dünen-Kluft
+    this.carveRoom(95, 165, 22, 16, 0.22);   // Sandstein-Grotte
+    this.carveRoom(175, 155, 24, 16, 0.22);  // Moor-Gewölbe
+    this.carveRoom(215, 165, 20, 15, 0.2);   // Teerpfuhl-Kaverne
+    this.carveTunnel(40, 155, 75, 165, 4.8);
+    this.carveTunnel(75, 165, 95, 165, 5.0);
+    this.carveTunnel(95, 165, 175, 155, 4.8);
+    this.carveTunnel(175, 155, 215, 165, 4.8);
 
-    // 6. Fünf Abgänge zu Ebene -2 (Tiefe Höhlenwelt) mit Leitern nach unten
+    // KOMPLEX 3: GLAZIALER STERNENABGRUND (Nordosten bis Osten)
+    this.carveRoom(225, 50, 26, 18, 0.2);    // Großer Gletscher-Palast
+    this.carveRoom(255, 36, 20, 15, 0.18);   // Nordkap-Eisdom
+    this.carveRoom(195, 45, 22, 15, 0.2);    // Eispass-Halle
+    this.carveRoom(245, 95, 24, 16, 0.22);   // Astraler Sternenschlund
+    this.carveTunnel(195, 45, 225, 50, 4.8);
+    this.carveTunnel(225, 50, 255, 36, 4.8);
+    this.carveTunnel(225, 50, 245, 95, 4.8);
+
+    // 3 GROSSE VERBINDUNGS-AUTOBAHNEN (Zwischen den 3 Komplexen)
+    this.carveTunnel(70, 72, 75, 165, 4.5);   // Komplex 1 <-> Komplex 2 (Nordwest nach Südwest)
+    this.carveTunnel(125, 75, 195, 45, 4.5);  // Komplex 1 <-> Komplex 3 (Zentrum nach Nordost)
+    this.carveTunnel(175, 155, 245, 95, 4.5); // Komplex 2 <-> Komplex 3 (Süd nach Ost)
+
+    // Alle 26 Oberwelt-Löcher mit großzügigen Räumen und Anbindungen versehen
+    for (const ent of entrances) {
+      this.carveRoom(ent.x, ent.y, 8, 7, 0.15);
+      // Nächsten Komplexpunkt suchen und anbinden
+      const hubs = [
+        { x: 55, y: 48 }, { x: 70, y: 72 }, { x: 125, y: 75 },
+        { x: 75, y: 165 }, { x: 95, y: 165 }, { x: 175, y: 155 },
+        { x: 225, y: 50 }, { x: 195, y: 45 }, { x: 245, y: 95 }
+      ];
+      let closestHub = hubs[0];
+      let minD = Infinity;
+      for (const h of hubs) {
+        const d = Math.hypot(ent.x - h.x, ent.y - h.y);
+        if (d < minD) {
+          minD = d;
+          closestHub = h;
+        }
+      }
+      this.carveTunnel(ent.x, ent.y, closestHub.x, closestHub.y, 3.8);
+    }
+
+    // ==========================================================================================
+    // 3. GENAU DREI LEITERN NACH UNTEN (Zu den 3 Sanktuarien in Ebene -2)
+    // ==========================================================================================
     const deepLadders = [
-      { x: 145, y: 105, label: 'Abstieg zur Äther-Kristall-Kammer (Ebene -2)' },
-      { x: 55,  y: 48,  label: 'Abstieg in die Moos-Katakomben (Ebene -2)' },
-      { x: 65,  y: 165, label: 'Abstieg in die Magma-Kluft (Ebene -2)' },
-      { x: 220, y: 45,  label: 'Abstieg in den Frostpalast-Schacht (Ebene -2)' },
-      { x: 200, y: 155, label: 'Abstieg in die Tiefensumpf-Krypta (Ebene -2)' }
+      { x: 65,  y: 55,  chamber: 'crystal_sanctuary', label: '⬇️ Leiter zur Äther-Kristallgrotte (Ebene -2)' },
+      { x: 75,  y: 165, chamber: 'magma_sanctuary',   label: '⬇️ Leiter zur Magmakammer (Ebene -2)' },
+      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬇️ Leiter zum Astralen Sternenschlund (Ebene -2)' }
     ];
 
     for (const dl of deepLadders) {
-      this.carveRoom(dl.x, dl.y, 6, 5, 0.2);
+      this.carveRoom(dl.x, dl.y, 8, 7, 0.15);
     }
 
-    // 7. Fünf Schreine in Ebene -1 (Thematisch über die Biome verteilt)
+    // ==========================================================================================
+    // 4. FÜNF SCHREINE IN EBENE -1
+    // ==========================================================================================
     const shrinesL1 = [
-      { x: 145, y: 73,  name: 'Schrein des Tiefenwassers' },
-      { x: 50,  y: 40,  name: 'Schrein des Verborgenen Mooses' },
-      { x: 75,  y: 175, name: 'Schrein der Sandstein-Tiefen' },
-      { x: 235, y: 35,  name: 'Schrein der Ewigen Kälte' },
-      { x: 255, y: 95,  name: 'Schrein der Astralen Stille' }
+      { x: 125, y: 64,  name: 'Schrein des Tiefenwassers' },
+      { x: 45,  y: 44,  name: 'Schrein des Verborgenen Mooses' },
+      { x: 82,  y: 176, name: 'Schrein der Sandstein-Tiefen' },
+      { x: 235, y: 38,  name: 'Schrein der Ewigen Kälte' },
+      { x: 252, y: 98,  name: 'Schrein der Astralen Stille' }
     ];
 
     for (const s of shrinesL1) {
-      this.carveRoom(s.x, s.y, 6, 5, 0.15);
+      this.carveRoom(s.x, s.y, 7, 6, 0.15);
     }
 
-    // 8. JETZT nach allen Tunnelaushöhlungen die Lichtschächte & Exits einprägen (verhindert Überschreiben)
+    // ==========================================================================================
+    // 5. OBJEKTE & EXITS EINPRÄGEN
+    // ==========================================================================================
+    // Lichtschächte zur Oberwelt
     for (const ent of entrances) {
       this.ground[ent.y][ent.x] = TILES.CAVE_HOLE_EXIT;
       this.exits.push({
@@ -6764,6 +6892,7 @@ class CaveMap {
       this.placeTorchIfFloor(ent.x + 2, ent.y);
     }
 
+    // Leitern nach unten zu Ebene -2
     for (const dl of deepLadders) {
       this.ground[dl.y][dl.x] = TILES.CAVE_LADDER_DOWN;
       this.exits.push({
@@ -6772,13 +6901,14 @@ class CaveMap {
         targetDim: 'caves_l2',
         targetX: dl.x,
         targetY: dl.y,
-        chamber: 'deep_caves',
+        chamber: dl.chamber,
         label: dl.label
       });
       this.placeTorchIfFloor(dl.x - 2, dl.y);
       this.placeTorchIfFloor(dl.x + 2, dl.y);
     }
 
+    // Schreine
     for (const s of shrinesL1) {
       this.ground[s.y][s.x] = TILES.CAVE_FLOOR;
       this.objects[s.y][s.x] = OBJECTS.SHRINE;
@@ -6787,72 +6917,71 @@ class CaveMap {
       this.placeTorchIfFloor(s.x + 2, s.y);
     }
 
-    // 9. Dekorationen (Tropfsteine, Kristalle, Leuchtpilze, Wandfackeln)
+    // Dekorationen
     this.decorateCaves();
   }
 
   // ---------------------------------------------------------------------------------------------------
-  // EBENE -2: TIEFE KRISTALL- & MAGMAHÖHLEN (290x200) – Unterhalb von Ebene -1
+  // EBENE -2: TIEFE SANCTUARIEN (290x200) – 3 Besondere kleine Höhlen mit jeweils einem Schrein
   // ---------------------------------------------------------------------------------------------------
   generateCavesL2() {
-    // 1. Die fünf Aufstiegsleitern zu Ebene -1 (exakt identische Koordinaten)
-    const upLadders = [
-      { x: 145, y: 105, label: 'Aufgang zur Haupthalle (Ebene -1)' },
-      { x: 55,  y: 48,  label: 'Aufgang zu den Moosgrotten (Ebene -1)' },
-      { x: 65,  y: 165, label: 'Aufgang zur Sandstein-Kluft (Ebene -1)' },
-      { x: 220, y: 45,  label: 'Aufgang zum Froststollen (Ebene -1)' },
-      { x: 200, y: 155, label: 'Aufgang zur Moor-Kuhle (Ebene -1)' }
-    ];
-
-    for (const ul of upLadders) {
-      this.carveRoom(ul.x, ul.y, 7, 5, 0.2);
-    }
-
-    // 2. Große Kristall-Zentralkammer (Äther-Kristallpalast)
-    const crystalPalace = { x: 145, y: 88 };
-    this.carveRoom(crystalPalace.x, crystalPalace.y, 24, 16, 0.18);
-
-    // Biolumineszierender Kristallpool im Zentrum
-    for (let dy = -4; dy <= 4; dy++) {
-      for (let dx = -7; dx <= 7; dx++) {
-        const px = crystalPalace.x + dx;
-        const py = crystalPalace.y + 4 + dy;
-        if (this.isValid(px, py) && Math.hypot(dx / 7, dy / 4) <= 0.85) {
+    // 1. SANKTUM 1: DIE ÄTHER-KRISTALLGROTTE (bei 65, 55)
+    // Reached via Leiter 1 von (65, 55)
+    this.carveRoom(65, 55, 12, 10, 0.12);
+    // Biolumineszierender Kristallpool
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const px = 65 + dx;
+        const py = 59 + dy;
+        if (this.isValid(px, py) && Math.hypot(dx / 4, dy / 2) <= 0.8) {
           this.ground[py][px] = TILES.CAVE_WATER;
         }
       }
     }
+    // Glühkristalle rund um das Sanktum
+    const crystalSpots = [
+      { x: 58, y: 52 }, { x: 72, y: 52 }, { x: 57, y: 57 }, { x: 73, y: 57 },
+      { x: 61, y: 62 }, { x: 69, y: 62 }
+    ];
+    for (const cs of crystalSpots) {
+      if (this.isValid(cs.x, cs.y) && this.ground[cs.y][cs.x] === TILES.CAVE_FLOOR) {
+        this.objects[cs.y][cs.x] = OBJECTS.GLOW_CRYSTAL;
+      }
+    }
 
-    // 3. Südwestliche Magma- und Obsidianhallen
-    const magmaChamber = { x: 72, y: 170 };
-    this.carveRoom(magmaChamber.x, magmaChamber.y, 18, 13, 0.25);
+    // 2. SANKTUM 2: DIE MAGMA- & OBSIDIANKAMMER (bei 75, 165)
+    // Reached via Leiter 2 von (75, 165)
+    this.carveRoom(75, 165, 13, 11, 0.14);
+    const magmaGlowSpots = [
+      { x: 67, y: 161 }, { x: 83, y: 161 }, { x: 66, y: 168 }, { x: 84, y: 168 },
+      { x: 71, y: 173 }, { x: 79, y: 173 }
+    ];
+    for (const ms of magmaGlowSpots) {
+      if (this.isValid(ms.x, ms.y) && this.ground[ms.y][ms.x] === TILES.CAVE_FLOOR) {
+        this.objects[ms.y][ms.x] = OBJECTS.GLOW_CRYSTAL;
+      }
+    }
 
-    // 4. Nordöstliche Glaziale Abgrund-Kammer
-    const frostAbyss = { x: 225, y: 45 };
-    this.carveRoom(frostAbyss.x, frostAbyss.y, 17, 12, 0.2);
+    // 3. SANKTUM 3: DER ASTRALE URLEEREN-SCHLUND (bei 225, 50)
+    // Reached via Leiter 3 von (225, 50)
+    this.carveRoom(225, 50, 13, 11, 0.14);
+    const voidGlowSpots = [
+      { x: 217, y: 46 }, { x: 233, y: 46 }, { x: 216, y: 54 }, { x: 234, y: 54 },
+      { x: 221, y: 58 }, { x: 229, y: 58 }
+    ];
+    for (const vs of voidGlowSpots) {
+      if (this.isValid(vs.x, vs.y) && this.ground[vs.y][vs.x] === TILES.CAVE_FLOOR) {
+        this.objects[vs.y][vs.x] = OBJECTS.GLOW_CRYSTAL;
+      }
+    }
 
-    // 5. Südöstliche Versunkene Krypta
-    const sunkenCrypt = { x: 195, y: 160 };
-    this.carveRoom(sunkenCrypt.x, sunkenCrypt.y, 16, 12, 0.2);
-
-    // 6. Östliche Astrale Urleeren-Kluft
-    const voidAbyss = { x: 245, y: 95 };
-    this.carveRoom(voidAbyss.x, voidAbyss.y, 18, 13, 0.22);
-
-    // 7. Wandelgänge & tiefe Tunnel zwischen den Großhallen
-    this.carveTunnel(55, 48, crystalPalace.x, crystalPalace.y, 2.9);
-    this.carveTunnel(65, 165, magmaChamber.x, magmaChamber.y, 3.0);
-    this.carveTunnel(magmaChamber.x, magmaChamber.y, crystalPalace.x, crystalPalace.y, 3.0);
-    this.carveTunnel(frostAbyss.x, frostAbyss.y, crystalPalace.x, crystalPalace.y, 2.9);
-    this.carveTunnel(sunkenCrypt.x, sunkenCrypt.y, crystalPalace.x, crystalPalace.y, 2.9);
-    this.carveTunnel(voidAbyss.x, voidAbyss.y, crystalPalace.x, crystalPalace.y, 3.0);
-    this.carveTunnel(magmaChamber.x, magmaChamber.y, sunkenCrypt.x, sunkenCrypt.y, 2.7);
-
-    // 8. Drei Uralte Tiefenschreine in Ebene -2
+    // ==========================================================================================
+    // DIE DREI URALTEN TIEFENSCHREINE IN EBENE -2 (Ein Schrein in jeder besonderen Grotte!)
+    // ==========================================================================================
     const shrinesL2 = [
-      { x: crystalPalace.x, y: crystalPalace.y - 8, name: 'Schrein des Äther-Kristalls' },
-      { x: magmaChamber.x + 4, y: magmaChamber.y,    name: 'Schrein der Magma-Urkraft' },
-      { x: voidAbyss.x + 3,    y: voidAbyss.y - 1,   name: 'Schrein des Tiefsten Vergessens' }
+      { x: 65,  y: 50,  name: 'Schrein des Äther-Kristalls' },
+      { x: 75,  y: 159, name: 'Schrein der Magma-Urkraft' },
+      { x: 225, y: 44,  name: 'Schrein des Tiefsten Vergessens' }
     ];
 
     for (const s of shrinesL2) {
@@ -6865,7 +6994,15 @@ class CaveMap {
       }
     }
 
-    // 9. JETZT nach allen Tunneln die Leitern nach oben zu Ebene -1 einprägen
+    // ==========================================================================================
+    // DIE DREI LEITERN NACH OBEN (Exakt korrespondierend zu Ebene -1)
+    // ==========================================================================================
+    const upLadders = [
+      { x: 65,  y: 55,  chamber: 'crystal_sanctuary', label: '⬆️ Leiter zum Moos-Stollen (Ebene -1)' },
+      { x: 75,  y: 165, chamber: 'magma_sanctuary',   label: '⬆️ Leiter zum Basalt-Canyon (Ebene -1)' },
+      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬆️ Leiter zum Gletscher-Palast (Ebene -1)' }
+    ];
+
     for (const ul of upLadders) {
       this.ground[ul.y][ul.x] = TILES.CAVE_LADDER_UP;
       this.exits.push({
@@ -6874,14 +7011,14 @@ class CaveMap {
         targetDim: 'caves_l1',
         targetX: ul.x,
         targetY: ul.y,
-        chamber: 'upper_caves',
+        chamber: ul.chamber,
         label: ul.label
       });
       this.placeTorchIfFloor(ul.x - 2, ul.y);
       this.placeTorchIfFloor(ul.x + 2, ul.y);
     }
 
-    // 10. Tiefen-Dekoration
+    // Tiefen-Dekoration (leuchtende Pilze & Fackeln nur in den 3 Sanktuarien)
     this.decorateCaves(true);
   }
 
@@ -12452,121 +12589,100 @@ class EnemyManager {
     });
 
     // =========================================================================
+    // =========================================================================
     // HÖHLEN-SPAWNS (EBENE -1: CAVES_L1 & EBENE -2: CAVES_L2)
     // =========================================================================
 
-    // --- EBENE -1: OBERE HÖHLEN (Direkt mit Oberwelt verbunden) ---
-    // 1. Zentraler See & Hauptgrotten (145, 85)
-    this.spawnPack('cave_weaver', 145 * TILE_SIZE, 85 * TILE_SIZE, 6, 32, DIMENSIONS.CAVES_L1, 'pack_c1_spider_center', {
+    // --- EBENE -1: 3 GROSSE HÖHLENSYSTEME (Moos-Stollen, Basalt-Canyon, Eis/Void-Abgrund) ---
+    // 1. KOMPLEX 1: MOOS- & URALT-STOLLEN (Nordwest & Seenhalle)
+    this.spawnPack('cave_weaver', 125 * TILE_SIZE, 75 * TILE_SIZE, 8, 30, DIMENSIONS.CAVES_L1, 'pack_c1_spider_lake', {
       scale: 0.72, hp: 26, atk: 10, xpValue: 4
     });
-    this.spawnPack('cave_stalker', 138 * TILE_SIZE, 82 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_center', {
+    this.spawnPack('cave_weaver', 55 * TILE_SIZE, 48 * TILE_SIZE, 7, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_moss', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_weaver', 70 * TILE_SIZE, 72 * TILE_SIZE, 7, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_grass', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_weaver', 45 * TILE_SIZE, 32 * TILE_SIZE, 6, 26, DIMENSIONS.CAVES_L1, 'pack_c1_spider_spawn', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 60 * TILE_SIZE, 60 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_k1', {
       scale: 0.65, hp: 95, atk: 22, xpValue: 12
     });
-    this.spawnEnemy('rock_golem', 135 * TILE_SIZE, 95 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_center', {
+    this.spawnEnemy('rock_golem', 130 * TILE_SIZE, 85 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_lake', {
       scale: 1.35, hp: 380, atk: 26, xpValue: 24
     });
 
-    // 2. Westliches Grasland & Wald-Grotten (70, 72 & 52, 32)
-    this.spawnPack('cave_weaver', 65 * TILE_SIZE, 62 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_west', {
+    // 2. KOMPLEX 2: GLUT- & BASALT-CANYON (Südwesten & Süd-Moor)
+    this.spawnPack('cave_weaver', 75 * TILE_SIZE, 165 * TILE_SIZE, 8, 30, DIMENSIONS.CAVES_L1, 'pack_c1_spider_basalt', {
       scale: 0.72, hp: 26, atk: 10, xpValue: 4
     });
-    this.spawnPack('cave_stalker', 70 * TILE_SIZE, 72 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_west', {
-      scale: 0.65, hp: 95, atk: 22, xpValue: 12
-    });
-
-    // 3. Südwestliche Wüsten- & Canyon-Klüfte (70, 168 & 93, 156)
-    this.spawnPack('cave_weaver', 70 * TILE_SIZE, 168 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_desert', {
+    this.spawnPack('cave_weaver', 40 * TILE_SIZE, 155 * TILE_SIZE, 6, 26, DIMENSIONS.CAVES_L1, 'pack_c1_spider_dune', {
       scale: 0.72, hp: 26, atk: 10, xpValue: 4
     });
-    this.spawnPack('cave_stalker', 82 * TILE_SIZE, 160 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_desert', {
+    this.spawnPack('cave_weaver', 95 * TILE_SIZE, 165 * TILE_SIZE, 7, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_canyon', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_weaver', 175 * TILE_SIZE, 155 * TILE_SIZE, 7, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_swamp', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 85 * TILE_SIZE, 165 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_k2', {
       scale: 0.65, hp: 95, atk: 22, xpValue: 12
     });
-    this.spawnEnemy('rock_golem', 74 * TILE_SIZE, 166 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_desert', {
+    this.spawnEnemy('rock_golem', 78 * TILE_SIZE, 172 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_basalt', {
       scale: 1.35, hp: 380, atk: 26, xpValue: 24
     });
 
-    // 4. Nordöstliche Schnee- & Gletscher-Stollen (226, 32 & 197, 44)
-    this.spawnPack('cave_weaver', 215 * TILE_SIZE, 45 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_snow', {
+    // 3. KOMPLEX 3: GLAZIALER STERNENABGRUND (Nordost & Ost-Void)
+    this.spawnPack('cave_weaver', 225 * TILE_SIZE, 50 * TILE_SIZE, 8, 30, DIMENSIONS.CAVES_L1, 'pack_c1_spider_frost', {
       scale: 0.72, hp: 26, atk: 10, xpValue: 4
     });
-    this.spawnPack('cave_stalker', 226 * TILE_SIZE, 35 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_snow', {
+    this.spawnPack('cave_weaver', 255 * TILE_SIZE, 36 * TILE_SIZE, 6, 26, DIMENSIONS.CAVES_L1, 'pack_c1_spider_cape', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_weaver', 245 * TILE_SIZE, 95 * TILE_SIZE, 7, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_void', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 235 * TILE_SIZE, 65 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_k3', {
       scale: 0.65, hp: 95, atk: 22, xpValue: 12
     });
-    this.spawnEnemy('rock_golem', 205 * TILE_SIZE, 50 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_snow', {
+    this.spawnEnemy('rock_golem', 218 * TILE_SIZE, 52 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_frost', {
       scale: 1.35, hp: 380, atk: 26, xpValue: 24
     });
 
-    // 5. Südöstliche Sumpf- & Moor-Grotte (191, 144 & 209, 160)
-    this.spawnPack('cave_weaver', 195 * TILE_SIZE, 150 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_swamp', {
-      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    // --- EBENE -2: DIE 3 BESONDEREN SANKTUARIEN ---
+    // 1. SANKTUM 1: Äther-Kristallgrotte (65, 55)
+    this.spawnEnemy('rock_golem', 65 * TILE_SIZE, 52 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crystal', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
     });
-    this.spawnPack('cave_stalker', 190 * TILE_SIZE, 142 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_swamp', {
-      scale: 0.65, hp: 95, atk: 22, xpValue: 12
-    });
-
-    // 6. Östliche Astrale Leeren-Kluft (243, 106 & 257, 94)
-    this.spawnPack('cave_weaver', 248 * TILE_SIZE, 100 * TILE_SIZE, 4, 25, DIMENSIONS.CAVES_L1, 'pack_c1_spider_void', {
-      scale: 0.72, hp: 26, atk: 10, xpValue: 4
-    });
-    this.spawnPack('cave_stalker', 243 * TILE_SIZE, 106 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_void', {
-      scale: 0.65, hp: 95, atk: 22, xpValue: 12
-    });
-
-    // --- EBENE -2: TIEFE HÖHLEN (Kristall-, Magma- & Basaltkammern) ---
-    // 1. Äther-Kristallpalast (145, 88)
-    this.spawnEnemy('rock_golem', 140 * TILE_SIZE, 85 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crystal1', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
-    });
-    this.spawnEnemy('rock_golem', 152 * TILE_SIZE, 92 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crystal2', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
-    });
-    this.spawnPack('cave_stalker', 145 * TILE_SIZE, 80 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_crystal', {
+    this.spawnPack('cave_stalker', 60 * TILE_SIZE, 58 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_crystal', {
       scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
-    this.spawnPack('cave_weaver', 148 * TILE_SIZE, 86 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L2, 'pack_c2_spider_crystal', {
+    this.spawnPack('cave_weaver', 68 * TILE_SIZE, 56 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_crystal', {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
     });
 
-    // 2. Südwestliche Magma- & Basalthallen (72, 170)
-    this.spawnEnemy('rock_golem', 70 * TILE_SIZE, 166 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_magma1', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    // 2. SANKTUM 2: Magmakammer (75, 165)
+    this.spawnEnemy('rock_golem', 75 * TILE_SIZE, 162 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_magma', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
     });
-    this.spawnEnemy('rock_golem', 76 * TILE_SIZE, 174 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_magma2', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
-    });
-    this.spawnPack('cave_stalker', 72 * TILE_SIZE, 172 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_magma', {
+    this.spawnPack('cave_stalker', 72 * TILE_SIZE, 167 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_magma', {
       scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
-
-    // 3. Nordöstlicher Glazialer Abgrund (225, 45)
-    this.spawnEnemy('rock_golem', 222 * TILE_SIZE, 42 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_frost', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
-    });
-    this.spawnPack('cave_stalker', 228 * TILE_SIZE, 48 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_frost', {
-      scale: 0.65, hp: 105, atk: 24, xpValue: 14
-    });
-    this.spawnPack('cave_weaver', 224 * TILE_SIZE, 44 * TILE_SIZE, 4, 25, DIMENSIONS.CAVES_L2, 'pack_c2_spider_frost', {
+    this.spawnPack('cave_weaver', 78 * TILE_SIZE, 166 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_magma', {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
     });
 
-    // 4. Südöstliche Versunkene Krypta (195, 160)
-    this.spawnEnemy('rock_golem', 198 * TILE_SIZE, 158 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crypt', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    // 3. SANKTUM 3: Astraler Urleeren-Schlund (225, 50)
+    this.spawnEnemy('rock_golem', 225 * TILE_SIZE, 47 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_void', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
     });
-    this.spawnPack('cave_stalker', 192 * TILE_SIZE, 162 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_crypt', {
+    this.spawnPack('cave_stalker', 222 * TILE_SIZE, 53 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_void', {
       scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
-    this.spawnPack('cave_weaver', 196 * TILE_SIZE, 156 * TILE_SIZE, 5, 26, DIMENSIONS.CAVES_L2, 'pack_c2_spider_crypt', {
+    this.spawnPack('cave_weaver', 228 * TILE_SIZE, 52 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_void', {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
-    });
-
-    // 5. Tiefe Astrale Leere (245, 100)
-    this.spawnEnemy('rock_golem', 244 * TILE_SIZE, 98 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_void', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
-    });
-    this.spawnPack('cave_stalker', 246 * TILE_SIZE, 102 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_void', {
-      scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
 
     // =========================================================================
@@ -14628,9 +14744,12 @@ class Player {
         }
       }
       // 3. Lichtschacht oder Leiter in Höhlen (Ebene -1 oder Ebene -2)
-      else if (this.game && (this.game.currentDimension === 'caves' || this.game.currentDimension === 'caves_l1' || this.game.currentDimension === 'caves_l2')) {
+      else if (this.game && (this.game.isCaveDimension ? this.game.isCaveDimension() : (this.game.currentDimension === 'caves' || this.game.currentDimension === 'caves_l1' || this.game.currentDimension === 'caves_l2' || this.game.currentDimension === 'caves_deep'))) {
         if (this.map.exits) {
-          const exit = this.map.exits.find(e => e.x === curTileX && e.y === curTileY);
+          const exit = this.map.exits.find(e =>
+            (e.x === curTileX && e.y === curTileY) ||
+            Math.hypot(this.x - (e.x * TILE_SIZE + 8), this.y - (e.y * TILE_SIZE + 8)) <= 18
+          );
           if (exit) {
             const tType = exit.targetDim === 'overworld' ? 'cave_exit' : 'ladder';
             let targetX = exit.targetX * TILE_SIZE + 8;
@@ -16522,11 +16641,46 @@ class Minimap {
         }
 
         // Ladder / Exit indicators in caves
-        if (tile === 33 || tile === 34 || tile === 35) {
+        if (tile === 33) {
+          // Lichtschacht zur Oberwelt (Goldener Sonnenkreis)
           const lx = Math.floor(x * sX);
           const ly = Math.floor(y * sY);
-          targetCtx.fillStyle = (tile === 33) ? '#fef08a' : ((tile === 34) ? '#c084fc' : '#38bdf8');
-          targetCtx.fillRect(lx - 1, ly - 1, 3, 3);
+          targetCtx.fillStyle = '#f59e0b';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 3.0, 0, Math.PI * 2);
+          targetCtx.fill();
+          targetCtx.fillStyle = '#fef08a';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 1.8, 0, Math.PI * 2);
+          targetCtx.fill();
+        } else if (tile === 34) {
+          // Leiter nach unten zu Ebene -2 (Leuchtender violetter Abgangs-Diamant)
+          const lx = Math.floor(x * sX);
+          const ly = Math.floor(y * sY);
+          targetCtx.fillStyle = '#4c1d95';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+          targetCtx.fill();
+          targetCtx.fillStyle = '#c084fc';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 2.2, 0, Math.PI * 2);
+          targetCtx.fill();
+          targetCtx.fillStyle = '#ffffff';
+          targetCtx.fillRect(lx - 0.5, ly - 0.5, 1.5, 1.5);
+        } else if (tile === 35) {
+          // Leiter nach oben zu Ebene -1 (Leuchtender cyanblauer Aufstiegs-Diamant)
+          const lx = Math.floor(x * sX);
+          const ly = Math.floor(y * sY);
+          targetCtx.fillStyle = '#0369a1';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+          targetCtx.fill();
+          targetCtx.fillStyle = '#38bdf8';
+          targetCtx.beginPath();
+          targetCtx.arc(lx, ly, 2.2, 0, Math.PI * 2);
+          targetCtx.fill();
+          targetCtx.fillStyle = '#ffffff';
+          targetCtx.fillRect(lx - 0.5, ly - 0.5, 1.5, 1.5);
         }
       }
     }
@@ -21050,6 +21204,17 @@ class Game {
     this.canopyCtx.imageSmoothingEnabled = false;
   }
 
+  isCaveDimension() {
+    return (
+      this.currentDimension === DIMENSIONS.CAVES ||
+      this.currentDimension === DIMENSIONS.CAVES_L1 ||
+      this.currentDimension === DIMENSIONS.CAVES_DEEP ||
+      this.currentDimension === 'caves_l1' ||
+      this.currentDimension === 'caves_l2' ||
+      this.currentDimension === 'caves'
+    );
+  }
+
   switchDimension(targetDim, targetX, targetY) {
     if (targetDim === 'overworld') {
       this.map = this.overworldMap;
@@ -21225,7 +21390,7 @@ class Game {
         worldPrefix = '☁️ [Wolkenreich] ';
         this.biomeNameEl.style.color = '#f472b6';
         this.biomeNameEl.textContent = worldPrefix + (this.map.name || 'Rosa Wolkenmeer');
-      } else if (this.currentDimension === DIMENSIONS.CAVES) {
+      } else if (this.isCaveDimension()) {
         worldPrefix = '🪨 [Höhlenwelt] ';
         const cTheme = this.map.getTheme ? this.map.getTheme(tileX, tileY) : 'main';
         if (cTheme === 'snow') this.biomeNameEl.style.color = '#38bdf8';
@@ -21346,7 +21511,7 @@ class Game {
         lanternText = 'Lampions aus';
       }
 
-      if (this.currentDimension === DIMENSIONS.CAVES) {
+      if (this.isCaveDimension()) {
         lanternText = '🏮 Höhlenlampe an';
         lanternCol = '#fbbf24';
       }
@@ -21562,7 +21727,7 @@ class Game {
 
     if (this.currentDimension === DIMENSIONS.CLOUDS) {
       this.renderCloudDimension(this.camera.getVisibleTileBounds(), t);
-    } else if (this.currentDimension === DIMENSIONS.CAVES) {
+    } else if (this.isCaveDimension()) {
       this.renderCaveDimension(this.camera.getVisibleTileBounds(), t);
     } else {
       const { sunlight, sunset, night } = this.getDayNightFactors();
@@ -23483,25 +23648,74 @@ class Game {
           this.ctx.lineTo(px + 12, py + 11);
           this.ctx.stroke();
         }
-        else if (tile === TILES.CAVE_LADDER_DOWN || tile === TILES.CAVE_LADDER_UP) {
-          // Shaft hole with ladder
-          this.ctx.fillStyle = '#090d16';
-          this.ctx.fillRect(px + 2, py + 2, 12, 12);
+        else if (tile === TILES.CAVE_LADDER_DOWN) {
+          // 1. Gemauerter Steinschacht mit Abgangs-Holzleiter
+          this.ctx.fillStyle = '#1e293b';
+          this.ctx.fillRect(px + 1, py + 1, 14, 14);
+          this.ctx.fillStyle = '#020617';
+          this.ctx.fillRect(px + 3, py + 3, 10, 10);
 
-          this.ctx.strokeStyle = '#cbd5e1';
-          this.ctx.lineWidth = 1.5;
+          // Hölzerne Leiterholme
+          this.ctx.strokeStyle = '#92400e';
+          this.ctx.lineWidth = 1.6;
           this.ctx.beginPath();
-          this.ctx.moveTo(px + 4, py);
-          this.ctx.lineTo(px + 4, py + ts);
-          this.ctx.moveTo(px + 12, py);
-          this.ctx.lineTo(px + 12, py + ts);
-          this.ctx.moveTo(px + 4, py + 4);
-          this.ctx.lineTo(px + 12, py + 4);
-          this.ctx.moveTo(px + 4, py + 8);
-          this.ctx.lineTo(px + 12, py + 8);
-          this.ctx.moveTo(px + 4, py + 12);
-          this.ctx.lineTo(px + 12, py + 12);
+          this.ctx.moveTo(px + 4.5, py + 2);
+          this.ctx.lineTo(px + 4.5, py + 14);
+          this.ctx.moveTo(px + 11.5, py + 2);
+          this.ctx.lineTo(px + 11.5, py + 14);
+          // Sprossen
+          this.ctx.moveTo(px + 4.5, py + 4);
+          this.ctx.lineTo(px + 11.5, py + 4);
+          this.ctx.moveTo(px + 4.5, py + 8);
+          this.ctx.lineTo(px + 11.5, py + 8);
+          this.ctx.moveTo(px + 4.5, py + 12);
+          this.ctx.lineTo(px + 11.5, py + 12);
           this.ctx.stroke();
+
+          // Bernsteingoldener Abgangs-Indikator (Pulsierender Pfeil nach unten)
+          const arrowBob = Math.sin(t * 6) * 1.5;
+          this.ctx.fillStyle = '#f59e0b';
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 8, py + 9 + arrowBob);
+          this.ctx.lineTo(px + 6, py + 6 + arrowBob);
+          this.ctx.lineTo(px + 10, py + 6 + arrowBob);
+          this.ctx.closePath();
+          this.ctx.fill();
+        }
+        else if (tile === TILES.CAVE_LADDER_UP) {
+          // 2. Aufstiegs-Leitergerüst mit Himmelslicht
+          this.ctx.fillStyle = '#0f172a';
+          this.ctx.fillRect(px + 1, py + 1, 14, 14);
+
+          // Strahlendes Oberlicht am oberen Schachtrand
+          this.ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+          this.ctx.fillRect(px + 3, py + 2, 10, 4);
+
+          // Stabile Aufstiegsleiter
+          this.ctx.strokeStyle = '#e2e8f0';
+          this.ctx.lineWidth = 1.6;
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 4.5, py + 2);
+          this.ctx.lineTo(px + 4.5, py + 14);
+          this.ctx.moveTo(px + 11.5, py + 2);
+          this.ctx.lineTo(px + 11.5, py + 14);
+          this.ctx.moveTo(px + 4.5, py + 4);
+          this.ctx.lineTo(px + 11.5, py + 4);
+          this.ctx.moveTo(px + 4.5, py + 8);
+          this.ctx.lineTo(px + 11.5, py + 8);
+          this.ctx.moveTo(px + 4.5, py + 12);
+          this.ctx.lineTo(px + 11.5, py + 12);
+          this.ctx.stroke();
+
+          // Cyanblauer Aufstiegs-Indikator (Pulsierender Pfeil nach oben)
+          const arrowBob = Math.sin(t * 6) * 1.5;
+          this.ctx.fillStyle = '#38bdf8';
+          this.ctx.beginPath();
+          this.ctx.moveTo(px + 8, py + 5 - arrowBob);
+          this.ctx.lineTo(px + 6, py + 8 - arrowBob);
+          this.ctx.lineTo(px + 10, py + 8 - arrowBob);
+          this.ctx.closePath();
+          this.ctx.fill();
         }
       }
     }
@@ -23590,7 +23804,7 @@ class Game {
     }
     if (this.remotePlayers) {
       for (const rp of this.remotePlayers.values()) {
-        if (!rp.isDead && rp.dimension === DIMENSIONS.CAVES) {
+        if (!rp.isDead && (rp.dimension === this.currentDimension || (this.isCaveDimension() && (rp.dimension === 'caves' || rp.dimension === 'caves_l1' || rp.dimension === 'caves_l2')))) {
           rp.render(this.ctx, t, 1.0);
         }
       }
@@ -23608,6 +23822,85 @@ class Game {
 
     // PASS 5: Dynamic Cavern Darkness Mask with Lantern & Crystal Light Holes
     this.renderCaveDarkness(bounds, t);
+
+    // PASS 6: Floating Interactive Prompts (Ladders & Exits rendered above darkness)
+    this.camera.apply(this.ctx);
+    this.renderCaveExitPrompts(bounds, t);
+    this.camera.release(this.ctx);
+  }
+
+  renderCaveExitPrompts(bounds, t) {
+    if (!this.map || !this.map.exits) return;
+    const px = this.player.x;
+    const py = this.player.y;
+
+    for (const exit of this.map.exits) {
+      const exCenter = exit.x * TILE_SIZE + 8;
+      const eyCenter = exit.y * TILE_SIZE + 8;
+      const dist = Math.hypot(px - exCenter, py - eyCenter);
+
+      if (dist <= 64) {
+        const bob = Math.sin(t * 5) * 2;
+        const alpha = Math.min(1.0, Math.max(0, (64 - dist) / 24));
+
+        let icon = '🚪';
+        let text = exit.label || 'Ausgang';
+        let bgCol = 'rgba(15, 23, 42, 0.92)';
+        let borderCol = '#94a3b8';
+        let textCol = '#f8fafc';
+
+        if (exit.targetDim === 'caves_l2') {
+          icon = '⬇️';
+          text = 'LEITER ZU EBENE -2';
+          bgCol = 'rgba(30, 27, 75, 0.94)';
+          borderCol = '#818cf8';
+          textCol = '#e0e7ff';
+        } else if (exit.targetDim === 'caves_l1') {
+          icon = '⬆️';
+          text = 'LEITER ZU EBENE -1';
+          bgCol = 'rgba(20, 83, 45, 0.94)';
+          borderCol = '#4ade80';
+          textCol = '#dcfce7';
+        } else if (exit.targetDim === 'overworld') {
+          icon = '☀️';
+          text = 'AUFSTIEG ZUR OBERWELT';
+          bgCol = 'rgba(67, 20, 7, 0.94)';
+          borderCol = '#f59e0b';
+          textCol = '#fef3c7';
+        }
+
+        this.ctx.save();
+        this.ctx.globalAlpha = alpha;
+        this.ctx.font = 'bold 9px "Press Start 2P", monospace, sans-serif';
+        const badgeText = `${icon} ${text}`;
+        const textWidth = this.ctx.measureText(badgeText).width;
+        const boxW = textWidth + 14;
+        const boxH = 18;
+        const boxX = exCenter - boxW / 2;
+        const boxY = eyCenter - 22 + bob;
+
+        // Shadow & Pill
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        this.ctx.beginPath();
+        this.ctx.roundRect(boxX + 1, boxY + 1.5, boxW, boxH, 4);
+        this.ctx.fill();
+
+        this.ctx.fillStyle = bgCol;
+        this.ctx.strokeStyle = borderCol;
+        this.ctx.lineWidth = 1.3;
+        this.ctx.beginPath();
+        this.ctx.roundRect(boxX, boxY, boxW, boxH, 4);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Badge Text
+        this.ctx.fillStyle = textCol;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(badgeText, exCenter, boxY + boxH / 2);
+        this.ctx.restore();
+      }
+    }
   }
 
   renderGlowCrystal(px, py, t, tx, ty, theme = 'main') {
@@ -23864,6 +24157,30 @@ class Game {
           this.ctx.arc(hx, hy, 58, 0, Math.PI * 2);
           this.ctx.fill();
         }
+        else if (this.map.getGroundTile(x, y) === TILES.CAVE_LADDER_DOWN) {
+          const lx = x * TILE_SIZE + 8;
+          const ly = y * TILE_SIZE + 8;
+          const lGrad = this.ctx.createRadialGradient(lx, ly, 4, lx, ly, 65);
+          lGrad.addColorStop(0, 'rgba(251, 191, 36, 0.55)');
+          lGrad.addColorStop(0.4, 'rgba(245, 158, 11, 0.22)');
+          lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          this.ctx.fillStyle = lGrad;
+          this.ctx.beginPath();
+          this.ctx.arc(lx, ly, 65, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
+        else if (this.map.getGroundTile(x, y) === TILES.CAVE_LADDER_UP) {
+          const lx = x * TILE_SIZE + 8;
+          const ly = y * TILE_SIZE + 8;
+          const lGrad = this.ctx.createRadialGradient(lx, ly, 4, lx, ly, 65);
+          lGrad.addColorStop(0, 'rgba(56, 189, 248, 0.55)');
+          lGrad.addColorStop(0.4, 'rgba(129, 140, 248, 0.22)');
+          lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          this.ctx.fillStyle = lGrad;
+          this.ctx.beginPath();
+          this.ctx.arc(lx, ly, 65, 0, Math.PI * 2);
+          this.ctx.fill();
+        }
       }
     }
   }
@@ -23977,6 +24294,18 @@ class Game {
           cCtx.fillStyle = hGrad;
           cCtx.beginPath();
           cCtx.arc(hx, hy, 56, 0, Math.PI * 2);
+          cCtx.fill();
+        }
+        else if (tile === TILES.CAVE_LADDER_DOWN || tile === TILES.CAVE_LADDER_UP) {
+          const lx = x * TILE_SIZE + 8;
+          const ly = y * TILE_SIZE + 8;
+          const lGrad = cCtx.createRadialGradient(lx, ly, 8, lx, ly, 64);
+          lGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          lGrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
+          lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+          cCtx.fillStyle = lGrad;
+          cCtx.beginPath();
+          cCtx.arc(lx, ly, 64, 0, Math.PI * 2);
           cCtx.fill();
         }
       }

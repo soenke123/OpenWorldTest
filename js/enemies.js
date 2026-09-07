@@ -1342,121 +1342,100 @@ export class EnemyManager {
     });
 
     // =========================================================================
+    // =========================================================================
     // HÖHLEN-SPAWNS (EBENE -1: CAVES_L1 & EBENE -2: CAVES_L2)
     // =========================================================================
 
-    // --- EBENE -1: OBERE HÖHLEN (Direkt mit Oberwelt verbunden) ---
-    // 1. Zentraler See & Hauptgrotten (145, 85)
-    this.spawnPack('cave_weaver', 145 * TILE_SIZE, 85 * TILE_SIZE, 6, 32, DIMENSIONS.CAVES_L1, 'pack_c1_spider_center', {
+    // --- EBENE -1: 3 GROSSE HÖHLENSYSTEME (Moos-Stollen, Basalt-Canyon, Eis/Void-Abgrund) ---
+    // 1. KOMPLEX 1: MOOS- & URALT-STOLLEN (Nordwest & Seenhalle)
+    this.spawnPack('cave_weaver', 125 * TILE_SIZE, 75 * TILE_SIZE, 8, 30, DIMENSIONS.CAVES_L1, 'pack_c1_spider_lake', {
       scale: 0.72, hp: 26, atk: 10, xpValue: 4
     });
-    this.spawnPack('cave_stalker', 138 * TILE_SIZE, 82 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_center', {
+    this.spawnPack('cave_weaver', 55 * TILE_SIZE, 48 * TILE_SIZE, 7, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_moss', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_weaver', 70 * TILE_SIZE, 72 * TILE_SIZE, 7, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_grass', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_weaver', 45 * TILE_SIZE, 32 * TILE_SIZE, 6, 26, DIMENSIONS.CAVES_L1, 'pack_c1_spider_spawn', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 60 * TILE_SIZE, 60 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_k1', {
       scale: 0.65, hp: 95, atk: 22, xpValue: 12
     });
-    this.spawnEnemy('rock_golem', 135 * TILE_SIZE, 95 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_center', {
+    this.spawnEnemy('rock_golem', 130 * TILE_SIZE, 85 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_lake', {
       scale: 1.35, hp: 380, atk: 26, xpValue: 24
     });
 
-    // 2. Westliches Grasland & Wald-Grotten (70, 72 & 52, 32)
-    this.spawnPack('cave_weaver', 65 * TILE_SIZE, 62 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_west', {
+    // 2. KOMPLEX 2: GLUT- & BASALT-CANYON (Südwesten & Süd-Moor)
+    this.spawnPack('cave_weaver', 75 * TILE_SIZE, 165 * TILE_SIZE, 8, 30, DIMENSIONS.CAVES_L1, 'pack_c1_spider_basalt', {
       scale: 0.72, hp: 26, atk: 10, xpValue: 4
     });
-    this.spawnPack('cave_stalker', 70 * TILE_SIZE, 72 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_west', {
-      scale: 0.65, hp: 95, atk: 22, xpValue: 12
-    });
-
-    // 3. Südwestliche Wüsten- & Canyon-Klüfte (70, 168 & 93, 156)
-    this.spawnPack('cave_weaver', 70 * TILE_SIZE, 168 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_desert', {
+    this.spawnPack('cave_weaver', 40 * TILE_SIZE, 155 * TILE_SIZE, 6, 26, DIMENSIONS.CAVES_L1, 'pack_c1_spider_dune', {
       scale: 0.72, hp: 26, atk: 10, xpValue: 4
     });
-    this.spawnPack('cave_stalker', 82 * TILE_SIZE, 160 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_desert', {
+    this.spawnPack('cave_weaver', 95 * TILE_SIZE, 165 * TILE_SIZE, 7, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_canyon', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_weaver', 175 * TILE_SIZE, 155 * TILE_SIZE, 7, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_swamp', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 85 * TILE_SIZE, 165 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_k2', {
       scale: 0.65, hp: 95, atk: 22, xpValue: 12
     });
-    this.spawnEnemy('rock_golem', 74 * TILE_SIZE, 166 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_desert', {
+    this.spawnEnemy('rock_golem', 78 * TILE_SIZE, 172 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_basalt', {
       scale: 1.35, hp: 380, atk: 26, xpValue: 24
     });
 
-    // 4. Nordöstliche Schnee- & Gletscher-Stollen (226, 32 & 197, 44)
-    this.spawnPack('cave_weaver', 215 * TILE_SIZE, 45 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_snow', {
+    // 3. KOMPLEX 3: GLAZIALER STERNENABGRUND (Nordost & Ost-Void)
+    this.spawnPack('cave_weaver', 225 * TILE_SIZE, 50 * TILE_SIZE, 8, 30, DIMENSIONS.CAVES_L1, 'pack_c1_spider_frost', {
       scale: 0.72, hp: 26, atk: 10, xpValue: 4
     });
-    this.spawnPack('cave_stalker', 226 * TILE_SIZE, 35 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_snow', {
+    this.spawnPack('cave_weaver', 255 * TILE_SIZE, 36 * TILE_SIZE, 6, 26, DIMENSIONS.CAVES_L1, 'pack_c1_spider_cape', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_weaver', 245 * TILE_SIZE, 95 * TILE_SIZE, 7, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_void', {
+      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    });
+    this.spawnPack('cave_stalker', 235 * TILE_SIZE, 65 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_k3', {
       scale: 0.65, hp: 95, atk: 22, xpValue: 12
     });
-    this.spawnEnemy('rock_golem', 205 * TILE_SIZE, 50 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_snow', {
+    this.spawnEnemy('rock_golem', 218 * TILE_SIZE, 52 * TILE_SIZE, DIMENSIONS.CAVES_L1, 'boss_c1_golem_frost', {
       scale: 1.35, hp: 380, atk: 26, xpValue: 24
     });
 
-    // 5. Südöstliche Sumpf- & Moor-Grotte (191, 144 & 209, 160)
-    this.spawnPack('cave_weaver', 195 * TILE_SIZE, 150 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L1, 'pack_c1_spider_swamp', {
-      scale: 0.72, hp: 26, atk: 10, xpValue: 4
+    // --- EBENE -2: DIE 3 BESONDEREN SANKTUARIEN ---
+    // 1. SANKTUM 1: Äther-Kristallgrotte (65, 55)
+    this.spawnEnemy('rock_golem', 65 * TILE_SIZE, 52 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crystal', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
     });
-    this.spawnPack('cave_stalker', 190 * TILE_SIZE, 142 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_swamp', {
-      scale: 0.65, hp: 95, atk: 22, xpValue: 12
-    });
-
-    // 6. Östliche Astrale Leeren-Kluft (243, 106 & 257, 94)
-    this.spawnPack('cave_weaver', 248 * TILE_SIZE, 100 * TILE_SIZE, 4, 25, DIMENSIONS.CAVES_L1, 'pack_c1_spider_void', {
-      scale: 0.72, hp: 26, atk: 10, xpValue: 4
-    });
-    this.spawnPack('cave_stalker', 243 * TILE_SIZE, 106 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L1, 'pack_c1_stalker_void', {
-      scale: 0.65, hp: 95, atk: 22, xpValue: 12
-    });
-
-    // --- EBENE -2: TIEFE HÖHLEN (Kristall-, Magma- & Basaltkammern) ---
-    // 1. Äther-Kristallpalast (145, 88)
-    this.spawnEnemy('rock_golem', 140 * TILE_SIZE, 85 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crystal1', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
-    });
-    this.spawnEnemy('rock_golem', 152 * TILE_SIZE, 92 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crystal2', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
-    });
-    this.spawnPack('cave_stalker', 145 * TILE_SIZE, 80 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_crystal', {
+    this.spawnPack('cave_stalker', 60 * TILE_SIZE, 58 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_crystal', {
       scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
-    this.spawnPack('cave_weaver', 148 * TILE_SIZE, 86 * TILE_SIZE, 5, 28, DIMENSIONS.CAVES_L2, 'pack_c2_spider_crystal', {
+    this.spawnPack('cave_weaver', 68 * TILE_SIZE, 56 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_crystal', {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
     });
 
-    // 2. Südwestliche Magma- & Basalthallen (72, 170)
-    this.spawnEnemy('rock_golem', 70 * TILE_SIZE, 166 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_magma1', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    // 2. SANKTUM 2: Magmakammer (75, 165)
+    this.spawnEnemy('rock_golem', 75 * TILE_SIZE, 162 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_magma', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
     });
-    this.spawnEnemy('rock_golem', 76 * TILE_SIZE, 174 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_magma2', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
-    });
-    this.spawnPack('cave_stalker', 72 * TILE_SIZE, 172 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_magma', {
+    this.spawnPack('cave_stalker', 72 * TILE_SIZE, 167 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_magma', {
       scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
-
-    // 3. Nordöstlicher Glazialer Abgrund (225, 45)
-    this.spawnEnemy('rock_golem', 222 * TILE_SIZE, 42 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_frost', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
-    });
-    this.spawnPack('cave_stalker', 228 * TILE_SIZE, 48 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_frost', {
-      scale: 0.65, hp: 105, atk: 24, xpValue: 14
-    });
-    this.spawnPack('cave_weaver', 224 * TILE_SIZE, 44 * TILE_SIZE, 4, 25, DIMENSIONS.CAVES_L2, 'pack_c2_spider_frost', {
+    this.spawnPack('cave_weaver', 78 * TILE_SIZE, 166 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_magma', {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
     });
 
-    // 4. Südöstliche Versunkene Krypta (195, 160)
-    this.spawnEnemy('rock_golem', 198 * TILE_SIZE, 158 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crypt', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
+    // 3. SANKTUM 3: Astraler Urleeren-Schlund (225, 50)
+    this.spawnEnemy('rock_golem', 225 * TILE_SIZE, 47 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_void', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
     });
-    this.spawnPack('cave_stalker', 192 * TILE_SIZE, 162 * TILE_SIZE, 2, 22, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_crypt', {
+    this.spawnPack('cave_stalker', 222 * TILE_SIZE, 53 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_void', {
       scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
-    this.spawnPack('cave_weaver', 196 * TILE_SIZE, 156 * TILE_SIZE, 5, 26, DIMENSIONS.CAVES_L2, 'pack_c2_spider_crypt', {
+    this.spawnPack('cave_weaver', 228 * TILE_SIZE, 52 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_void', {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
-    });
-
-    // 5. Tiefe Astrale Leere (245, 100)
-    this.spawnEnemy('rock_golem', 244 * TILE_SIZE, 98 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_void', {
-      scale: 1.45, hp: 420, atk: 28, xpValue: 30
-    });
-    this.spawnPack('cave_stalker', 246 * TILE_SIZE, 102 * TILE_SIZE, 2, 20, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_void', {
-      scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
 
     // =========================================================================
