@@ -1929,12 +1929,26 @@ export class MagicManager {
     const player = this.game?.player;
     if (!this.magicHudSlot) return;
 
-    if (!player || !player.artifact || player.artifact.charges <= 0) {
+    // Ohne jemals gebundenes Artefakt gibt es nichts zu zeigen -> ganzer Slot weg.
+    if (!player || !player.artifact) {
       this.magicHudSlot.classList.add('hidden');
       return;
     }
 
     this.magicHudSlot.classList.remove('hidden');
+
+    const hasCharges = player.artifact.charges > 0;
+
+    // Der Zauber-Button (Icon + Aufladungs-Badge) verschwindet, sobald der Zauber
+    // verbraucht ist - das kleine Info-"i" daneben bleibt aber IMMER sichtbar,
+    // damit man den Zauber jederzeit nachschlagen kann.
+    if (this.btnCastMagic) {
+      this.btnCastMagic.classList.toggle('hidden', !hasCharges);
+    }
+
+    if (!hasCharges) {
+      return;
+    }
 
     if (this.magicChargesBadge) {
       this.magicChargesBadge.textContent = player.artifact.charges;
