@@ -6819,10 +6819,9 @@ class CaveMap {
     this.carveTunnel(225, 50, 255, 36, 4.8);
     this.carveTunnel(225, 50, 245, 95, 4.8);
 
-    // 3 GROSSE VERBINDUNGS-AUTOBAHNEN (Zwischen den 3 Komplexen)
-    this.carveTunnel(70, 72, 75, 165, 4.5);   // Komplex 1 <-> Komplex 2 (Nordwest nach Südwest)
-    this.carveTunnel(125, 75, 195, 45, 4.5);  // Komplex 1 <-> Komplex 3 (Zentrum nach Nordost)
-    this.carveTunnel(175, 155, 245, 95, 4.5); // Komplex 2 <-> Komplex 3 (Süd nach Ost)
+    // WICHTIG: Die 3 Komplexe bleiben absichtlich VONEINANDER GETRENNT (keine Verbindungstunnel
+    // untereinander) – jeder Komplex ist nur über seine eigenen Oberwelt-Löcher erreichbar und
+    // bildet ein in sich geschlossenes, isoliertes Höhlensystem.
 
     // Alle 26 Oberwelt-Löcher mit großzügigen Räumen und Anbindungen versehen
     for (const ent of entrances) {
@@ -6846,12 +6845,18 @@ class CaveMap {
     }
 
     // ==========================================================================================
-    // 3. GENAU DREI LEITERN NACH UNTEN (Zu den 3 Sanktuarien in Ebene -2)
+    // 3. SECHS LEITERN NACH UNTEN (Je 2 pro Komplex, zu den 6 Sanktuarien in Ebene -2)
     // ==========================================================================================
     const deepLadders = [
+      // Komplex 1 (Moos- & Uralt-Stollen)
       { x: 65,  y: 55,  chamber: 'crystal_sanctuary', label: '⬇️ Leiter zur Äther-Kristallgrotte (Ebene -2)' },
+      { x: 45,  y: 32,  chamber: 'root_sanctuary',    label: '⬇️ Leiter zum Wurzelgewölbe der Alten (Ebene -2)' },
+      // Komplex 2 (Glut- & Basalt-Canyon)
       { x: 75,  y: 165, chamber: 'magma_sanctuary',   label: '⬇️ Leiter zur Magmakammer (Ebene -2)' },
-      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬇️ Leiter zum Astralen Sternenschlund (Ebene -2)' }
+      { x: 215, y: 165, chamber: 'tar_sanctuary',     label: '⬇️ Leiter zum Teerpfuhl-Sanktum (Ebene -2)' },
+      // Komplex 3 (Glazialer Sternenabgrund)
+      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬇️ Leiter zum Astralen Sternenschlund (Ebene -2)' },
+      { x: 255, y: 36,  chamber: 'frost_sanctuary',   label: '⬇️ Leiter zum Frost-Dom der Ewigkeit (Ebene -2)' }
     ];
 
     for (const dl of deepLadders) {
@@ -6922,7 +6927,8 @@ class CaveMap {
   }
 
   // ---------------------------------------------------------------------------------------------------
-  // EBENE -2: TIEFE SANCTUARIEN (290x200) – 3 Besondere kleine Höhlen mit jeweils einem Schrein
+  // EBENE -2: TIEFE SANCTUARIEN (290x200) – 6 Besondere, ISOLIERTE kleine Höhlen (keine Tunnel
+  // untereinander!) mit jeweils einem Schrein, je 2 pro Komplex der Ebene -1
   // ---------------------------------------------------------------------------------------------------
   generateCavesL2() {
     // 1. SANKTUM 1: DIE ÄTHER-KRISTALLGROTTE (bei 65, 55)
@@ -6975,13 +6981,66 @@ class CaveMap {
       }
     }
 
+    // 4. SANKTUM 4: DAS WURZELGEWÖLBE DER ALTEN (bei 45, 32) – Komplex 1
+    // Reached via Leiter von (45, 32)
+    this.carveRoom(45, 32, 11, 9, 0.14);
+    const rootGlowSpots = [
+      { x: 39, y: 29 }, { x: 51, y: 29 }, { x: 38, y: 34 }, { x: 52, y: 34 },
+      { x: 42, y: 37 }, { x: 48, y: 37 }
+    ];
+    for (const rs of rootGlowSpots) {
+      if (this.isValid(rs.x, rs.y) && this.ground[rs.y][rs.x] === TILES.CAVE_FLOOR) {
+        this.objects[rs.y][rs.x] = OBJECTS.CAVE_MUSHROOM_GLOW;
+      }
+    }
+
+    // 5. SANKTUM 5: DAS TEERPFUHL-SANKTUM (bei 215, 165) – Komplex 2
+    // Reached via Leiter von (215, 165)
+    this.carveRoom(215, 165, 12, 10, 0.13);
+    // Brodelnder Teerpfuhl in der Mitte
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const px = 215 + dx;
+        const py = 168 + dy;
+        if (this.isValid(px, py) && Math.hypot(dx / 4, dy / 2) <= 0.8) {
+          this.ground[py][px] = TILES.CAVE_WATER;
+        }
+      }
+    }
+    const tarGlowSpots = [
+      { x: 208, y: 161 }, { x: 222, y: 161 }, { x: 207, y: 168 }, { x: 223, y: 168 },
+      { x: 211, y: 172 }, { x: 219, y: 172 }
+    ];
+    for (const ts of tarGlowSpots) {
+      if (this.isValid(ts.x, ts.y) && this.ground[ts.y][ts.x] === TILES.CAVE_FLOOR) {
+        this.objects[ts.y][ts.x] = OBJECTS.TORCH;
+      }
+    }
+
+    // 6. SANKTUM 6: DER FROST-DOM DER EWIGKEIT (bei 255, 36) – Komplex 3
+    // Reached via Leiter von (255, 36)
+    this.carveRoom(255, 36, 11, 9, 0.13);
+    const frostGlowSpots = [
+      { x: 249, y: 33 }, { x: 261, y: 33 }, { x: 248, y: 38 }, { x: 262, y: 38 },
+      { x: 252, y: 41 }, { x: 258, y: 41 }
+    ];
+    for (const fs of frostGlowSpots) {
+      if (this.isValid(fs.x, fs.y) && this.ground[fs.y][fs.x] === TILES.CAVE_FLOOR) {
+        this.objects[fs.y][fs.x] = OBJECTS.ROCK_ICE;
+      }
+    }
+
     // ==========================================================================================
-    // DIE DREI URALTEN TIEFENSCHREINE IN EBENE -2 (Ein Schrein in jeder besonderen Grotte!)
+    // DIE SECHS URALTEN TIEFENSCHREINE IN EBENE -2 (Ein Schrein in jeder besonderen Grotte!)
+    // Die 6 Sanktuarien sind absichtlich ISOLIERT – keine Tunnel verbinden sie untereinander.
     // ==========================================================================================
     const shrinesL2 = [
       { x: 65,  y: 50,  name: 'Schrein des Äther-Kristalls' },
+      { x: 45,  y: 27,  name: 'Schrein des Wurzelgewölbes' },
       { x: 75,  y: 159, name: 'Schrein der Magma-Urkraft' },
-      { x: 225, y: 44,  name: 'Schrein des Tiefsten Vergessens' }
+      { x: 215, y: 160, name: 'Schrein des Teerpfuhls' },
+      { x: 225, y: 44,  name: 'Schrein des Tiefsten Vergessens' },
+      { x: 255, y: 31,  name: 'Schrein des Frostdoms' }
     ];
 
     for (const s of shrinesL2) {
@@ -6995,12 +7054,15 @@ class CaveMap {
     }
 
     // ==========================================================================================
-    // DIE DREI LEITERN NACH OBEN (Exakt korrespondierend zu Ebene -1)
+    // DIE SECHS LEITERN NACH OBEN (Exakt korrespondierend zu Ebene -1)
     // ==========================================================================================
     const upLadders = [
       { x: 65,  y: 55,  chamber: 'crystal_sanctuary', label: '⬆️ Leiter zum Moos-Stollen (Ebene -1)' },
+      { x: 45,  y: 32,  chamber: 'root_sanctuary',    label: '⬆️ Leiter zum Moos-Stollen (Ebene -1)' },
       { x: 75,  y: 165, chamber: 'magma_sanctuary',   label: '⬆️ Leiter zum Basalt-Canyon (Ebene -1)' },
-      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬆️ Leiter zum Gletscher-Palast (Ebene -1)' }
+      { x: 215, y: 165, chamber: 'tar_sanctuary',     label: '⬆️ Leiter zum Basalt-Canyon (Ebene -1)' },
+      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬆️ Leiter zum Gletscher-Palast (Ebene -1)' },
+      { x: 255, y: 36,  chamber: 'frost_sanctuary',   label: '⬆️ Leiter zum Gletscher-Palast (Ebene -1)' }
     ];
 
     for (const ul of upLadders) {
@@ -7018,7 +7080,7 @@ class CaveMap {
       this.placeTorchIfFloor(ul.x + 2, ul.y);
     }
 
-    // Tiefen-Dekoration (leuchtende Pilze & Fackeln nur in den 3 Sanktuarien)
+    // Tiefen-Dekoration (leuchtende Pilze & Fackeln nur in den 6 Sanktuarien)
     this.decorateCaves(true);
   }
 
@@ -12651,7 +12713,7 @@ class EnemyManager {
       scale: 1.35, hp: 380, atk: 26, xpValue: 24
     });
 
-    // --- EBENE -2: DIE 3 BESONDEREN SANKTUARIEN ---
+    // --- EBENE -2: DIE 6 BESONDEREN, ISOLIERTEN SANKTUARIEN (je 2 pro Komplex) ---
     // 1. SANKTUM 1: Äther-Kristallgrotte (65, 55)
     this.spawnEnemy('rock_golem', 65 * TILE_SIZE, 52 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crystal', {
       scale: 1.45, hp: 440, atk: 28, xpValue: 32
@@ -12663,7 +12725,18 @@ class EnemyManager {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
     });
 
-    // 2. SANKTUM 2: Magmakammer (75, 165)
+    // 2. SANKTUM 2: Wurzelgewölbe der Alten (45, 32)
+    this.spawnEnemy('rock_golem', 45 * TILE_SIZE, 29 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_root', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
+    });
+    this.spawnPack('cave_stalker', 41 * TILE_SIZE, 35 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_root', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
+    });
+    this.spawnPack('cave_weaver', 48 * TILE_SIZE, 33 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_root', {
+      scale: 0.72, hp: 28, atk: 12, xpValue: 5
+    });
+
+    // 3. SANKTUM 3: Magmakammer (75, 165)
     this.spawnEnemy('rock_golem', 75 * TILE_SIZE, 162 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_magma', {
       scale: 1.45, hp: 440, atk: 28, xpValue: 32
     });
@@ -12674,7 +12747,18 @@ class EnemyManager {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
     });
 
-    // 3. SANKTUM 3: Astraler Urleeren-Schlund (225, 50)
+    // 4. SANKTUM 4: Teerpfuhl-Sanktum (215, 165)
+    this.spawnEnemy('rock_golem', 215 * TILE_SIZE, 162 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_tar', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
+    });
+    this.spawnPack('cave_stalker', 211 * TILE_SIZE, 168 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_tar', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
+    });
+    this.spawnPack('cave_weaver', 219 * TILE_SIZE, 166 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_tar', {
+      scale: 0.72, hp: 28, atk: 12, xpValue: 5
+    });
+
+    // 5. SANKTUM 5: Astraler Urleeren-Schlund (225, 50)
     this.spawnEnemy('rock_golem', 225 * TILE_SIZE, 47 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_void', {
       scale: 1.45, hp: 440, atk: 28, xpValue: 32
     });
@@ -12682,6 +12766,17 @@ class EnemyManager {
       scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
     this.spawnPack('cave_weaver', 228 * TILE_SIZE, 52 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_void', {
+      scale: 0.72, hp: 28, atk: 12, xpValue: 5
+    });
+
+    // 6. SANKTUM 6: Frost-Dom der Ewigkeit (255, 36)
+    this.spawnEnemy('rock_golem', 255 * TILE_SIZE, 33 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_frost', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
+    });
+    this.spawnPack('cave_stalker', 251 * TILE_SIZE, 39 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_frost', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
+    });
+    this.spawnPack('cave_weaver', 259 * TILE_SIZE, 37 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_frost', {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
     });
 
@@ -13325,7 +13420,7 @@ class Player {
     // Dimensions-Transitionen (Trampolin, Wolkenfall, Höhleneinstieg)
     this.transition = null; // { type, timer, duration, targetDim, targetX, targetY, switched }
     this.transitionCooldown = 0;
-    this.lastTransitionTile = null; // Verhindert Re-Triggering solange man auf dem Zielfeld steht
+    this.lastTransitionPos = null; // Verhindert Re-Triggering, bis der Spieler sich weit genug vom Eingang wegbewegt hat
     this.discoveredShrines = new Set();
     this.shrineMessage = null;
     this.artifact = null; // Active magical artifact { id, name, charges, maxCharges, cooldownTimer, ... }
@@ -13339,7 +13434,7 @@ class Player {
     this.revertBearForm();
     this.transition = null;
     this.transitionCooldown = 0.5;
-    this.lastTransitionTile = null;
+    this.lastTransitionPos = null;
     this.isDead = false;
     this.deathTimer = 0;
     this.hp = this.maxHp;
@@ -14261,10 +14356,7 @@ class Player {
         }
         this.transition = null;
         this.transitionCooldown = 0.1;
-        this.lastTransitionTile = {
-          x: Math.floor(this.x / TILE_SIZE),
-          y: Math.floor(this.y / TILE_SIZE)
-        };
+        this.lastTransitionPos = { x: this.x, y: this.y };
       }
       return;
     }
@@ -14652,9 +14744,16 @@ class Player {
     const curTileX = Math.floor(this.x / TILE_SIZE);
     const curTileY = Math.floor(this.y / TILE_SIZE);
 
-    // Sobald sich der Spieler vom Lande-Kachel wegbewegt, wird der Schutz aufgehoben
-    if (this.lastTransitionTile && (this.lastTransitionTile.x !== curTileX || this.lastTransitionTile.y !== curTileY)) {
-      this.lastTransitionTile = null;
+    // Rückweg bleibt gesperrt, bis der Spieler sich wirklich vom Eingang/Leiter wegbewegt hat.
+    // Ein reiner Kachel-Vergleich reicht nicht: der Trigger-Radius der Ausgänge (18px) ist größer
+    // als eine einzelne Kachel (16px), wodurch man direkt nach einem Schritt sofort wieder
+    // zurückgeworfen wurde ("Hin- und Herspringen"). Deshalb hier ein echter Mindestabstand.
+    const TRANSITION_REARM_DISTANCE = 32;
+    if (this.lastTransitionPos) {
+      const distFromEntry = Math.hypot(this.x - this.lastTransitionPos.x, this.y - this.lastTransitionPos.y);
+      if (distFromEntry > TRANSITION_REARM_DISTANCE) {
+        this.lastTransitionPos = null;
+      }
     }
 
     const currentGround = this.map.getGroundTile ? this.map.getGroundTile(curTileX, curTileY) : 0;
@@ -14715,10 +14814,11 @@ class Player {
     // Seltene Schreine prüfen (immer prüfen, auch im Stehen)
     this.checkShrines(curTileX, curTileY);
 
-    // Dimension-Trigger prüfen (nur wenn keine Transition läuft, Cooldown vorbei ist und nicht auf Lande-Kachel)
-    const isLandingTile = Boolean(this.lastTransitionTile && this.lastTransitionTile.x === curTileX && this.lastTransitionTile.y === curTileY);
+    // Dimension-Trigger prüfen (nur wenn keine Transition läuft, Cooldown vorbei ist und der Rückweg
+    // noch nicht wieder scharf ist, siehe TRANSITION_REARM_DISTANCE oben)
+    const isInEntryZone = Boolean(this.lastTransitionPos);
 
-    if (!this.transition && this.transitionCooldown <= 0 && !isLandingTile) {
+    if (!this.transition && this.transitionCooldown <= 0 && !isInEntryZone) {
       // 1. Trampolin auf der Oberwelt -> Bounced in die Wolkenwelt
       if (this.game && this.game.currentDimension === 'overworld') {
         if (this.map.isTrampoline && this.map.isTrampoline(curTileX, curTileY)) {
@@ -21255,10 +21355,7 @@ class Game {
 
     this.player.x = finalX;
     this.player.y = finalY;
-    this.player.lastTransitionTile = {
-      x: Math.floor(finalX / TILE_SIZE),
-      y: Math.floor(finalY / TILE_SIZE)
-    };
+    this.player.lastTransitionPos = { x: finalX, y: finalY };
     this.camera.setWorldBounds(this.map.width, this.map.height);
     this.camera.follow(finalX, finalY);
     this.minimap.setMap(this.map, this.currentDimension);

@@ -330,10 +330,9 @@ export class CaveMap {
     this.carveTunnel(225, 50, 255, 36, 4.8);
     this.carveTunnel(225, 50, 245, 95, 4.8);
 
-    // 3 GROSSE VERBINDUNGS-AUTOBAHNEN (Zwischen den 3 Komplexen)
-    this.carveTunnel(70, 72, 75, 165, 4.5);   // Komplex 1 <-> Komplex 2 (Nordwest nach Südwest)
-    this.carveTunnel(125, 75, 195, 45, 4.5);  // Komplex 1 <-> Komplex 3 (Zentrum nach Nordost)
-    this.carveTunnel(175, 155, 245, 95, 4.5); // Komplex 2 <-> Komplex 3 (Süd nach Ost)
+    // WICHTIG: Die 3 Komplexe bleiben absichtlich VONEINANDER GETRENNT (keine Verbindungstunnel
+    // untereinander) – jeder Komplex ist nur über seine eigenen Oberwelt-Löcher erreichbar und
+    // bildet ein in sich geschlossenes, isoliertes Höhlensystem.
 
     // Alle 26 Oberwelt-Löcher mit großzügigen Räumen und Anbindungen versehen
     for (const ent of entrances) {
@@ -357,12 +356,18 @@ export class CaveMap {
     }
 
     // ==========================================================================================
-    // 3. GENAU DREI LEITERN NACH UNTEN (Zu den 3 Sanktuarien in Ebene -2)
+    // 3. SECHS LEITERN NACH UNTEN (Je 2 pro Komplex, zu den 6 Sanktuarien in Ebene -2)
     // ==========================================================================================
     const deepLadders = [
+      // Komplex 1 (Moos- & Uralt-Stollen)
       { x: 65,  y: 55,  chamber: 'crystal_sanctuary', label: '⬇️ Leiter zur Äther-Kristallgrotte (Ebene -2)' },
+      { x: 45,  y: 32,  chamber: 'root_sanctuary',    label: '⬇️ Leiter zum Wurzelgewölbe der Alten (Ebene -2)' },
+      // Komplex 2 (Glut- & Basalt-Canyon)
       { x: 75,  y: 165, chamber: 'magma_sanctuary',   label: '⬇️ Leiter zur Magmakammer (Ebene -2)' },
-      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬇️ Leiter zum Astralen Sternenschlund (Ebene -2)' }
+      { x: 215, y: 165, chamber: 'tar_sanctuary',     label: '⬇️ Leiter zum Teerpfuhl-Sanktum (Ebene -2)' },
+      // Komplex 3 (Glazialer Sternenabgrund)
+      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬇️ Leiter zum Astralen Sternenschlund (Ebene -2)' },
+      { x: 255, y: 36,  chamber: 'frost_sanctuary',   label: '⬇️ Leiter zum Frost-Dom der Ewigkeit (Ebene -2)' }
     ];
 
     for (const dl of deepLadders) {
@@ -433,7 +438,8 @@ export class CaveMap {
   }
 
   // ---------------------------------------------------------------------------------------------------
-  // EBENE -2: TIEFE SANCTUARIEN (290x200) – 3 Besondere kleine Höhlen mit jeweils einem Schrein
+  // EBENE -2: TIEFE SANCTUARIEN (290x200) – 6 Besondere, ISOLIERTE kleine Höhlen (keine Tunnel
+  // untereinander!) mit jeweils einem Schrein, je 2 pro Komplex der Ebene -1
   // ---------------------------------------------------------------------------------------------------
   generateCavesL2() {
     // 1. SANKTUM 1: DIE ÄTHER-KRISTALLGROTTE (bei 65, 55)
@@ -486,13 +492,66 @@ export class CaveMap {
       }
     }
 
+    // 4. SANKTUM 4: DAS WURZELGEWÖLBE DER ALTEN (bei 45, 32) – Komplex 1
+    // Reached via Leiter von (45, 32)
+    this.carveRoom(45, 32, 11, 9, 0.14);
+    const rootGlowSpots = [
+      { x: 39, y: 29 }, { x: 51, y: 29 }, { x: 38, y: 34 }, { x: 52, y: 34 },
+      { x: 42, y: 37 }, { x: 48, y: 37 }
+    ];
+    for (const rs of rootGlowSpots) {
+      if (this.isValid(rs.x, rs.y) && this.ground[rs.y][rs.x] === TILES.CAVE_FLOOR) {
+        this.objects[rs.y][rs.x] = OBJECTS.CAVE_MUSHROOM_GLOW;
+      }
+    }
+
+    // 5. SANKTUM 5: DAS TEERPFUHL-SANKTUM (bei 215, 165) – Komplex 2
+    // Reached via Leiter von (215, 165)
+    this.carveRoom(215, 165, 12, 10, 0.13);
+    // Brodelnder Teerpfuhl in der Mitte
+    for (let dy = -2; dy <= 2; dy++) {
+      for (let dx = -4; dx <= 4; dx++) {
+        const px = 215 + dx;
+        const py = 168 + dy;
+        if (this.isValid(px, py) && Math.hypot(dx / 4, dy / 2) <= 0.8) {
+          this.ground[py][px] = TILES.CAVE_WATER;
+        }
+      }
+    }
+    const tarGlowSpots = [
+      { x: 208, y: 161 }, { x: 222, y: 161 }, { x: 207, y: 168 }, { x: 223, y: 168 },
+      { x: 211, y: 172 }, { x: 219, y: 172 }
+    ];
+    for (const ts of tarGlowSpots) {
+      if (this.isValid(ts.x, ts.y) && this.ground[ts.y][ts.x] === TILES.CAVE_FLOOR) {
+        this.objects[ts.y][ts.x] = OBJECTS.TORCH;
+      }
+    }
+
+    // 6. SANKTUM 6: DER FROST-DOM DER EWIGKEIT (bei 255, 36) – Komplex 3
+    // Reached via Leiter von (255, 36)
+    this.carveRoom(255, 36, 11, 9, 0.13);
+    const frostGlowSpots = [
+      { x: 249, y: 33 }, { x: 261, y: 33 }, { x: 248, y: 38 }, { x: 262, y: 38 },
+      { x: 252, y: 41 }, { x: 258, y: 41 }
+    ];
+    for (const fs of frostGlowSpots) {
+      if (this.isValid(fs.x, fs.y) && this.ground[fs.y][fs.x] === TILES.CAVE_FLOOR) {
+        this.objects[fs.y][fs.x] = OBJECTS.ROCK_ICE;
+      }
+    }
+
     // ==========================================================================================
-    // DIE DREI URALTEN TIEFENSCHREINE IN EBENE -2 (Ein Schrein in jeder besonderen Grotte!)
+    // DIE SECHS URALTEN TIEFENSCHREINE IN EBENE -2 (Ein Schrein in jeder besonderen Grotte!)
+    // Die 6 Sanktuarien sind absichtlich ISOLIERT – keine Tunnel verbinden sie untereinander.
     // ==========================================================================================
     const shrinesL2 = [
       { x: 65,  y: 50,  name: 'Schrein des Äther-Kristalls' },
+      { x: 45,  y: 27,  name: 'Schrein des Wurzelgewölbes' },
       { x: 75,  y: 159, name: 'Schrein der Magma-Urkraft' },
-      { x: 225, y: 44,  name: 'Schrein des Tiefsten Vergessens' }
+      { x: 215, y: 160, name: 'Schrein des Teerpfuhls' },
+      { x: 225, y: 44,  name: 'Schrein des Tiefsten Vergessens' },
+      { x: 255, y: 31,  name: 'Schrein des Frostdoms' }
     ];
 
     for (const s of shrinesL2) {
@@ -506,12 +565,15 @@ export class CaveMap {
     }
 
     // ==========================================================================================
-    // DIE DREI LEITERN NACH OBEN (Exakt korrespondierend zu Ebene -1)
+    // DIE SECHS LEITERN NACH OBEN (Exakt korrespondierend zu Ebene -1)
     // ==========================================================================================
     const upLadders = [
       { x: 65,  y: 55,  chamber: 'crystal_sanctuary', label: '⬆️ Leiter zum Moos-Stollen (Ebene -1)' },
+      { x: 45,  y: 32,  chamber: 'root_sanctuary',    label: '⬆️ Leiter zum Moos-Stollen (Ebene -1)' },
       { x: 75,  y: 165, chamber: 'magma_sanctuary',   label: '⬆️ Leiter zum Basalt-Canyon (Ebene -1)' },
-      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬆️ Leiter zum Gletscher-Palast (Ebene -1)' }
+      { x: 215, y: 165, chamber: 'tar_sanctuary',     label: '⬆️ Leiter zum Basalt-Canyon (Ebene -1)' },
+      { x: 225, y: 50,  chamber: 'void_sanctuary',    label: '⬆️ Leiter zum Gletscher-Palast (Ebene -1)' },
+      { x: 255, y: 36,  chamber: 'frost_sanctuary',   label: '⬆️ Leiter zum Gletscher-Palast (Ebene -1)' }
     ];
 
     for (const ul of upLadders) {
@@ -529,7 +591,7 @@ export class CaveMap {
       this.placeTorchIfFloor(ul.x + 2, ul.y);
     }
 
-    // Tiefen-Dekoration (leuchtende Pilze & Fackeln nur in den 3 Sanktuarien)
+    // Tiefen-Dekoration (leuchtende Pilze & Fackeln nur in den 6 Sanktuarien)
     this.decorateCaves(true);
   }
 

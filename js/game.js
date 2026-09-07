@@ -969,10 +969,7 @@ class Game {
 
     this.player.x = finalX;
     this.player.y = finalY;
-    this.player.lastTransitionTile = {
-      x: Math.floor(finalX / TILE_SIZE),
-      y: Math.floor(finalY / TILE_SIZE)
-    };
+    this.player.lastTransitionPos = { x: finalX, y: finalY };
     this.camera.setWorldBounds(this.map.width, this.map.height);
     this.camera.follow(finalX, finalY);
     this.minimap.setMap(this.map, this.currentDimension);

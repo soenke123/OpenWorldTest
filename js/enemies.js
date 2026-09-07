@@ -1404,7 +1404,7 @@ export class EnemyManager {
       scale: 1.35, hp: 380, atk: 26, xpValue: 24
     });
 
-    // --- EBENE -2: DIE 3 BESONDEREN SANKTUARIEN ---
+    // --- EBENE -2: DIE 6 BESONDEREN, ISOLIERTEN SANKTUARIEN (je 2 pro Komplex) ---
     // 1. SANKTUM 1: Äther-Kristallgrotte (65, 55)
     this.spawnEnemy('rock_golem', 65 * TILE_SIZE, 52 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_crystal', {
       scale: 1.45, hp: 440, atk: 28, xpValue: 32
@@ -1416,7 +1416,18 @@ export class EnemyManager {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
     });
 
-    // 2. SANKTUM 2: Magmakammer (75, 165)
+    // 2. SANKTUM 2: Wurzelgewölbe der Alten (45, 32)
+    this.spawnEnemy('rock_golem', 45 * TILE_SIZE, 29 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_root', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
+    });
+    this.spawnPack('cave_stalker', 41 * TILE_SIZE, 35 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_root', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
+    });
+    this.spawnPack('cave_weaver', 48 * TILE_SIZE, 33 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_root', {
+      scale: 0.72, hp: 28, atk: 12, xpValue: 5
+    });
+
+    // 3. SANKTUM 3: Magmakammer (75, 165)
     this.spawnEnemy('rock_golem', 75 * TILE_SIZE, 162 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_magma', {
       scale: 1.45, hp: 440, atk: 28, xpValue: 32
     });
@@ -1427,7 +1438,18 @@ export class EnemyManager {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
     });
 
-    // 3. SANKTUM 3: Astraler Urleeren-Schlund (225, 50)
+    // 4. SANKTUM 4: Teerpfuhl-Sanktum (215, 165)
+    this.spawnEnemy('rock_golem', 215 * TILE_SIZE, 162 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_tar', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
+    });
+    this.spawnPack('cave_stalker', 211 * TILE_SIZE, 168 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_tar', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
+    });
+    this.spawnPack('cave_weaver', 219 * TILE_SIZE, 166 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_tar', {
+      scale: 0.72, hp: 28, atk: 12, xpValue: 5
+    });
+
+    // 5. SANKTUM 5: Astraler Urleeren-Schlund (225, 50)
     this.spawnEnemy('rock_golem', 225 * TILE_SIZE, 47 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_void', {
       scale: 1.45, hp: 440, atk: 28, xpValue: 32
     });
@@ -1435,6 +1457,17 @@ export class EnemyManager {
       scale: 0.65, hp: 105, atk: 24, xpValue: 14
     });
     this.spawnPack('cave_weaver', 228 * TILE_SIZE, 52 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_void', {
+      scale: 0.72, hp: 28, atk: 12, xpValue: 5
+    });
+
+    // 6. SANKTUM 6: Frost-Dom der Ewigkeit (255, 36)
+    this.spawnEnemy('rock_golem', 255 * TILE_SIZE, 33 * TILE_SIZE, DIMENSIONS.CAVES_L2, 'boss_c2_golem_frost', {
+      scale: 1.45, hp: 440, atk: 28, xpValue: 32
+    });
+    this.spawnPack('cave_stalker', 251 * TILE_SIZE, 39 * TILE_SIZE, 1, 16, DIMENSIONS.CAVES_L2, 'pack_c2_stalker_frost', {
+      scale: 0.65, hp: 105, atk: 24, xpValue: 14
+    });
+    this.spawnPack('cave_weaver', 259 * TILE_SIZE, 37 * TILE_SIZE, 5, 20, DIMENSIONS.CAVES_L2, 'pack_c2_spider_frost', {
       scale: 0.72, hp: 28, atk: 12, xpValue: 5
     });
 

@@ -113,7 +113,7 @@ export class Player {
     // Dimensions-Transitionen (Trampolin, Wolkenfall, Höhleneinstieg)
     this.transition = null; // { type, timer, duration, targetDim, targetX, targetY, switched }
     this.transitionCooldown = 0;
-    this.lastTransitionTile = null; // Verhindert Re-Triggering solange man auf dem Zielfeld steht
+    this.lastTransitionPos = null; // Verhindert Re-Triggering, bis der Spieler sich weit genug vom Eingang wegbewegt hat
     this.discoveredShrines = new Set();
     this.shrineMessage = null;
     this.artifact = null; // Active magical artifact { id, name, charges, maxCharges, cooldownTimer, ... }
@@ -127,7 +127,7 @@ export class Player {
     this.revertBearForm();
     this.transition = null;
     this.transitionCooldown = 0.5;
-    this.lastTransitionTile = null;
+    this.lastTransitionPos = null;
     this.isDead = false;
     this.deathTimer = 0;
     this.hp = this.maxHp;
@@ -1049,10 +1049,7 @@ export class Player {
         }
         this.transition = null;
         this.transitionCooldown = 0.1;
-        this.lastTransitionTile = {
-          x: Math.floor(this.x / TILE_SIZE),
-          y: Math.floor(this.y / TILE_SIZE)
-        };
+        this.lastTransitionPos = { x: this.x, y: this.y };
       }
       return;
     }
@@ -1440,9 +1437,16 @@ export class Player {
     const curTileX = Math.floor(this.x / TILE_SIZE);
     const curTileY = Math.floor(this.y / TILE_SIZE);
 
-    // Sobald sich der Spieler vom Lande-Kachel wegbewegt, wird der Schutz aufgehoben
-    if (this.lastTransitionTile && (this.lastTransitionTile.x !== curTileX || this.lastTransitionTile.y !== curTileY)) {
-      this.lastTransitionTile = null;
+    // Rückweg bleibt gesperrt, bis der Spieler sich wirklich vom Eingang/Leiter wegbewegt hat.
+    // Ein reiner Kachel-Vergleich reicht nicht: der Trigger-Radius der Ausgänge (18px) ist größer
+    // als eine einzelne Kachel (16px), wodurch man direkt nach einem Schritt sofort wieder
+    // zurückgeworfen wurde ("Hin- und Herspringen"). Deshalb hier ein echter Mindestabstand.
+    const TRANSITION_REARM_DISTANCE = 32;
+    if (this.lastTransitionPos) {
+      const distFromEntry = Math.hypot(this.x - this.lastTransitionPos.x, this.y - this.lastTransitionPos.y);
+      if (distFromEntry > TRANSITION_REARM_DISTANCE) {
+        this.lastTransitionPos = null;
+      }
     }
 
     const currentGround = this.map.getGroundTile ? this.map.getGroundTile(curTileX, curTileY) : 0;
@@ -1503,10 +1507,11 @@ export class Player {
     // Seltene Schreine prüfen (immer prüfen, auch im Stehen)
     this.checkShrines(curTileX, curTileY);
 
-    // Dimension-Trigger prüfen (nur wenn keine Transition läuft, Cooldown vorbei ist und nicht auf Lande-Kachel)
-    const isLandingTile = Boolean(this.lastTransitionTile && this.lastTransitionTile.x === curTileX && this.lastTransitionTile.y === curTileY);
+    // Dimension-Trigger prüfen (nur wenn keine Transition läuft, Cooldown vorbei ist und der Rückweg
+    // noch nicht wieder scharf ist, siehe TRANSITION_REARM_DISTANCE oben)
+    const isInEntryZone = Boolean(this.lastTransitionPos);
 
-    if (!this.transition && this.transitionCooldown <= 0 && !isLandingTile) {
+    if (!this.transition && this.transitionCooldown <= 0 && !isInEntryZone) {
       // 1. Trampolin auf der Oberwelt -> Bounced in die Wolkenwelt
       if (this.game && this.game.currentDimension === 'overworld') {
         if (this.map.isTrampoline && this.map.isTrampoline(curTileX, curTileY)) {
