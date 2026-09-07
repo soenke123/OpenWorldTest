@@ -188,13 +188,25 @@ export class NetworkManager {
     });
   }
 
-  sendArtifactPickup(artifactType, shrineIdx, dimension) {
-    if (!this.connected) return;
+  // Meldet neu erzeugtes Loot/XP/Artefakt (kind: 'loot' | 'xp' | 'artifact') an alle Mitspieler,
+  // damit niemand eine eigene, unsynchronisierte Kopie erzeugt.
+  sendLootSpawn(kind, items) {
+    if (!this.connected || !items || items.length === 0) return;
     this.send({
-      type: 'artifact_pickup',
-      artifactType,
-      shrineIdx,
-      dimension
+      type: 'loot_spawn',
+      kind,
+      items
+    });
+  }
+
+  // Meldet das Einsammeln eines Items (kind: 'loot' | 'xp' | 'artifact') an alle Mitspieler,
+  // damit es auch bei ihnen lokal entfernt wird (kein Doppel-Pickup).
+  sendItemPickup(id, kind) {
+    if (!this.connected || !id) return;
+    this.send({
+      type: 'item_pickup',
+      id,
+      kind
     });
   }
 

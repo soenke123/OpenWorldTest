@@ -93,6 +93,17 @@ export function getArtifactDef(typeId) {
 
 const getElement = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
 
+// Deterministischer Hash für Schrein-Artefakttypen: Alle LAN-Clients erzeugen beim
+// Weltaufbau denselben Startzustand, ohne dafür etwas übers Netzwerk abstimmen zu müssen
+// (genau wie bei der deterministischen Monster-Weltbevölkerung in enemies.js).
+function seededPick(list, seedStr) {
+  let h = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    h = (h * 31 + seedStr.charCodeAt(i)) >>> 0;
+  }
+  return list[h % list.length];
+}
+
 export class MagicManager {
   constructor(game) {
     this.game = game;
@@ -402,7 +413,8 @@ export class MagicManager {
   // ---------------------------------------------------------------------------
   // GROUND ARTIFACT MANAGEMENT
   // ---------------------------------------------------------------------------
-  spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false, subCaveId = null) {
+  spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false, subCaveId = null, opts = {}) {
+    const { forcedId = null, broadcast = false } = opts;
     // Walkable ground verification: ensure artifact is placed on walkable tiles
     let map = null;
     if (dimension === DIMENSIONS.OVERWORLD) map = this.game?.overworldMap;
@@ -453,7 +465,7 @@ export class MagicManager {
 
     const artifactDef = getArtifactDef(typeId);
     const artifact = {
-      id: `art_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      id: forcedId || `art_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       typeId: artifactDef.id,
       def: artifactDef,
       x,
@@ -465,19 +477,40 @@ export class MagicManager {
       lightPulse: 0
     };
     this.groundArtifacts.push(artifact);
+
+    // LAN-Sync: Dynamisch erzeugte Artefakte (Monster-Drop, Schrein-Respawn) an alle
+    // Mitspieler melden, damit niemand eine eigene Kopie erzeugt. Die deterministische
+    // Start-Weltbevölkerung (initShrineArtifacts) braucht das NICHT, da alle Clients dort
+    // ohnehin dasselbe Ergebnis berechnen.
+    if (broadcast && this.game?.network?.connected) {
+      this.game.network.sendLootSpawn('artifact', [{
+        id: artifact.id,
+        typeId: artifact.typeId,
+        x: artifact.x,
+        y: artifact.y,
+        dimension: artifact.dimension,
+        subCaveId: artifact.subCaveId,
+        fromShrine: artifact.fromShrine
+      }]);
+    }
     return artifact;
   }
 
   initShrineArtifacts(caves, cloudMap, overworldMap) {
     this.groundArtifacts = [];
     const ALL_ARTIFACTS = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
-    const getRandomType = () => ALL_ARTIFACTS[Math.floor(Math.random() * ALL_ARTIFACTS.length)];
+    // Deterministisch statt Math.random(): Im LAN-Modus berechnen so ALLE Clients exakt
+    // denselben Starttyp + dieselbe ID für jeden Schrein, ganz ohne Netzwerk-Nachricht
+    // (Duplikate/abweichende Typen pro Spieler waren vorher möglich).
+    const shrineType = (dim, x, y) => seededPick(ALL_ARTIFACTS, `${dim}_${Math.round(x)}_${Math.round(y)}`);
+    const shrineId = (dim, subCaveId, x, y) => `shrine_${dim}_${subCaveId || '-'}_${Math.round(x)}_${Math.round(y)}`;
 
-    // 1. Shrines in Cloud World (Himmel): Zufälliges Artefakt aus allen 5 Typen
+    // 1. Shrines in Cloud World (Himmel): Deterministisches Artefakt aus allen 5 Typen
     if (cloudMap && Array.isArray(cloudMap.shrines)) {
       cloudMap.shrines.forEach(shrine => {
-        const type = getRandomType();
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, type, true, null);
+        const x = shrine.x * TILE_SIZE + 8, y = (shrine.y + 1) * TILE_SIZE + 8;
+        const type = shrineType(DIMENSIONS.CLOUDS, x, y);
+        this.spawnGroundArtifact(x, y, DIMENSIONS.CLOUDS, type, true, null, { forcedId: shrineId(DIMENSIONS.CLOUDS, null, x, y) });
       });
     }
 
@@ -485,16 +518,18 @@ export class MagicManager {
     if (caves && typeof caves === 'object') {
       if (Array.isArray(caves.shrines)) {
         caves.shrines.forEach(shrine => {
-          const type = getRandomType();
-          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES_L1, type, true, 'caves_l1');
+          const x = shrine.x * TILE_SIZE + 8, y = (shrine.y + 1) * TILE_SIZE + 8;
+          const type = shrineType(DIMENSIONS.CAVES_L1, x, y);
+          this.spawnGroundArtifact(x, y, DIMENSIONS.CAVES_L1, type, true, 'caves_l1', { forcedId: shrineId(DIMENSIONS.CAVES_L1, 'caves_l1', x, y) });
         });
       } else {
         Object.entries(caves).forEach(([caveKey, cMap]) => {
           if (cMap && Array.isArray(cMap.shrines)) {
             const dim = (caveKey === 'caves_l2' || caveKey === 'caves_deep') ? DIMENSIONS.CAVES_L2 : DIMENSIONS.CAVES_L1;
             cMap.shrines.forEach(shrine => {
-              const type = getRandomType();
-              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, dim, type, true, caveKey);
+              const x = shrine.x * TILE_SIZE + 8, y = (shrine.y + 1) * TILE_SIZE + 8;
+              const type = shrineType(dim, x, y);
+              this.spawnGroundArtifact(x, y, dim, type, true, caveKey, { forcedId: shrineId(dim, caveKey, x, y) });
             });
           }
         });
@@ -504,12 +539,14 @@ export class MagicManager {
     // 3. Shrines in Overworld: Nur der uralte Leeren-Schrein im Abgrund (Void)
     if (overworldMap && Array.isArray(overworldMap.shrines)) {
       overworldMap.shrines.forEach(shrine => {
-        const type = getRandomType();
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true, null);
+        const x = shrine.x * TILE_SIZE + 8, y = (shrine.y + 1) * TILE_SIZE + 8;
+        const type = shrineType(DIMENSIONS.OVERWORLD, x, y);
+        this.spawnGroundArtifact(x, y, DIMENSIONS.OVERWORLD, type, true, null, { forcedId: shrineId(DIMENSIONS.OVERWORLD, null, x, y) });
       });
     } else {
-      const type = getRandomType();
-      this.spawnGroundArtifact(108 * TILE_SIZE + 8, 63 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true, null);
+      const x = 108 * TILE_SIZE + 8, y = 63 * TILE_SIZE + 8;
+      const type = shrineType(DIMENSIONS.OVERWORLD, x, y);
+      this.spawnGroundArtifact(x, y, DIMENSIONS.OVERWORLD, type, true, null, { forcedId: shrineId(DIMENSIONS.OVERWORLD, null, x, y) });
     }
   }
 
@@ -538,10 +575,42 @@ export class MagicManager {
     });
   }
 
+  // Zentrale Pickup-Entfernung für alle 6 Aufnahme-Stellen (direkt ausrüsten, aufladen,
+  // Swap-Modal-Varianten): entfernt lokal + meldet es im LAN an alle Mitspieler, damit
+  // niemand dasselbe Artefakt noch einmal einsammeln kann.
+  removePickedUpArtifact(artifact, index) {
+    this.handleArtifactRemoved(artifact);
+    if (index >= 0 && index < this.groundArtifacts.length && this.groundArtifacts[index] === artifact) {
+      this.groundArtifacts.splice(index, 1);
+    } else {
+      const i = this.groundArtifacts.indexOf(artifact);
+      if (i >= 0) this.groundArtifacts.splice(i, 1);
+    }
+    if (this.game?.network?.connected) {
+      this.game.network.sendItemPickup(artifact.id, 'artifact');
+    }
+  }
+
+  // Wird aufgerufen, wenn ein ANDERER Spieler dieses Artefakt zuerst eingesammelt hat
+  removeRemoteArtifact(id) {
+    if (!id) return;
+    const idx = this.groundArtifacts.findIndex(a => a.id === id);
+    if (idx >= 0) this.groundArtifacts.splice(idx, 1);
+  }
+
+  // Empfängt ein Artefakt, das ein anderer Client (Monster-Drop oder Schrein-Respawn) erzeugt hat
+  applyRemoteArtifactSpawn(items) {
+    if (!Array.isArray(items)) return;
+    for (const it of items) {
+      if (this.groundArtifacts.some(a => a.id === it.id)) continue;
+      this.spawnGroundArtifact(it.x, it.y, it.dimension, it.typeId, it.fromShrine, it.subCaveId || null, { forcedId: it.id });
+    }
+  }
+
   dropMonsterArtifact(x, y, dimension = DIMENSIONS.OVERWORLD) {
     const allTypes = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
     const chosenType = allTypes[Math.floor(Math.random() * allTypes.length)];
-    const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false, this.game?.activeSubCave || null);
+    const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false, this.game?.activeSubCave || null, { broadcast: true });
 
     if (this.game?.combat) {
       this.game.combat.addFloatingText(`✨ ${art.def.icon} ${art.def.name.toUpperCase()}!`, x, y - 24, art.def.colorTheme || '#f59e0b', 1.3);
@@ -586,16 +655,14 @@ export class MagicManager {
         if (!hasActiveArtifact) {
           // Direkt ausrüsten ohne jegliche Rückfrage!
           this.equipArtifact(player, art.def);
-          this.handleArtifactRemoved(art);
-          this.groundArtifacts.splice(i, 1);
+          this.removePickedUpArtifact(art, i);
           this.triggerPickupBanner(art.def);
           this.pickupCooldown = 0.5;
         } else if (player.artifact.id === art.def.id) {
           // 2. Gleiche Artefakt-Art: Automatisch +3 Aufladungen ohne Frage!
           const bonus = art.def.rechargeBonus || 3;
-          player.artifact.charges = Math.min(player.artifact.maxCharges + 5, player.artifact.charges + bonus);
-          this.handleArtifactRemoved(art);
-          this.groundArtifacts.splice(i, 1);
+          player.artifact.charges = Math.min(6, player.artifact.charges + bonus);
+          this.removePickedUpArtifact(art, i);
           this.updateHUD();
           this.triggerPickupBanner(art.def, `✨ ${art.def.name.toUpperCase()} AUFGELADEN (+${bonus} AUFLADUNGEN)!`);
           this.pickupCooldown = 0.5;
@@ -643,10 +710,7 @@ export class MagicManager {
     const hasActiveArtifact = Boolean(player.artifact && player.artifact.id && player.artifact.charges > 0);
     if (!hasActiveArtifact) {
       this.equipArtifact(player, groundArtifact.def);
-      this.handleArtifactRemoved(groundArtifact);
-      if (index >= 0 && index < this.groundArtifacts.length) {
-        this.groundArtifacts.splice(index, 1);
-      }
+      this.removePickedUpArtifact(groundArtifact, index);
       this.triggerPickupBanner(groundArtifact.def);
       this.pickupCooldown = 0.5;
       return;
@@ -655,11 +719,8 @@ export class MagicManager {
     // Wenn gleiches Artefakt: Automatisch aufladen ohne Dialog
     if (player.artifact.id === groundArtifact.def.id) {
       const bonus = groundArtifact.def.rechargeBonus || 3;
-      player.artifact.charges = Math.min(player.artifact.maxCharges + 5, player.artifact.charges + bonus);
-      this.handleArtifactRemoved(groundArtifact);
-      if (index >= 0 && index < this.groundArtifacts.length) {
-        this.groundArtifacts.splice(index, 1);
-      }
+      player.artifact.charges = Math.min(6, player.artifact.charges + bonus);
+      this.removePickedUpArtifact(groundArtifact, index);
       this.updateHUD();
       this.triggerPickupBanner(groundArtifact.def, `✨ ${groundArtifact.def.name.toUpperCase()} AUFGELADEN (+${bonus} AUFLADUNGEN)!`);
       this.pickupCooldown = 0.5;
@@ -721,10 +782,7 @@ export class MagicManager {
     }
 
     this.equipArtifact(player, artifact.def);
-    this.handleArtifactRemoved(artifact);
-    if (index >= 0 && index < this.groundArtifacts.length) {
-      this.groundArtifacts.splice(index, 1);
-    }
+    this.removePickedUpArtifact(artifact, index);
     this.triggerPickupBanner(artifact.def, 'NEUES ARTEFAKT AUSGERÜSTET!');
     this.pickupCooldown = 0.5;
     this.closeSwapModal();
@@ -740,14 +798,11 @@ export class MagicManager {
 
     if (player.artifact) {
       const bonus = artifact.def.rechargeBonus || 3;
-      player.artifact.charges = Math.min(player.artifact.maxCharges + 5, player.artifact.charges + bonus);
+      player.artifact.charges = Math.min(6, player.artifact.charges + bonus);
       this.triggerPickupBanner(artifact.def, `ARTEFAKT AUFGELADEN (+${bonus} AUFLADUNGEN)!`);
     }
 
-    this.handleArtifactRemoved(artifact);
-    if (index >= 0 && index < this.groundArtifacts.length) {
-      this.groundArtifacts.splice(index, 1);
-    }
+    this.removePickedUpArtifact(artifact, index);
     this.updateHUD();
     this.pickupCooldown = 0.5;
     this.closeSwapModal();
@@ -1657,7 +1712,7 @@ export class MagicManager {
       const respawn = this.respawnQueue[r];
       respawn.timer -= dt;
       if (respawn.timer <= 0) {
-        this.spawnGroundArtifact(respawn.x, respawn.y, respawn.dimension, respawn.typeId, true, respawn.subCaveId || null);
+        this.spawnGroundArtifact(respawn.x, respawn.y, respawn.dimension, respawn.typeId, true, respawn.subCaveId || null, { broadcast: true });
         const def = getArtifactDef(respawn.typeId);
         if (combatManager && (!this.game || this.game.currentDimension === respawn.dimension)) {
           combatManager.addFloatingText(`✨ ARTEFAKT RESPAWNT: ${def.name.toUpperCase()}!`, respawn.x, respawn.y - 20, def.colorTheme || '#38bdf8', 1.6);

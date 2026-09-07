@@ -1590,6 +1590,8 @@ export class EnemyManager {
 
   dropLoot(x, y, enemy = null) {
     const dimension = enemy?.dimension || this.game?.currentDimension || DIMENSIONS.OVERWORLD;
+    const seed = `${enemy?.id || 'evt'}_${Date.now().toString(36)}`;
+    const spawned = [];
 
     // Drop-Raten: XP droppen immer (100%), Pfeile und Herzen nach Nutzer-Balancing
     const isBoss = enemy && (enemy.category === 'boss' || enemy.maxHp >= 100);
@@ -1598,21 +1600,25 @@ export class EnemyManager {
     // 1. Herz-Beere (❤️ +25 HP) - leicht erhöht (14% normal, 40% bei Bossen)
     const heartChance = isBoss ? 0.40 : 0.14;
     if (Math.random() < heartChance) {
-      this.lootItems.push({
+      const item = {
+        id: `loot_${seed}_heart`,
         type: LOOT_TYPES.HEART,
         dimension,
         x: x + (Math.random() - 0.5) * 12,
         y: y + (Math.random() - 0.5) * 12,
         life: 25.0,
         bobOffset: Math.random() * Math.PI * 2
-      });
+      };
+      this.lootItems.push(item);
+      spawned.push(item);
     }
 
     // 2. Köcher-Pfeile (🏹 +3-5 Pfeile) - deutlich erhöht (35% normal, 60% Bogenschützen, 50% Bosse)
     const arrowChance = isBoss ? 0.50 : (isRanged ? 0.60 : 0.35);
     if (Math.random() < arrowChance) {
       const amount = Math.floor(Math.random() * 3) + 3; // 3 bis 5 Pfeile
-      this.lootItems.push({
+      const item = {
+        id: `loot_${seed}_arrow`,
         type: LOOT_TYPES.ARROW,
         dimension,
         x: x + (Math.random() - 0.5) * 14,
@@ -1620,20 +1626,30 @@ export class EnemyManager {
         amount,
         life: 25.0,
         bobOffset: Math.random() * Math.PI * 2
-      });
+      };
+      this.lootItems.push(item);
+      spawned.push(item);
     }
 
     // 3. Sternenstaub / Geist-Juwel (⭐ Glanzpartikel) - selten (ca. 6% bei normalen Gegnern, 35% bei Bossen)
     const gemChance = isBoss ? 0.35 : 0.06;
     if (Math.random() < gemChance) {
-      this.lootItems.push({
+      const item = {
+        id: `loot_${seed}_gem`,
         type: LOOT_TYPES.SPIRIT_GEM,
         dimension,
         x,
         y,
         life: 20.0,
         bobOffset: Math.random() * Math.PI * 2
-      });
+      };
+      this.lootItems.push(item);
+      spawned.push(item);
+    }
+
+    // LAN-Sync: Diese Drops an alle Mitspieler senden, damit niemand eigene Duplikate erzeugt
+    if (spawned.length > 0 && this.game?.network?.connected) {
+      this.game.network.sendLootSpawn('loot', spawned);
     }
 
     // 4. Magisches Artefakt (🔥 Zauber-Orb) - NUR bei schweren Monstern!
@@ -1670,6 +1686,8 @@ export class EnemyManager {
 
     const baseVal = Math.max(1, Math.floor(totalXp / orbCount));
     let remainder = totalXp - (baseVal * orbCount);
+    const seed = `${Math.round(x)}_${Math.round(y)}_${Date.now().toString(36)}`;
+    const spawned = [];
 
     for (let i = 0; i < orbCount; i++) {
       const val = baseVal + (remainder > 0 ? 1 : 0);
@@ -1678,7 +1696,8 @@ export class EnemyManager {
       const burstAng = (i / orbCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
       const burstSpeed = Math.random() * 45 + 20;
 
-      this.xpOrbs.push({
+      const orb = {
+        id: `xp_${seed}_${i}`,
         dimension: dim,
         x: x + (Math.random() - 0.5) * 6,
         y: y + (Math.random() - 0.5) * 6,
@@ -1688,7 +1707,14 @@ export class EnemyManager {
         life: 45.0,
         magnetSpeed: 0,
         bobOffset: Math.random() * Math.PI * 2
-      });
+      };
+      this.xpOrbs.push(orb);
+      spawned.push(orb);
+    }
+
+    // LAN-Sync: XP-Orbs an alle Mitspieler senden, damit niemand eigene Duplikate erzeugt
+    if (spawned.length > 0 && this.game?.network?.connected) {
+      this.game.network.sendLootSpawn('xp', spawned);
     }
   }
 
@@ -1704,8 +1730,13 @@ export class EnemyManager {
 
       // Bei Tod: XP droppt IMMER garantiert, Pfeile & Herzen nur selten
       if (enemy.state === 'dead') {
-        this.dropLoot(enemy.x, enemy.y, enemy);
-        this.spawnXp(enemy.x, enemy.y, Math.max(1, enemy.xpValue || 2), enemy.dimension);
+        // LAN-Sync: Nur der Master-Client erzeugt den Loot/XP-Drop (einmalig) und
+        // broadcastet ihn an alle Mitspieler. Solo/nicht verbunden = immer selbst erzeugen.
+        const isLootAuthority = !(this.game?.network?.connected) || this.isMasterClient;
+        if (isLootAuthority) {
+          this.dropLoot(enemy.x, enemy.y, enemy);
+          this.spawnXp(enemy.x, enemy.y, Math.max(1, enemy.xpValue || 2), enemy.dimension);
+        }
 
         // Respawn-Berechnung nach Stärke (3-5 Min)
         // Schwach (<= 60 HP): 3 Min (180 s)
@@ -1762,6 +1793,7 @@ export class EnemyManager {
             combatManager?.addFloatingText('❤️ +25 LEBEN', player.x, player.y - 20, '#4ade80');
             combatManager?.addHitSparks(player.x, player.y, '#4ade80', 12);
             this.lootItems.splice(i, 1);
+            this.notifyItemPickup(item.id, 'loot');
           }
         } else if (item.type === LOOT_TYPES.ARROW) {
           if (player.ranged && player.ranged.ammo < 30) {
@@ -1770,11 +1802,13 @@ export class EnemyManager {
             combatManager?.addFloatingText(`🏹 +${gain} PFEILE`, player.x, player.y - 20, '#38bdf8');
             combatManager?.addHitSparks(player.x, player.y, '#38bdf8', 10);
             this.lootItems.splice(i, 1);
+            this.notifyItemPickup(item.id, 'loot');
           }
         } else if (item.type === LOOT_TYPES.SPIRIT_GEM) {
           combatManager?.addFloatingText('⭐ GEIST-FUNKE', player.x, player.y - 20, '#fde047');
           combatManager?.addHitSparks(player.x, player.y, '#facc15', 14);
           this.lootItems.splice(i, 1);
+          this.notifyItemPickup(item.id, 'loot');
         }
       }
     }
@@ -1837,6 +1871,41 @@ export class EnemyManager {
         }
 
         this.xpOrbs.splice(i, 1);
+        this.notifyItemPickup(orb.id, 'xp');
+      }
+    }
+  }
+
+  // LAN-Sync: Einsammeln lokal sofort anwenden (responsive), aber allen Mitspielern
+  // mitteilen, damit sie ihre eigene Kopie desselben Items entfernen (kein Doppel-Loot).
+  notifyItemPickup(id, kind) {
+    if (id && this.game?.network?.connected) {
+      this.game.network.sendItemPickup(id, kind);
+    }
+  }
+
+  // Wird aufgerufen, wenn ein ANDERER Spieler dieses Item zuerst eingesammelt hat
+  removeRemotePickup(kind, id) {
+    if (!id) return;
+    if (kind === 'xp') {
+      const idx = this.xpOrbs.findIndex(o => o.id === id);
+      if (idx >= 0) this.xpOrbs.splice(idx, 1);
+    } else {
+      const idx = this.lootItems.findIndex(l => l.id === id);
+      if (idx >= 0) this.lootItems.splice(idx, 1);
+    }
+  }
+
+  // Empfängt Loot/XP, das ein anderer Client (Master oder sterbender Spieler) erzeugt hat
+  applyRemoteLootSpawn(kind, items) {
+    if (!Array.isArray(items)) return;
+    if (kind === 'xp') {
+      for (const it of items) {
+        if (!this.xpOrbs.some(o => o.id === it.id)) this.xpOrbs.push({ ...it });
+      }
+    } else {
+      for (const it of items) {
+        if (!this.lootItems.some(l => l.id === it.id)) this.lootItems.push({ ...it });
       }
     }
   }

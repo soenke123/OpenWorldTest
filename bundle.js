@@ -8944,6 +8944,17 @@ function getArtifactDef(typeId) {
 
 const getElement = (id) => (typeof document !== 'undefined' ? document.getElementById(id) : null);
 
+// Deterministischer Hash für Schrein-Artefakttypen: Alle LAN-Clients erzeugen beim
+// Weltaufbau denselben Startzustand, ohne dafür etwas übers Netzwerk abstimmen zu müssen
+// (genau wie bei der deterministischen Monster-Weltbevölkerung in enemies.js).
+function seededPick(list, seedStr) {
+  let h = 0;
+  for (let i = 0; i < seedStr.length; i++) {
+    h = (h * 31 + seedStr.charCodeAt(i)) >>> 0;
+  }
+  return list[h % list.length];
+}
+
 class MagicManager {
   constructor(game) {
     this.game = game;
@@ -9253,7 +9264,8 @@ class MagicManager {
   // ---------------------------------------------------------------------------
   // GROUND ARTIFACT MANAGEMENT
   // ---------------------------------------------------------------------------
-  spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false, subCaveId = null) {
+  spawnGroundArtifact(x, y, dimension = DIMENSIONS.OVERWORLD, typeId = 'phoenix', fromShrine = false, subCaveId = null, opts = {}) {
+    const { forcedId = null, broadcast = false } = opts;
     // Walkable ground verification: ensure artifact is placed on walkable tiles
     let map = null;
     if (dimension === DIMENSIONS.OVERWORLD) map = this.game?.overworldMap;
@@ -9304,7 +9316,7 @@ class MagicManager {
 
     const artifactDef = getArtifactDef(typeId);
     const artifact = {
-      id: `art_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      id: forcedId || `art_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
       typeId: artifactDef.id,
       def: artifactDef,
       x,
@@ -9316,19 +9328,40 @@ class MagicManager {
       lightPulse: 0
     };
     this.groundArtifacts.push(artifact);
+
+    // LAN-Sync: Dynamisch erzeugte Artefakte (Monster-Drop, Schrein-Respawn) an alle
+    // Mitspieler melden, damit niemand eine eigene Kopie erzeugt. Die deterministische
+    // Start-Weltbevölkerung (initShrineArtifacts) braucht das NICHT, da alle Clients dort
+    // ohnehin dasselbe Ergebnis berechnen.
+    if (broadcast && this.game?.network?.connected) {
+      this.game.network.sendLootSpawn('artifact', [{
+        id: artifact.id,
+        typeId: artifact.typeId,
+        x: artifact.x,
+        y: artifact.y,
+        dimension: artifact.dimension,
+        subCaveId: artifact.subCaveId,
+        fromShrine: artifact.fromShrine
+      }]);
+    }
     return artifact;
   }
 
   initShrineArtifacts(caves, cloudMap, overworldMap) {
     this.groundArtifacts = [];
     const ALL_ARTIFACTS = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
-    const getRandomType = () => ALL_ARTIFACTS[Math.floor(Math.random() * ALL_ARTIFACTS.length)];
+    // Deterministisch statt Math.random(): Im LAN-Modus berechnen so ALLE Clients exakt
+    // denselben Starttyp + dieselbe ID für jeden Schrein, ganz ohne Netzwerk-Nachricht
+    // (Duplikate/abweichende Typen pro Spieler waren vorher möglich).
+    const shrineType = (dim, x, y) => seededPick(ALL_ARTIFACTS, `${dim}_${Math.round(x)}_${Math.round(y)}`);
+    const shrineId = (dim, subCaveId, x, y) => `shrine_${dim}_${subCaveId || '-'}_${Math.round(x)}_${Math.round(y)}`;
 
-    // 1. Shrines in Cloud World (Himmel): Zufälliges Artefakt aus allen 5 Typen
+    // 1. Shrines in Cloud World (Himmel): Deterministisches Artefakt aus allen 5 Typen
     if (cloudMap && Array.isArray(cloudMap.shrines)) {
       cloudMap.shrines.forEach(shrine => {
-        const type = getRandomType();
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CLOUDS, type, true, null);
+        const x = shrine.x * TILE_SIZE + 8, y = (shrine.y + 1) * TILE_SIZE + 8;
+        const type = shrineType(DIMENSIONS.CLOUDS, x, y);
+        this.spawnGroundArtifact(x, y, DIMENSIONS.CLOUDS, type, true, null, { forcedId: shrineId(DIMENSIONS.CLOUDS, null, x, y) });
       });
     }
 
@@ -9336,16 +9369,18 @@ class MagicManager {
     if (caves && typeof caves === 'object') {
       if (Array.isArray(caves.shrines)) {
         caves.shrines.forEach(shrine => {
-          const type = getRandomType();
-          this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.CAVES_L1, type, true, 'caves_l1');
+          const x = shrine.x * TILE_SIZE + 8, y = (shrine.y + 1) * TILE_SIZE + 8;
+          const type = shrineType(DIMENSIONS.CAVES_L1, x, y);
+          this.spawnGroundArtifact(x, y, DIMENSIONS.CAVES_L1, type, true, 'caves_l1', { forcedId: shrineId(DIMENSIONS.CAVES_L1, 'caves_l1', x, y) });
         });
       } else {
         Object.entries(caves).forEach(([caveKey, cMap]) => {
           if (cMap && Array.isArray(cMap.shrines)) {
             const dim = (caveKey === 'caves_l2' || caveKey === 'caves_deep') ? DIMENSIONS.CAVES_L2 : DIMENSIONS.CAVES_L1;
             cMap.shrines.forEach(shrine => {
-              const type = getRandomType();
-              this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, dim, type, true, caveKey);
+              const x = shrine.x * TILE_SIZE + 8, y = (shrine.y + 1) * TILE_SIZE + 8;
+              const type = shrineType(dim, x, y);
+              this.spawnGroundArtifact(x, y, dim, type, true, caveKey, { forcedId: shrineId(dim, caveKey, x, y) });
             });
           }
         });
@@ -9355,12 +9390,14 @@ class MagicManager {
     // 3. Shrines in Overworld: Nur der uralte Leeren-Schrein im Abgrund (Void)
     if (overworldMap && Array.isArray(overworldMap.shrines)) {
       overworldMap.shrines.forEach(shrine => {
-        const type = getRandomType();
-        this.spawnGroundArtifact(shrine.x * TILE_SIZE + 8, (shrine.y + 1) * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true, null);
+        const x = shrine.x * TILE_SIZE + 8, y = (shrine.y + 1) * TILE_SIZE + 8;
+        const type = shrineType(DIMENSIONS.OVERWORLD, x, y);
+        this.spawnGroundArtifact(x, y, DIMENSIONS.OVERWORLD, type, true, null, { forcedId: shrineId(DIMENSIONS.OVERWORLD, null, x, y) });
       });
     } else {
-      const type = getRandomType();
-      this.spawnGroundArtifact(108 * TILE_SIZE + 8, 63 * TILE_SIZE + 8, DIMENSIONS.OVERWORLD, type, true, null);
+      const x = 108 * TILE_SIZE + 8, y = 63 * TILE_SIZE + 8;
+      const type = shrineType(DIMENSIONS.OVERWORLD, x, y);
+      this.spawnGroundArtifact(x, y, DIMENSIONS.OVERWORLD, type, true, null, { forcedId: shrineId(DIMENSIONS.OVERWORLD, null, x, y) });
     }
   }
 
@@ -9389,10 +9426,42 @@ class MagicManager {
     });
   }
 
+  // Zentrale Pickup-Entfernung für alle 6 Aufnahme-Stellen (direkt ausrüsten, aufladen,
+  // Swap-Modal-Varianten): entfernt lokal + meldet es im LAN an alle Mitspieler, damit
+  // niemand dasselbe Artefakt noch einmal einsammeln kann.
+  removePickedUpArtifact(artifact, index) {
+    this.handleArtifactRemoved(artifact);
+    if (index >= 0 && index < this.groundArtifacts.length && this.groundArtifacts[index] === artifact) {
+      this.groundArtifacts.splice(index, 1);
+    } else {
+      const i = this.groundArtifacts.indexOf(artifact);
+      if (i >= 0) this.groundArtifacts.splice(i, 1);
+    }
+    if (this.game?.network?.connected) {
+      this.game.network.sendItemPickup(artifact.id, 'artifact');
+    }
+  }
+
+  // Wird aufgerufen, wenn ein ANDERER Spieler dieses Artefakt zuerst eingesammelt hat
+  removeRemoteArtifact(id) {
+    if (!id) return;
+    const idx = this.groundArtifacts.findIndex(a => a.id === id);
+    if (idx >= 0) this.groundArtifacts.splice(idx, 1);
+  }
+
+  // Empfängt ein Artefakt, das ein anderer Client (Monster-Drop oder Schrein-Respawn) erzeugt hat
+  applyRemoteArtifactSpawn(items) {
+    if (!Array.isArray(items)) return;
+    for (const it of items) {
+      if (this.groundArtifacts.some(a => a.id === it.id)) continue;
+      this.spawnGroundArtifact(it.x, it.y, it.dimension, it.typeId, it.fromShrine, it.subCaveId || null, { forcedId: it.id });
+    }
+  }
+
   dropMonsterArtifact(x, y, dimension = DIMENSIONS.OVERWORLD) {
     const allTypes = ['phoenix', 'druid_bear', 'plasma_orbs', 'void_teleport', 'frost_cone'];
     const chosenType = allTypes[Math.floor(Math.random() * allTypes.length)];
-    const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false, this.game?.activeSubCave || null);
+    const art = this.spawnGroundArtifact(x, y, dimension, chosenType, false, this.game?.activeSubCave || null, { broadcast: true });
 
     if (this.game?.combat) {
       this.game.combat.addFloatingText(`✨ ${art.def.icon} ${art.def.name.toUpperCase()}!`, x, y - 24, art.def.colorTheme || '#f59e0b', 1.3);
@@ -9437,16 +9506,14 @@ class MagicManager {
         if (!hasActiveArtifact) {
           // Direkt ausrüsten ohne jegliche Rückfrage!
           this.equipArtifact(player, art.def);
-          this.handleArtifactRemoved(art);
-          this.groundArtifacts.splice(i, 1);
+          this.removePickedUpArtifact(art, i);
           this.triggerPickupBanner(art.def);
           this.pickupCooldown = 0.5;
         } else if (player.artifact.id === art.def.id) {
           // 2. Gleiche Artefakt-Art: Automatisch +3 Aufladungen ohne Frage!
           const bonus = art.def.rechargeBonus || 3;
-          player.artifact.charges = Math.min(player.artifact.maxCharges + 5, player.artifact.charges + bonus);
-          this.handleArtifactRemoved(art);
-          this.groundArtifacts.splice(i, 1);
+          player.artifact.charges = Math.min(6, player.artifact.charges + bonus);
+          this.removePickedUpArtifact(art, i);
           this.updateHUD();
           this.triggerPickupBanner(art.def, `✨ ${art.def.name.toUpperCase()} AUFGELADEN (+${bonus} AUFLADUNGEN)!`);
           this.pickupCooldown = 0.5;
@@ -9494,10 +9561,7 @@ class MagicManager {
     const hasActiveArtifact = Boolean(player.artifact && player.artifact.id && player.artifact.charges > 0);
     if (!hasActiveArtifact) {
       this.equipArtifact(player, groundArtifact.def);
-      this.handleArtifactRemoved(groundArtifact);
-      if (index >= 0 && index < this.groundArtifacts.length) {
-        this.groundArtifacts.splice(index, 1);
-      }
+      this.removePickedUpArtifact(groundArtifact, index);
       this.triggerPickupBanner(groundArtifact.def);
       this.pickupCooldown = 0.5;
       return;
@@ -9506,11 +9570,8 @@ class MagicManager {
     // Wenn gleiches Artefakt: Automatisch aufladen ohne Dialog
     if (player.artifact.id === groundArtifact.def.id) {
       const bonus = groundArtifact.def.rechargeBonus || 3;
-      player.artifact.charges = Math.min(player.artifact.maxCharges + 5, player.artifact.charges + bonus);
-      this.handleArtifactRemoved(groundArtifact);
-      if (index >= 0 && index < this.groundArtifacts.length) {
-        this.groundArtifacts.splice(index, 1);
-      }
+      player.artifact.charges = Math.min(6, player.artifact.charges + bonus);
+      this.removePickedUpArtifact(groundArtifact, index);
       this.updateHUD();
       this.triggerPickupBanner(groundArtifact.def, `✨ ${groundArtifact.def.name.toUpperCase()} AUFGELADEN (+${bonus} AUFLADUNGEN)!`);
       this.pickupCooldown = 0.5;
@@ -9572,10 +9633,7 @@ class MagicManager {
     }
 
     this.equipArtifact(player, artifact.def);
-    this.handleArtifactRemoved(artifact);
-    if (index >= 0 && index < this.groundArtifacts.length) {
-      this.groundArtifacts.splice(index, 1);
-    }
+    this.removePickedUpArtifact(artifact, index);
     this.triggerPickupBanner(artifact.def, 'NEUES ARTEFAKT AUSGERÜSTET!');
     this.pickupCooldown = 0.5;
     this.closeSwapModal();
@@ -9591,14 +9649,11 @@ class MagicManager {
 
     if (player.artifact) {
       const bonus = artifact.def.rechargeBonus || 3;
-      player.artifact.charges = Math.min(player.artifact.maxCharges + 5, player.artifact.charges + bonus);
+      player.artifact.charges = Math.min(6, player.artifact.charges + bonus);
       this.triggerPickupBanner(artifact.def, `ARTEFAKT AUFGELADEN (+${bonus} AUFLADUNGEN)!`);
     }
 
-    this.handleArtifactRemoved(artifact);
-    if (index >= 0 && index < this.groundArtifacts.length) {
-      this.groundArtifacts.splice(index, 1);
-    }
+    this.removePickedUpArtifact(artifact, index);
     this.updateHUD();
     this.pickupCooldown = 0.5;
     this.closeSwapModal();
@@ -10508,7 +10563,7 @@ class MagicManager {
       const respawn = this.respawnQueue[r];
       respawn.timer -= dt;
       if (respawn.timer <= 0) {
-        this.spawnGroundArtifact(respawn.x, respawn.y, respawn.dimension, respawn.typeId, true, respawn.subCaveId || null);
+        this.spawnGroundArtifact(respawn.x, respawn.y, respawn.dimension, respawn.typeId, true, respawn.subCaveId || null, { broadcast: true });
         const def = getArtifactDef(respawn.typeId);
         if (combatManager && (!this.game || this.game.currentDimension === respawn.dimension)) {
           combatManager.addFloatingText(`✨ ARTEFAKT RESPAWNT: ${def.name.toUpperCase()}!`, respawn.x, respawn.y - 20, def.colorTheme || '#38bdf8', 1.6);
@@ -12899,6 +12954,8 @@ class EnemyManager {
 
   dropLoot(x, y, enemy = null) {
     const dimension = enemy?.dimension || this.game?.currentDimension || DIMENSIONS.OVERWORLD;
+    const seed = `${enemy?.id || 'evt'}_${Date.now().toString(36)}`;
+    const spawned = [];
 
     // Drop-Raten: XP droppen immer (100%), Pfeile und Herzen nach Nutzer-Balancing
     const isBoss = enemy && (enemy.category === 'boss' || enemy.maxHp >= 100);
@@ -12907,21 +12964,25 @@ class EnemyManager {
     // 1. Herz-Beere (❤️ +25 HP) - leicht erhöht (14% normal, 40% bei Bossen)
     const heartChance = isBoss ? 0.40 : 0.14;
     if (Math.random() < heartChance) {
-      this.lootItems.push({
+      const item = {
+        id: `loot_${seed}_heart`,
         type: LOOT_TYPES.HEART,
         dimension,
         x: x + (Math.random() - 0.5) * 12,
         y: y + (Math.random() - 0.5) * 12,
         life: 25.0,
         bobOffset: Math.random() * Math.PI * 2
-      });
+      };
+      this.lootItems.push(item);
+      spawned.push(item);
     }
 
     // 2. Köcher-Pfeile (🏹 +3-5 Pfeile) - deutlich erhöht (35% normal, 60% Bogenschützen, 50% Bosse)
     const arrowChance = isBoss ? 0.50 : (isRanged ? 0.60 : 0.35);
     if (Math.random() < arrowChance) {
       const amount = Math.floor(Math.random() * 3) + 3; // 3 bis 5 Pfeile
-      this.lootItems.push({
+      const item = {
+        id: `loot_${seed}_arrow`,
         type: LOOT_TYPES.ARROW,
         dimension,
         x: x + (Math.random() - 0.5) * 14,
@@ -12929,20 +12990,30 @@ class EnemyManager {
         amount,
         life: 25.0,
         bobOffset: Math.random() * Math.PI * 2
-      });
+      };
+      this.lootItems.push(item);
+      spawned.push(item);
     }
 
     // 3. Sternenstaub / Geist-Juwel (⭐ Glanzpartikel) - selten (ca. 6% bei normalen Gegnern, 35% bei Bossen)
     const gemChance = isBoss ? 0.35 : 0.06;
     if (Math.random() < gemChance) {
-      this.lootItems.push({
+      const item = {
+        id: `loot_${seed}_gem`,
         type: LOOT_TYPES.SPIRIT_GEM,
         dimension,
         x,
         y,
         life: 20.0,
         bobOffset: Math.random() * Math.PI * 2
-      });
+      };
+      this.lootItems.push(item);
+      spawned.push(item);
+    }
+
+    // LAN-Sync: Diese Drops an alle Mitspieler senden, damit niemand eigene Duplikate erzeugt
+    if (spawned.length > 0 && this.game?.network?.connected) {
+      this.game.network.sendLootSpawn('loot', spawned);
     }
 
     // 4. Magisches Artefakt (🔥 Zauber-Orb) - NUR bei schweren Monstern!
@@ -12979,6 +13050,8 @@ class EnemyManager {
 
     const baseVal = Math.max(1, Math.floor(totalXp / orbCount));
     let remainder = totalXp - (baseVal * orbCount);
+    const seed = `${Math.round(x)}_${Math.round(y)}_${Date.now().toString(36)}`;
+    const spawned = [];
 
     for (let i = 0; i < orbCount; i++) {
       const val = baseVal + (remainder > 0 ? 1 : 0);
@@ -12987,7 +13060,8 @@ class EnemyManager {
       const burstAng = (i / orbCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
       const burstSpeed = Math.random() * 45 + 20;
 
-      this.xpOrbs.push({
+      const orb = {
+        id: `xp_${seed}_${i}`,
         dimension: dim,
         x: x + (Math.random() - 0.5) * 6,
         y: y + (Math.random() - 0.5) * 6,
@@ -12997,7 +13071,14 @@ class EnemyManager {
         life: 45.0,
         magnetSpeed: 0,
         bobOffset: Math.random() * Math.PI * 2
-      });
+      };
+      this.xpOrbs.push(orb);
+      spawned.push(orb);
+    }
+
+    // LAN-Sync: XP-Orbs an alle Mitspieler senden, damit niemand eigene Duplikate erzeugt
+    if (spawned.length > 0 && this.game?.network?.connected) {
+      this.game.network.sendLootSpawn('xp', spawned);
     }
   }
 
@@ -13013,8 +13094,13 @@ class EnemyManager {
 
       // Bei Tod: XP droppt IMMER garantiert, Pfeile & Herzen nur selten
       if (enemy.state === 'dead') {
-        this.dropLoot(enemy.x, enemy.y, enemy);
-        this.spawnXp(enemy.x, enemy.y, Math.max(1, enemy.xpValue || 2), enemy.dimension);
+        // LAN-Sync: Nur der Master-Client erzeugt den Loot/XP-Drop (einmalig) und
+        // broadcastet ihn an alle Mitspieler. Solo/nicht verbunden = immer selbst erzeugen.
+        const isLootAuthority = !(this.game?.network?.connected) || this.isMasterClient;
+        if (isLootAuthority) {
+          this.dropLoot(enemy.x, enemy.y, enemy);
+          this.spawnXp(enemy.x, enemy.y, Math.max(1, enemy.xpValue || 2), enemy.dimension);
+        }
 
         // Respawn-Berechnung nach Stärke (3-5 Min)
         // Schwach (<= 60 HP): 3 Min (180 s)
@@ -13071,6 +13157,7 @@ class EnemyManager {
             combatManager?.addFloatingText('❤️ +25 LEBEN', player.x, player.y - 20, '#4ade80');
             combatManager?.addHitSparks(player.x, player.y, '#4ade80', 12);
             this.lootItems.splice(i, 1);
+            this.notifyItemPickup(item.id, 'loot');
           }
         } else if (item.type === LOOT_TYPES.ARROW) {
           if (player.ranged && player.ranged.ammo < 30) {
@@ -13079,11 +13166,13 @@ class EnemyManager {
             combatManager?.addFloatingText(`🏹 +${gain} PFEILE`, player.x, player.y - 20, '#38bdf8');
             combatManager?.addHitSparks(player.x, player.y, '#38bdf8', 10);
             this.lootItems.splice(i, 1);
+            this.notifyItemPickup(item.id, 'loot');
           }
         } else if (item.type === LOOT_TYPES.SPIRIT_GEM) {
           combatManager?.addFloatingText('⭐ GEIST-FUNKE', player.x, player.y - 20, '#fde047');
           combatManager?.addHitSparks(player.x, player.y, '#facc15', 14);
           this.lootItems.splice(i, 1);
+          this.notifyItemPickup(item.id, 'loot');
         }
       }
     }
@@ -13146,6 +13235,41 @@ class EnemyManager {
         }
 
         this.xpOrbs.splice(i, 1);
+        this.notifyItemPickup(orb.id, 'xp');
+      }
+    }
+  }
+
+  // LAN-Sync: Einsammeln lokal sofort anwenden (responsive), aber allen Mitspielern
+  // mitteilen, damit sie ihre eigene Kopie desselben Items entfernen (kein Doppel-Loot).
+  notifyItemPickup(id, kind) {
+    if (id && this.game?.network?.connected) {
+      this.game.network.sendItemPickup(id, kind);
+    }
+  }
+
+  // Wird aufgerufen, wenn ein ANDERER Spieler dieses Item zuerst eingesammelt hat
+  removeRemotePickup(kind, id) {
+    if (!id) return;
+    if (kind === 'xp') {
+      const idx = this.xpOrbs.findIndex(o => o.id === id);
+      if (idx >= 0) this.xpOrbs.splice(idx, 1);
+    } else {
+      const idx = this.lootItems.findIndex(l => l.id === id);
+      if (idx >= 0) this.lootItems.splice(idx, 1);
+    }
+  }
+
+  // Empfängt Loot/XP, das ein anderer Client (Master oder sterbender Spieler) erzeugt hat
+  applyRemoteLootSpawn(kind, items) {
+    if (!Array.isArray(items)) return;
+    if (kind === 'xp') {
+      for (const it of items) {
+        if (!this.xpOrbs.some(o => o.id === it.id)) this.xpOrbs.push({ ...it });
+      }
+    } else {
+      for (const it of items) {
+        if (!this.lootItems.some(l => l.id === it.id)) this.lootItems.push({ ...it });
       }
     }
   }
@@ -18092,13 +18216,25 @@ class NetworkManager {
     });
   }
 
-  sendArtifactPickup(artifactType, shrineIdx, dimension) {
-    if (!this.connected) return;
+  // Meldet neu erzeugtes Loot/XP/Artefakt (kind: 'loot' | 'xp' | 'artifact') an alle Mitspieler,
+  // damit niemand eine eigene, unsynchronisierte Kopie erzeugt.
+  sendLootSpawn(kind, items) {
+    if (!this.connected || !items || items.length === 0) return;
     this.send({
-      type: 'artifact_pickup',
-      artifactType,
-      shrineIdx,
-      dimension
+      type: 'loot_spawn',
+      kind,
+      items
+    });
+  }
+
+  // Meldet das Einsammeln eines Items (kind: 'loot' | 'xp' | 'artifact') an alle Mitspieler,
+  // damit es auch bei ihnen lokal entfernt wird (kein Doppel-Pickup).
+  sendItemPickup(id, kind) {
+    if (!this.connected || !id) return;
+    this.send({
+      type: 'item_pickup',
+      id,
+      kind
     });
   }
 
@@ -24289,9 +24425,9 @@ class Game {
       const screenX = Math.round((this.player.x - this.camera.x) * this.camera.zoom);
       const screenY = Math.round((this.player.y - elevY - this.camera.y) * this.camera.zoom);
       const grad = this.ctx.createRadialGradient(screenX, screenY, 40, screenX, screenY, 280);
-      grad.addColorStop(0, 'rgba(6, 8, 16, 0.05)');
-      grad.addColorStop(0.5, 'rgba(6, 8, 16, 0.55)');
-      grad.addColorStop(1, 'rgba(6, 8, 16, 0.95)');
+      grad.addColorStop(0, 'rgba(6, 8, 16, 0.0)');
+      grad.addColorStop(0.5, 'rgba(6, 8, 16, 0.35)');
+      grad.addColorStop(1, 'rgba(6, 8, 16, 0.72)');
       this.ctx.fillStyle = grad;
       this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       return;
@@ -24303,8 +24439,8 @@ class Game {
     // 1. Offscreen Canvas leeren
     cCtx.clearRect(0, 0, cCanvas.width, cCanvas.height);
 
-    // 2. Volle Höhlen-Dunkelheit zeichnen
-    cCtx.fillStyle = 'rgba(5, 7, 15, 0.94)';
+    // 2. Volle Höhlen-Dunkelheit zeichnen (ausreichend hell, um im Ungelichteten noch etwas zu erkennen)
+    cCtx.fillStyle = 'rgba(5, 7, 15, 0.72)';
     cCtx.fillRect(0, 0, cCanvas.width, cCanvas.height);
 
     // 3. Kamera-Transformation für exakte Weltkoordinaten anwenden
@@ -24318,12 +24454,12 @@ class Game {
     const elevY = Math.round(this.player.visualElevation * ELEVATION_PIXEL_OFFSET);
     const plx = this.player.x + 6;
     const ply = this.player.y - 8 - elevY;
-    const pRadius = 92 + Math.sin(t * 11) * 3;
+    const pRadius = 110 + Math.sin(t * 11) * 3;
 
     const pGrad = cCtx.createRadialGradient(plx, ply, 14, plx, ply, pRadius);
     pGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-    pGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.88)');
-    pGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.4)');
+    pGrad.addColorStop(0.55, 'rgba(0, 0, 0, 1.0)');
+    pGrad.addColorStop(0.85, 'rgba(0, 0, 0, 0.55)');
     pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     cCtx.fillStyle = pGrad;
     cCtx.beginPath();
@@ -24339,12 +24475,12 @@ class Game {
           const tx = x * TILE_SIZE + 8;
           const ty = y * TILE_SIZE + 5;
           const fPulse = Math.sin(t * 14 + x * 7 + y * 13) * 3;
-          const tRadius = 74 + fPulse;
+          const tRadius = 90 + fPulse;
 
           const tGrad = cCtx.createRadialGradient(tx, ty, 8, tx, ty, tRadius);
           tGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-          tGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.85)');
-          tGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.35)');
+          tGrad.addColorStop(0.5, 'rgba(0, 0, 0, 1.0)');
+          tGrad.addColorStop(0.82, 'rgba(0, 0, 0, 0.5)');
           tGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           cCtx.fillStyle = tGrad;
           cCtx.beginPath();
@@ -24355,11 +24491,11 @@ class Game {
           const cx = x * TILE_SIZE + 8;
           const cy = y * TILE_SIZE + 8;
           const cPulse = Math.sin(t * 3.5 + x + y) * 2;
-          const cRadius = 46 + cPulse;
+          const cRadius = 58 + cPulse;
 
           const cGrad = cCtx.createRadialGradient(cx, cy, 6, cx, cy, cRadius);
-          cGrad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
-          cGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.45)');
+          cGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          cGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.65)');
           cGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           cCtx.fillStyle = cGrad;
           cCtx.beginPath();
@@ -24369,13 +24505,13 @@ class Game {
         else if (obj === OBJECTS.SHRINE) {
           const sx = x * TILE_SIZE + 8;
           const sy = y * TILE_SIZE + 8;
-          const sGrad = cCtx.createRadialGradient(sx, sy, 10, sx, sy, 65);
-          sGrad.addColorStop(0, 'rgba(0, 0, 0, 0.9)');
-          sGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.5)');
+          const sGrad = cCtx.createRadialGradient(sx, sy, 10, sx, sy, 78);
+          sGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          sGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.7)');
           sGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           cCtx.fillStyle = sGrad;
           cCtx.beginPath();
-          cCtx.arc(sx, sy, 65, 0, Math.PI * 2);
+          cCtx.arc(sx, sy, 78, 0, Math.PI * 2);
           cCtx.fill();
         }
 
@@ -24384,25 +24520,25 @@ class Game {
         if (tile === TILES.CAVE_HOLE_EXIT) {
           const hx = x * TILE_SIZE + 8;
           const hy = y * TILE_SIZE + 8;
-          const hGrad = cCtx.createRadialGradient(hx, hy, 8, hx, hy, 56);
+          const hGrad = cCtx.createRadialGradient(hx, hy, 8, hx, hy, 70);
           hGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-          hGrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
+          hGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.85)');
           hGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           cCtx.fillStyle = hGrad;
           cCtx.beginPath();
-          cCtx.arc(hx, hy, 56, 0, Math.PI * 2);
+          cCtx.arc(hx, hy, 70, 0, Math.PI * 2);
           cCtx.fill();
         }
         else if (tile === TILES.CAVE_LADDER_DOWN || tile === TILES.CAVE_LADDER_UP) {
           const lx = x * TILE_SIZE + 8;
           const ly = y * TILE_SIZE + 8;
-          const lGrad = cCtx.createRadialGradient(lx, ly, 8, lx, ly, 64);
+          const lGrad = cCtx.createRadialGradient(lx, ly, 8, lx, ly, 78);
           lGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-          lGrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
+          lGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.85)');
           lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           cCtx.fillStyle = lGrad;
           cCtx.beginPath();
-          cCtx.arc(lx, ly, 64, 0, Math.PI * 2);
+          cCtx.arc(lx, ly, 78, 0, Math.PI * 2);
           cCtx.fill();
         }
       }
@@ -25006,6 +25142,24 @@ class Game {
     this.network.on('damage_enemy', (msg) => {
       if (this.enemyManager && this.enemyManager.isMasterClient) {
         this.enemyManager.handleRemoteDamage(msg);
+      }
+    });
+
+    // LAN-Sync: Von einem anderen Client neu erzeugtes Loot/XP/Artefakt übernehmen
+    this.network.on('loot_spawn', (msg) => {
+      if (msg.kind === 'artifact') {
+        this.magicManager?.applyRemoteArtifactSpawn(msg.items);
+      } else if (this.enemyManager) {
+        this.enemyManager.applyRemoteLootSpawn(msg.kind, msg.items);
+      }
+    });
+
+    // LAN-Sync: Ein anderer Spieler hat dieses Item zuerst eingesammelt -> lokal entfernen
+    this.network.on('item_pickup', (msg) => {
+      if (msg.kind === 'artifact') {
+        this.magicManager?.removeRemoteArtifact(msg.id);
+      } else if (this.enemyManager) {
+        this.enemyManager.removeRemotePickup(msg.kind, msg.id);
       }
     });
 

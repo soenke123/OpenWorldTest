@@ -3903,9 +3903,9 @@ class Game {
       const screenX = Math.round((this.player.x - this.camera.x) * this.camera.zoom);
       const screenY = Math.round((this.player.y - elevY - this.camera.y) * this.camera.zoom);
       const grad = this.ctx.createRadialGradient(screenX, screenY, 40, screenX, screenY, 280);
-      grad.addColorStop(0, 'rgba(6, 8, 16, 0.05)');
-      grad.addColorStop(0.5, 'rgba(6, 8, 16, 0.55)');
-      grad.addColorStop(1, 'rgba(6, 8, 16, 0.95)');
+      grad.addColorStop(0, 'rgba(6, 8, 16, 0.0)');
+      grad.addColorStop(0.5, 'rgba(6, 8, 16, 0.35)');
+      grad.addColorStop(1, 'rgba(6, 8, 16, 0.72)');
       this.ctx.fillStyle = grad;
       this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       return;
@@ -3917,8 +3917,8 @@ class Game {
     // 1. Offscreen Canvas leeren
     cCtx.clearRect(0, 0, cCanvas.width, cCanvas.height);
 
-    // 2. Volle Höhlen-Dunkelheit zeichnen
-    cCtx.fillStyle = 'rgba(5, 7, 15, 0.94)';
+    // 2. Volle Höhlen-Dunkelheit zeichnen (ausreichend hell, um im Ungelichteten noch etwas zu erkennen)
+    cCtx.fillStyle = 'rgba(5, 7, 15, 0.72)';
     cCtx.fillRect(0, 0, cCanvas.width, cCanvas.height);
 
     // 3. Kamera-Transformation für exakte Weltkoordinaten anwenden
@@ -3932,12 +3932,12 @@ class Game {
     const elevY = Math.round(this.player.visualElevation * ELEVATION_PIXEL_OFFSET);
     const plx = this.player.x + 6;
     const ply = this.player.y - 8 - elevY;
-    const pRadius = 92 + Math.sin(t * 11) * 3;
+    const pRadius = 110 + Math.sin(t * 11) * 3;
 
     const pGrad = cCtx.createRadialGradient(plx, ply, 14, plx, ply, pRadius);
     pGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-    pGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.88)');
-    pGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.4)');
+    pGrad.addColorStop(0.55, 'rgba(0, 0, 0, 1.0)');
+    pGrad.addColorStop(0.85, 'rgba(0, 0, 0, 0.55)');
     pGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     cCtx.fillStyle = pGrad;
     cCtx.beginPath();
@@ -3953,12 +3953,12 @@ class Game {
           const tx = x * TILE_SIZE + 8;
           const ty = y * TILE_SIZE + 5;
           const fPulse = Math.sin(t * 14 + x * 7 + y * 13) * 3;
-          const tRadius = 74 + fPulse;
+          const tRadius = 90 + fPulse;
 
           const tGrad = cCtx.createRadialGradient(tx, ty, 8, tx, ty, tRadius);
           tGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-          tGrad.addColorStop(0.45, 'rgba(0, 0, 0, 0.85)');
-          tGrad.addColorStop(0.8, 'rgba(0, 0, 0, 0.35)');
+          tGrad.addColorStop(0.5, 'rgba(0, 0, 0, 1.0)');
+          tGrad.addColorStop(0.82, 'rgba(0, 0, 0, 0.5)');
           tGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           cCtx.fillStyle = tGrad;
           cCtx.beginPath();
@@ -3969,11 +3969,11 @@ class Game {
           const cx = x * TILE_SIZE + 8;
           const cy = y * TILE_SIZE + 8;
           const cPulse = Math.sin(t * 3.5 + x + y) * 2;
-          const cRadius = 46 + cPulse;
+          const cRadius = 58 + cPulse;
 
           const cGrad = cCtx.createRadialGradient(cx, cy, 6, cx, cy, cRadius);
-          cGrad.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
-          cGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.45)');
+          cGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          cGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.65)');
           cGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           cCtx.fillStyle = cGrad;
           cCtx.beginPath();
@@ -3983,13 +3983,13 @@ class Game {
         else if (obj === OBJECTS.SHRINE) {
           const sx = x * TILE_SIZE + 8;
           const sy = y * TILE_SIZE + 8;
-          const sGrad = cCtx.createRadialGradient(sx, sy, 10, sx, sy, 65);
-          sGrad.addColorStop(0, 'rgba(0, 0, 0, 0.9)');
-          sGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.5)');
+          const sGrad = cCtx.createRadialGradient(sx, sy, 10, sx, sy, 78);
+          sGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
+          sGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.7)');
           sGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           cCtx.fillStyle = sGrad;
           cCtx.beginPath();
-          cCtx.arc(sx, sy, 65, 0, Math.PI * 2);
+          cCtx.arc(sx, sy, 78, 0, Math.PI * 2);
           cCtx.fill();
         }
 
@@ -3998,25 +3998,25 @@ class Game {
         if (tile === TILES.CAVE_HOLE_EXIT) {
           const hx = x * TILE_SIZE + 8;
           const hy = y * TILE_SIZE + 8;
-          const hGrad = cCtx.createRadialGradient(hx, hy, 8, hx, hy, 56);
+          const hGrad = cCtx.createRadialGradient(hx, hy, 8, hx, hy, 70);
           hGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-          hGrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
+          hGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.85)');
           hGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           cCtx.fillStyle = hGrad;
           cCtx.beginPath();
-          cCtx.arc(hx, hy, 56, 0, Math.PI * 2);
+          cCtx.arc(hx, hy, 70, 0, Math.PI * 2);
           cCtx.fill();
         }
         else if (tile === TILES.CAVE_LADDER_DOWN || tile === TILES.CAVE_LADDER_UP) {
           const lx = x * TILE_SIZE + 8;
           const ly = y * TILE_SIZE + 8;
-          const lGrad = cCtx.createRadialGradient(lx, ly, 8, lx, ly, 64);
+          const lGrad = cCtx.createRadialGradient(lx, ly, 8, lx, ly, 78);
           lGrad.addColorStop(0, 'rgba(0, 0, 0, 1.0)');
-          lGrad.addColorStop(0.55, 'rgba(0, 0, 0, 0.7)');
+          lGrad.addColorStop(0.6, 'rgba(0, 0, 0, 0.85)');
           lGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           cCtx.fillStyle = lGrad;
           cCtx.beginPath();
-          cCtx.arc(lx, ly, 64, 0, Math.PI * 2);
+          cCtx.arc(lx, ly, 78, 0, Math.PI * 2);
           cCtx.fill();
         }
       }
@@ -4620,6 +4620,24 @@ class Game {
     this.network.on('damage_enemy', (msg) => {
       if (this.enemyManager && this.enemyManager.isMasterClient) {
         this.enemyManager.handleRemoteDamage(msg);
+      }
+    });
+
+    // LAN-Sync: Von einem anderen Client neu erzeugtes Loot/XP/Artefakt übernehmen
+    this.network.on('loot_spawn', (msg) => {
+      if (msg.kind === 'artifact') {
+        this.magicManager?.applyRemoteArtifactSpawn(msg.items);
+      } else if (this.enemyManager) {
+        this.enemyManager.applyRemoteLootSpawn(msg.kind, msg.items);
+      }
+    });
+
+    // LAN-Sync: Ein anderer Spieler hat dieses Item zuerst eingesammelt -> lokal entfernen
+    this.network.on('item_pickup', (msg) => {
+      if (msg.kind === 'artifact') {
+        this.magicManager?.removeRemoteArtifact(msg.id);
+      } else if (this.enemyManager) {
+        this.enemyManager.removeRemotePickup(msg.kind, msg.id);
       }
     });
 

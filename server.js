@@ -373,25 +373,25 @@ wss.on('connection', (ws) => {
         break;
       }
 
-      case 'artifact_pickup': {
+      case 'loot_spawn': {
+        // Ein Client (Master-Client bei Monster-Tod, oder ein sterbender Spieler) meldet
+        // neu erzeugtes Loot/XP/Artefakt. Einfacher Relay an alle anderen, damit niemand
+        // seine eigene, unsynchronisierte Kopie erzeugt.
         broadcast({
-          type: 'artifact_pickup',
-          finderId: clientId,
-          finderName: (roomState.players.get(clientId) || {}).name || 'Jemand',
-          artifactType: msg.artifactType,
-          shrineIdx: msg.shrineIdx,
-          dimension: msg.dimension
-        });
+          type: 'loot_spawn',
+          kind: msg.kind,
+          items: msg.items
+        }, ws);
         break;
       }
 
-      case 'artifact_respawn': {
+      case 'item_pickup': {
+        // Ein Spieler hat ein Item eingesammelt -> bei allen anderen lokal entfernen
         broadcast({
-          type: 'artifact_respawn',
-          shrineIdx: msg.shrineIdx,
-          artifactType: msg.artifactType,
-          dimension: msg.dimension
-        });
+          type: 'item_pickup',
+          id: msg.id,
+          kind: msg.kind
+        }, ws);
         break;
       }
 
