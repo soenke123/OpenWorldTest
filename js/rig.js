@@ -164,6 +164,7 @@ export class SkelRig {
     this.flash = 0;
     this.flashColor = '#ffffff';
     this.ink = 0.85;
+    this.tilt = RIG_TILT;
     this.setFacing(Math.PI / 2);
   }
 
@@ -180,6 +181,7 @@ export class SkelRig {
     this.flashColor = o.flashColor || '#ffffff';
     this.ink = o.ink === undefined ? 0.85 : o.ink;
     this.alpha = o.alpha === undefined ? 1 : o.alpha;
+    this.tilt = o.tilt || RIG_TILT;
     this.items.length = 0;
     this.setFacing(rigFacingAngle(o.facing));
     return this;
@@ -199,7 +201,7 @@ export class SkelRig {
     const gd = p.x * this.ry + p.z * this.fy;
     return {
       x: this.ox + gx * this.s,
-      y: this.oy + (-p.y + gd * RIG_TILT) * this.s,
+      y: this.oy + (-p.y + gd * this.tilt) * this.s,
       d: gd * RIG_CAM_Z + p.y * RIG_CAM_Y
     };
   }
@@ -600,8 +602,8 @@ export class SkelRig {
       // Ellipsen-Achsen des horizontalen Rings auf dem Bildschirm
       const ring = (r) => {
         // Ring-Achsen: Modell-x und Modell-z, projiziert
-        const ax = { x: this.rx * r * sx * s, y: this.ry * r * sx * RIG_TILT * s };
-        const az = { x: this.fx * r * sz * s, y: this.fy * r * sz * RIG_TILT * s };
+        const ax = { x: this.rx * r * sx * s, y: this.ry * r * sx * this.tilt * s };
+        const az = { x: this.fx * r * sz * s, y: this.fy * r * sz * this.tilt * s };
         return { ax, az };
       };
       const rT = ring(rt);

@@ -1,5 +1,5 @@
 import { TILE_SIZE, PLAYER_CONFIG, TILES, OBJECTS, ELEVATION_PIXEL_OFFSET, RAMPS, COMBAT_CONFIG, PVP_CONFIG } from './constants.js';
-import { CHARACTERS_MAP, getSelectedSkin, setSelectedSkin, getSelectedPlayerName, setSelectedPlayerName, renderHeroSwingTrail } from './characters.js';
+import { CHARACTERS_MAP, getSelectedSkin, setSelectedSkin, getSelectedPlayerName, setSelectedPlayerName, renderHeroSwingTrail, renderDruidBear } from './characters.js';
 
 export class Player {
   constructor(x, y, map, game = null) {
@@ -474,8 +474,8 @@ export class Player {
   }
 
   /** Aktuelle Kampfaktion für das Skelett-Rig des Helden (Schwert, Stich, Wirbel, Bogen) */
-  getSkinAction(animTime) {
-    if (this.isBearForm) return null;
+  getSkinAction(animTime, forBear = false) {
+    if (this.isBearForm && !forBear) return null;
     const angle = this.getFacingAngle();
     if (this.melee.isSpinning) {
       return { type: 'spin', progress: 0, angle, time: animTime };
@@ -484,7 +484,7 @@ export class Player {
       const type = this.melee.swingType === 'slash1' ? 'slash' : this.melee.swingType;
       return { type, progress: this.melee.swingProgress, angle };
     }
-    if (this.ranged.charging || this.ranged.isHolding || this.ranged.aiming) {
+    if (!this.isBearForm && (this.ranged.charging || this.ranged.isHolding || this.ranged.aiming)) {
       let pull = 0.85;
       if (this.ranged.charging) {
         pull = Math.min(1, 0.4 + this.ranged.chargeTimer * 1.5);
@@ -2652,211 +2652,7 @@ export class Player {
   }
 
   renderBearForm(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-    const vec = this.getFacingVector();
-    const dx = vec.x;
-    const dy = vec.y;
-    const waddle = isMoving ? Math.sin(animTime * 9) * 2 : Math.sin(animTime * 2.5) * 0.5;
-    const footStep = isMoving ? Math.cos(animTime * 9) * 2.5 : 0;
-
-    const drawBox = (x, y, w, h, rad) => {
-      if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(x, y, w, h, rad);
-      } else {
-        ctx.rect(x, y, w, h);
-      }
-    };
-
-    ctx.save();
-
-    // 1. Bear Paper Drop Shadow
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(px + 1, py + 2, 13, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 2. Druidic Nature Aura Ring (Forest Emerald Glow)
-    const auraPulse = 1.0 + Math.sin(animTime * 4) * 0.12;
-    if (typeof ctx.createRadialGradient === 'function') {
-      const auraGrad = ctx.createRadialGradient(px, py - 8, 4, px, py - 8, 22 * auraPulse);
-      auraGrad.addColorStop(0, 'rgba(34, 197, 94, 0.35)');
-      auraGrad.addColorStop(0.7, 'rgba(22, 163, 74, 0.15)');
-      auraGrad.addColorStop(1, 'rgba(22, 101, 52, 0)');
-      ctx.fillStyle = auraGrad;
-      ctx.beginPath();
-      ctx.arc(px, py - 8, 22 * auraPulse, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // 3. Back Paws (Hind Feet)
-    const hindY = py - 2;
-    ctx.fillStyle = '#2e1507';
-    // Left hind paw
-    ctx.beginPath();
-    ctx.ellipse(px - 7, hindY - footStep * 0.5, 4.2, 3, -0.2, 0, Math.PI * 2);
-    ctx.fill();
-    // Right hind paw
-    ctx.beginPath();
-    ctx.ellipse(px + 7, hindY + footStep * 0.5, 4.2, 3, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 4. Massive Bear Torso (Chunky Layered Papercraft Fold)
-    const bodyY = py - 13 + waddle;
-    // Darker back/shoulder shadow layer
-    ctx.fillStyle = '#3d1d0a';
-    ctx.beginPath();
-    drawBox(px - 11, bodyY - 11, 22, 20, 7);
-    ctx.fill();
-
-    // Main fur body
-    ctx.fillStyle = '#552a10';
-    ctx.beginPath();
-    drawBox(px - 10, bodyY - 10, 20, 18, 6);
-    ctx.fill();
-
-    // Papercraft Crease lines on fur
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(px - 7, bodyY - 9);
-    ctx.lineTo(px, bodyY + 6);
-    ctx.lineTo(px + 7, bodyY - 9);
-    ctx.stroke();
-
-    // Shoulder moss flakes
-    ctx.fillStyle = '#15803d';
-    ctx.fillRect(px - 9, bodyY - 8, 3, 2);
-    ctx.fillRect(px + 6, bodyY - 8, 3, 2);
-
-    // 5. Pale Honey Parchment Chest Crest with Druid Runes
-    ctx.fillStyle = '#d4a373';
-    ctx.beginPath();
-    ctx.moveTo(px, bodyY - 7);
-    ctx.lineTo(px + 6 + dx * 1.5, bodyY + 4 + dy);
-    ctx.lineTo(px, bodyY + 7 + dy);
-    ctx.lineTo(px - 6 + dx * 1.5, bodyY + 4 + dy);
-    ctx.closePath();
-    ctx.fill();
-
-    // Glowing Emerald Druid Spiral / Mark on Chest
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    ctx.arc(px + dx * 1.2, bodyY + dy * 0.8, 2.8, 0, Math.PI * 1.6);
-    ctx.stroke();
-
-    // 6. Bear Head & Snout
-    const headX = px + dx * 3;
-    const headY = bodyY - 9 + dy * 2;
-
-    // Round Paper Ears
-    // Left ear
-    ctx.fillStyle = '#3d1d0a';
-    ctx.beginPath();
-    ctx.arc(headX - 6.5, headY - 5, 3.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#e5a882'; // Inner ear fold
-    ctx.beginPath();
-    ctx.arc(headX - 6.5, headY - 5, 2.0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Right ear
-    ctx.fillStyle = '#3d1d0a';
-    ctx.beginPath();
-    ctx.arc(headX + 6.5, headY - 5, 3.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#e5a882';
-    ctx.beginPath();
-    ctx.arc(headX + 6.5, headY - 5, 2.0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Main Head Fold
-    ctx.fillStyle = '#5c3012';
-    ctx.beginPath();
-    ctx.ellipse(headX, headY, 8.5, 7.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Folded Snout / Muzzle
-    const snoutX = headX + dx * 2.5;
-    const snoutY = headY + 2 + dy * 1.5;
-    ctx.fillStyle = '#783c18';
-    ctx.beginPath();
-    ctx.ellipse(snoutX, snoutY, 4.5, 3.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Black Button Nose with tiny highlight
-    ctx.fillStyle = '#18181b';
-    ctx.beginPath();
-    ctx.arc(snoutX + dx * 0.8, snoutY - 1 + dy * 0.5, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(snoutX + dx * 0.8 - 0.6, snoutY - 1.6 + dy * 0.5, 0.9, 0.9);
-
-    // Glowing Fierce Emerald Eyes
-    if (direction !== 'up') {
-      const eyeY = headY - 1.5 + dy * 0.5;
-      const eyeSpacing = 3.8;
-      // Left eye
-      if (!direction.includes('right')) {
-        ctx.fillStyle = '#22c55e';
-        ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 0.4, eyeY + 0.4, 1.1, 1.1);
-      }
-      // Right eye
-      if (!direction.includes('left')) {
-        ctx.fillStyle = '#22c55e';
-        ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 0.4, eyeY + 0.4, 1.1, 1.1);
-      }
-    }
-
-    // 7. Massive Front Paws with Emerald-Tipped Bone Claws
-    const pawRaise = (this.melee.charging || this.melee.swingProgress < 0.6) ? -4 : 0;
-    const lPawX = px - 9 + (dx < 0 ? -2 : 0);
-    const lPawY = bodyY + 5 + footStep + pawRaise;
-    const rPawX = px + 9 + (dx > 0 ? 2 : 0);
-    const rPawY = bodyY + 5 - footStep + pawRaise;
-
-    const drawPawWithClaws = (pawX, pawY, isLeft) => {
-      ctx.fillStyle = '#3d1d0a';
-      ctx.beginPath();
-      ctx.ellipse(pawX, pawY, 4.6, 3.8, isLeft ? -0.15 : 0.15, 0, Math.PI * 2);
-      ctx.fill();
-
-      const clawAngle = Math.atan2(dy || 1, dx || (isLeft ? -0.4 : 0.4));
-      for (let c = -1; c <= 1; c++) {
-        const ca = clawAngle + c * 0.35;
-        const cx = pawX + Math.cos(ca) * 3.5;
-        const cy = pawY + Math.sin(ca) * 3.5;
-        const tipX = pawX + Math.cos(ca) * 6.5;
-        const tipY = pawY + Math.sin(ca) * 6.5;
-
-        // Bone white claw base
-        ctx.strokeStyle = '#f8fafc';
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(tipX, tipY);
-        ctx.stroke();
-
-        // Emerald glowing claw tip
-        ctx.fillStyle = '#4ade80';
-        ctx.fillRect(tipX - 0.7, tipY - 0.7, 1.4, 1.4);
-      }
-    };
-
-    drawPawWithClaws(lPawX, lPawY, true);
-    drawPawWithClaws(rPawX, rPawY, false);
-
-    // Hit Flash Tint
-    if (hitFlash > 0) {
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.55)';
-      ctx.beginPath();
-      drawBox(px - 12, bodyY - 15, 24, 26, 7);
-      ctx.fill();
-    }
-
-    ctx.restore();
+    // Smaragd-Druide: Vierbeiner-Skelett mit Prankenhieb, Ansprung und Wirbel (siehe characters.js)
+    renderDruidBear(ctx, px, py, animTime, direction, isMoving, hitFlash, this.getSkinAction(animTime, true));
   }
 }

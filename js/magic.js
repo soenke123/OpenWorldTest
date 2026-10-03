@@ -2,6 +2,7 @@
 // MAGIC & ARTIFACT SYSTEM (Zauber- & Artefakt-System)
 // =============================================================================
 import { TILE_SIZE, MAP_WIDTH, MAP_HEIGHT, DIMENSIONS, PVP_CONFIG } from './constants.js';
+import { RIG, rigV, rigAdd, rigLerp, rigChain } from './rig.js';
 
 export const ARTIFACT_TYPES = {
   PHOENIX: {
@@ -2176,110 +2177,11 @@ export class MagicManager {
         continue;
       }
 
-      // Flapping wing cycle
-      const flap = Math.sin(spell.animTime * 18);
-      const halfW = (spell.width / 2) * zoom; // 40px * zoom each wing
-
-      // 1. Blazing Heat Aura / Shockwave
-      const auraGrad = ctx.createRadialGradient(0, 0, 10 * zoom, 0, 0, halfW * 1.2);
-      auraGrad.addColorStop(0, 'rgba(254, 240, 138, 0.7)');
-      auraGrad.addColorStop(0.4, 'rgba(239, 68, 68, 0.45)');
-      auraGrad.addColorStop(1, 'rgba(185, 28, 28, 0)');
-      ctx.fillStyle = auraGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, halfW * 1.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 2. Trailing Fiery Tail Feathers (3 long blazing streams)
-      for (let t = -1; t <= 1; t++) {
-        const tailWav = Math.sin(spell.animTime * 14 + t) * (6 * zoom);
-        ctx.fillStyle = t === 0 ? '#facc15' : '#dc2626';
-        ctx.beginPath();
-        ctx.moveTo(-10 * zoom, t * 8 * zoom);
-        ctx.quadraticCurveTo(-40 * zoom, (t * 16 + tailWav) * zoom, -70 * zoom, (t * 22 + tailWav * 1.4) * zoom);
-        ctx.lineTo(-45 * zoom, (t * 8) * zoom);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      // 3. Wide Majestic Origami Phoenix Wings (5 Tiles = 80px width)
-      // Left Wing
-      ctx.fillStyle = '#b91c1c';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-18 * zoom, -halfW * (0.85 + flap * 0.15));
-      ctx.lineTo(12 * zoom, -halfW * (0.65 + flap * 0.15));
-      ctx.lineTo(8 * zoom, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      // Left Wing Layer 2 (Lighter Orange Paper Fold)
-      ctx.fillStyle = '#f97316';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-12 * zoom, -halfW * (0.75 + flap * 0.12));
-      ctx.lineTo(10 * zoom, -halfW * (0.5 + flap * 0.12));
-      ctx.lineTo(6 * zoom, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      // Right Wing
-      ctx.fillStyle = '#b91c1c';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-18 * zoom, halfW * (0.85 + flap * 0.15));
-      ctx.lineTo(12 * zoom, halfW * (0.65 + flap * 0.15));
-      ctx.lineTo(8 * zoom, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      // Right Wing Layer 2
-      ctx.fillStyle = '#f97316';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-12 * zoom, halfW * (0.75 + flap * 0.12));
-      ctx.lineTo(10 * zoom, halfW * (0.5 + flap * 0.12));
-      ctx.lineTo(6 * zoom, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      // 4. Phoenix Body & Radiant Origami Beak
-      ctx.fillStyle = '#ef4444';
-      ctx.beginPath();
-      ctx.moveTo(-16 * zoom, 0);
-      ctx.lineTo(0, -6 * zoom);
-      ctx.lineTo(24 * zoom, 0); // Sharp golden beak forward
-      ctx.lineTo(0, 6 * zoom);
-      ctx.closePath();
-      ctx.fill();
-
-      // Golden Beak Tip
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.moveTo(14 * zoom, -3 * zoom);
-      ctx.lineTo(26 * zoom, 0);
-      ctx.lineTo(14 * zoom, 3 * zoom);
-      ctx.closePath();
-      ctx.fill();
-
-      // Blazing Head Crest (3 fire feathers)
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.moveTo(4 * zoom, 0);
-      ctx.lineTo(-10 * zoom, -8 * zoom);
-      ctx.lineTo(0, -2 * zoom);
-      ctx.lineTo(-14 * zoom, 0);
-      ctx.lineTo(0, 2 * zoom);
-      ctx.lineTo(-10 * zoom, 8 * zoom);
-      ctx.closePath();
-      ctx.fill();
-
-      // Pure White Glowing Eyes
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(10 * zoom, -2 * zoom, 3 * zoom, 1.5 * zoom);
-      ctx.fillRect(10 * zoom, 0.5 * zoom, 3 * zoom, 1.5 * zoom);
-
+      // Rubin-Phönix als Skelett-Feuervogel (Rig arbeitet in eigenen Koordinaten)
       ctx.restore();
+      const cull = (spell.width || 80) * zoom;
+      if (sx < -cull || sy < -cull || sx > ctx.canvas.width + cull || sy > ctx.canvas.height + cull) continue;
+      renderPhoenixBird(ctx, sx, sy, spell.angle, spell.animTime, zoom, spell.width);
     }
   }
 
@@ -2523,4 +2425,111 @@ export class MagicManager {
 
     ctx.restore();
   }
+}
+
+// -----------------------------------------------------------------------------
+// RUBIN-PHÖNIX: Feuervogel auf dem Skelett-Rig
+// -----------------------------------------------------------------------------
+
+/**
+ * Zeichnet den Phönix im Bildschirmraum (sx, sy = Körpermitte, zoom = Kamerazoom).
+ * width ist die Spannweite in Weltpixeln (Trefferbreite des Zaubers).
+ */
+export function renderPhoenixBird(ctx, sx, sy, angle, animTime, zoom, width = 80) {
+  const t = animTime;
+  const alt = 12;
+  const r = RIG.begin(ctx, sx, sy + alt * zoom * 1.0, { facing: angle, scale: zoom, ink: 0.7, tilt: 0.92 });
+  const half = width / 2;
+
+  // Hitze-Aura und Schatten am Boden
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const ag = ctx.createRadialGradient(sx, sy, 4 * zoom, sx, sy, half * 1.15 * zoom);
+  ag.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
+  ag.addColorStop(0.35, 'rgba(249, 115, 22, 0.28)');
+  ag.addColorStop(1, 'rgba(185, 28, 28, 0)');
+  ctx.fillStyle = ag;
+  ctx.beginPath();
+  ctx.arc(sx, sy, half * 1.15 * zoom, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  r.shadow(half * 0.7, 6, 0.22);
+
+  const flap = Math.sin(t * 9);
+  const flapLag = Math.sin(t * 9 - 0.7);
+  const bodyY = alt + Math.cos(t * 9) * 1.2;
+
+  // Körper: Brust -> Schweifansatz
+  const chest = rigV(0, bodyY, 6);
+  const rump = rigV(0, bodyY + 0.5, -8);
+  const neck = rigV(0, bodyY + 2.2, 11);
+  const head = rigV(0, bodyY + 3.6, 15 + Math.sin(t * 4) * 0.4);
+
+  // Flammenschweif: fünf lange, wogende Federn
+  for (let i = -2; i <= 2; i++) {
+    const base = rigAdd(rump, rigV(i * 1.3, 0, -1));
+    const len = 9 - Math.abs(i) * 1.6;
+    const pts = rigChain(t, base, rigV(i * 0.35, -0.08, -1), { n: 6, seg: len * 0.55, amp: 2.2, ampY: 1.0, freq: 10, k: 0.7 + Math.abs(i) * 0.1 });
+    const col = i === 0 ? '#fde047' : (Math.abs(i) === 1 ? '#f97316' : '#dc2626');
+    r.line(pts, col, 2.2 - Math.abs(i) * 0.3, { bias: -2 });
+    r.line(pts.slice(0, 4), '#fff7d6', 0.6, { outline: false, bias: -1.9 });
+    r.glow(pts[pts.length - 1], 5, 'rgba(251,146,60,0.9)', { alpha: 0.5 });
+    // Pfauenauge am Federende
+    r.ball(pts[pts.length - 1], 1.4, i === 0 ? '#fef08a' : '#fb923c', { outline: false, gloss: 0.5, bias: -1.8 });
+  }
+
+  // Schwingen: Arm (Schulter->Ellbogen) und Hand (Ellbogen->Spitze) mit Federstaffeln
+  for (const side of [1, -1]) {
+    const sh = rigV(side * 2.8, bodyY + 1, 3);
+    const a1 = flap * 0.55;
+    const a2 = flapLag * 0.75;
+    const elbow = rigAdd(sh, rigV(side * Math.cos(a1) * half * 0.42, Math.sin(a1) * half * 0.42, -1));
+    const tip = rigAdd(elbow, rigV(side * Math.cos(a2) * half * 0.6, Math.sin(a2) * half * 0.6, -5));
+    // Hinterkante mit gezackten Schwungfedern
+    const trail = [];
+    const N = 11;
+    for (let k = 0; k <= N; k++) {
+      const f = k / N;
+      const along = f < 0.45 ? rigLerp(sh, elbow, f / 0.45) : rigLerp(elbow, tip, (f - 0.45) / 0.55);
+      const depth = 15 * Math.sin(Math.PI * (0.2 + f * 0.7)) + (k % 2 ? 3.2 : 0);
+      trail.push(rigAdd(along, rigV(0, -0.8 * f, -depth)));
+    }
+    const wing = [sh, elbow, tip].concat(trail.slice().reverse());
+    const wd = r.depth(rigLerp(sh, tip, 0.4)) - 1;
+    r.poly(wing, '#b91c1c', { smooth: false, depth: wd });
+    // Mittlere Federlage (orange) und Deckfedern (gold)
+    const mid = [rigLerp(sh, elbow, 0.1), elbow, rigLerp(elbow, tip, 0.75)].concat(
+      trail.slice(1, 9).reverse().map((p, i) => rigLerp(p, rigLerp(sh, elbow, 0.5), 0.3 + (i % 2) * 0.12)));
+    r.poly(mid, '#f97316', { smooth: false, depth: wd + 0.01, outline: false });
+    const cov = [sh, rigLerp(sh, elbow, 0.9), rigLerp(elbow, tip, 0.4), rigAdd(rigLerp(elbow, tip, 0.2), rigV(0, -0.3, -6)), rigAdd(rigLerp(sh, elbow, 0.6), rigV(0, -0.3, -7)), rigAdd(sh, rigV(0, -0.3, -5.5))];
+    r.poly(cov, '#fbbf24', { depth: wd + 0.02, outline: false });
+    // Leuchtende Vorderkante
+    r.line([sh, elbow, tip], '#fff1b8', 0.7, { outline: false, depth: wd + 0.03 });
+    r.glow(tip, 4, 'rgba(253,186,116,0.9)', { alpha: 0.55 });
+  }
+
+  // Rumpf, Hals und Kopf
+  r.capsule(rump, chest, 2.6, 4.2, '#dc2626', { bias: 0.2 });
+  r.ball(rigAdd(chest, rigV(0, -0.6, 0.5)), 3.4, '#fb923c', { bias: 0.3, gloss: 0.4 });
+  r.capsule(chest, neck, 3.2, 2.2, '#ef4444', { bias: 0.4 });
+  r.ball(head, 2.8, '#ef4444', { bias: 0.6, gloss: 0.45, after: (c) => {
+    r.eye(c, head, 2.8, 0.75, 0.15, { style: 'glow', color: '#fef9c3', size: 0.75 });
+    r.eye(c, head, 2.8, -0.75, 0.15, { style: 'glow', color: '#fef9c3', size: 0.75 });
+  } });
+  r.capsule(rigAdd(head, rigV(0, -0.2, 2.0)), rigAdd(head, rigV(0, -1.2, 5.2)), 1.1, 0.15, '#facc15', { bias: 0.7, light: 0.4 });
+  // Flammenkamm: drei züngelnde Federn
+  for (let i = -1; i <= 1; i++) {
+    const cb = rigAdd(head, rigV(i * 0.9, 2.0, -0.5));
+    const pts = rigChain(t + i, cb, rigV(i * 0.4, 0.8, -1), { n: 4, seg: 1.6, amp: 0.7, ampY: 0.4, freq: 14, k: 1.1 });
+    r.line(pts, i === 0 ? '#fde047' : '#f97316', 0.9, { bias: 0.8 });
+  }
+  r.glow(chest, 11, 'rgba(254,215,170,0.85)', { alpha: 0.55 });
+
+  // Glutfunken, die vom Körper abreißen
+  for (let i = 0; i < 6; i++) {
+    const life = (t * 1.6 + i / 6) % 1;
+    const ep = rigV(Math.sin(i * 7.3) * 10, bodyY + Math.cos(i * 3.1) * 3 + life * 4, -6 - life * 26);
+    r.glow(ep, 2.2 * (1 - life) + 0.4, i % 2 ? 'rgba(253,224,71,0.95)' : 'rgba(249,115,22,0.95)', { alpha: 1 - life });
+  }
+  r.flush();
 }

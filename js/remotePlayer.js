@@ -1,5 +1,5 @@
 import { TILE_SIZE, ELEVATION_PIXEL_OFFSET } from './constants.js';
-import { CHARACTERS_MAP, renderHeroSwingTrail } from './characters.js';
+import { CHARACTERS_MAP, renderHeroSwingTrail, renderDruidBear } from './characters.js';
 
 export class RemotePlayer {
   constructor(data) {
@@ -451,116 +451,13 @@ export class RemotePlayer {
   }
 
   renderBearForm(ctx, px, py, animTime) {
-    const vec = this.getFacingVector();
-    const dx = vec.x;
-    const dy = vec.y;
-    const waddle = this.isMoving ? Math.sin(animTime * 9) * 2 : Math.sin(animTime * 2.5) * 0.5;
-    const footStep = this.isMoving ? Math.cos(animTime * 9) * 2.5 : 0;
-
-    const drawBox = (x, y, w, h, rad) => {
-      if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(x, y, w, h, rad);
-      } else {
-        ctx.rect(x, y, w, h);
-      }
-    };
-
-    ctx.save();
-
-    // 1. Druidic Nature Aura Ring (Forest Emerald Glow)
-    const auraPulse = 1.0 + Math.sin(animTime * 4) * 0.12;
-    if (typeof ctx.createRadialGradient === 'function') {
-      const auraGrad = ctx.createRadialGradient(px, py - 8, 4, px, py - 8, 22 * auraPulse);
-      auraGrad.addColorStop(0, 'rgba(34, 197, 94, 0.35)');
-      auraGrad.addColorStop(0.7, 'rgba(22, 163, 74, 0.15)');
-      auraGrad.addColorStop(1, 'rgba(22, 101, 52, 0)');
-      ctx.fillStyle = auraGrad;
-      ctx.beginPath();
-      ctx.arc(px, py - 8, 22 * auraPulse, 0, Math.PI * 2);
-      ctx.fill();
+    let action = null;
+    if (this.swingAnim > 0 && this.swingType) {
+      const progress = 1 - this.swingAnim;
+      const map = { bear_claw1: 'slash', bear_claw2: 'slash2', bear_thrust: 'thrust', bear_spin: 'spin', slash1: 'slash', slash2: 'slash2', thrust: 'thrust', spin: 'spin' };
+      const type = map[this.swingType];
+      if (type) action = { type, progress, angle: this.swingAngle, time: animTime };
     }
-
-    // 2. Back Paws
-    const hindY = py - 2;
-    ctx.fillStyle = '#2e1507';
-    ctx.beginPath();
-    ctx.ellipse(px - 7, hindY - footStep * 0.5, 4.2, 3, -0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(px + 7, hindY + footStep * 0.5, 4.2, 3, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 3. Massive Bear Torso
-    const bodyY = py - 13 + waddle;
-    ctx.fillStyle = '#3d1d0a';
-    ctx.beginPath();
-    drawBox(px - 11, bodyY - 11, 22, 20, 7);
-    ctx.fill();
-
-    ctx.fillStyle = '#552a10';
-    ctx.beginPath();
-    drawBox(px - 10, bodyY - 10, 20, 18, 6);
-    ctx.fill();
-
-    // 4. Chest Crest
-    ctx.fillStyle = '#d4a373';
-    ctx.beginPath();
-    ctx.moveTo(px, bodyY - 7);
-    ctx.lineTo(px + 6 + dx * 1.5, bodyY + 4 + dy);
-    ctx.lineTo(px, bodyY + 7 + dy);
-    ctx.lineTo(px - 6 + dx * 1.5, bodyY + 4 + dy);
-    ctx.closePath();
-    ctx.fill();
-
-    // Emerald Spiral Mark
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    ctx.arc(px + dx * 1.2, bodyY + dy * 0.8, 2.8, 0, Math.PI * 1.6);
-    ctx.stroke();
-
-    // 5. Head & Snout
-    const headX = px + dx * 3;
-    const headY = bodyY - 9 + dy * 2;
-
-    // Ears
-    ctx.fillStyle = '#3d1d0a';
-    ctx.beginPath();
-    ctx.arc(headX - 6.5, headY - 5, 3.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(headX + 6.5, headY - 5, 3.6, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Head
-    ctx.fillStyle = '#5c3012';
-    ctx.beginPath();
-    ctx.ellipse(headX, headY, 8.5, 7.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Snout
-    const snoutX = headX + dx * 2.5;
-    const snoutY = headY + 2 + dy * 1.5;
-    ctx.fillStyle = '#783c18';
-    ctx.beginPath();
-    ctx.ellipse(snoutX, snoutY, 4.5, 3.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Nose
-    ctx.fillStyle = '#18181b';
-    ctx.beginPath();
-    ctx.arc(snoutX + dx * 0.8, snoutY - 1 + dy * 0.5, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Emerald Eyes
-    if (this.direction !== 'up') {
-      const eyeY = headY - 1.5 + dy * 0.5;
-      const eyeSpacing = 3.8;
-      ctx.fillStyle = '#22c55e';
-      ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
-      ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
-    }
-
-    ctx.restore();
+    renderDruidBear(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash, action);
   }
 }

@@ -1666,218 +1666,145 @@ export class CombatManager {
 
   renderSlashEffects(ctx) {
     for (const slash of this.slashEffects) {
-      const progress = slash.timer / slash.duration;
+      const progress = Math.min(1, slash.timer / slash.duration);
       const alpha = 1.0 - progress;
+      const isBear = slash.type.startsWith('bear_');
 
       ctx.save();
       ctx.translate(slash.x, slash.y);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-      if (slash.type === 'spin') {
-        // 360 Degree Whirling Cyclone & Shockwave Ring (Zelda Spin Attack)
-        const curRadius = slash.radius * (0.75 + progress * 0.45);
-
-        // Outer expanding air vacuum ring
-        ctx.lineWidth = 2 * alpha;
-        ctx.strokeStyle = `rgba(186, 230, 253, ${alpha * 0.6})`;
+      if (slash.type === 'spin' || slash.type === 'bear_spin') {
+        // Wirbelsturm: zwei rotierende, sich verjüngende Klingenbögen + Druckring
+        const R = slash.radius * (0.8 + progress * 0.35);
+        const head = progress * Math.PI * 6;
+        const core = isBear ? '187, 247, 208' : '255, 255, 255';
+        const glow = isBear ? '34, 197, 94' : '56, 189, 248';
+        for (let k = 0; k < 2; k++) {
+          const a1 = head + k * Math.PI;
+          this.drawTaperedArc(ctx, 0, 0, R, a1 - 2.2, a1, 7 * alpha + 1, `rgba(${glow}, ${0.45 * alpha})`, true);
+          this.drawTaperedArc(ctx, 0, 0, R, a1 - 1.6, a1, 3.2 * alpha + 0.6, `rgba(${core}, ${0.95 * alpha})`, true);
+        }
+        ctx.strokeStyle = `rgba(${glow}, ${0.35 * alpha})`;
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.arc(0, 0, curRadius * 1.3, 0, Math.PI * 2);
+        ctx.arc(0, 0, R * (1.15 + progress * 0.3), 0, Math.PI * 2);
         ctx.stroke();
-
-        // Primary glowing cyan blade circle
-        ctx.lineWidth = 5 * alpha;
-        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha * 0.95})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Bright white sharp cutting rim
-        ctx.lineWidth = 2.2 * alpha;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Dual swirling whirlwind spiral blades
-        ctx.lineWidth = 3.0 * alpha;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.92})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius * 0.78, progress * Math.PI * 5, progress * Math.PI * 5 + Math.PI * 1.4);
-        ctx.stroke();
-
-        ctx.strokeStyle = `rgba(103, 232, 249, ${alpha * 0.85})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius * 0.6, -progress * Math.PI * 5, -progress * Math.PI * 5 + Math.PI * 1.4);
-        ctx.stroke();
-      }
-      else if (slash.type === 'thrust') {
-        // Linear Forward Powerful Thrust Blade & Dual Sonic Shockwave
+        if (isBear) {
+          // Krallenspuren im Wirbel
+          for (let s = 0; s < 3; s++) {
+            const sa = -head * 0.7 + (s * Math.PI * 2) / 3;
+            this.drawClawMarks(ctx, R * 0.72, sa, sa + 0.9, alpha, 1);
+          }
+        }
+      } else if (slash.type === 'thrust' || slash.type === 'bear_thrust') {
+        // Durchstoß: Lichtlanze mit Druckwellen-Ringen in Stoßrichtung
         ctx.rotate(slash.angle);
-        const curLen = slash.radius * (0.68 + progress * 0.55);
-
-        // 1. Dual Shockwave Pressure Rings
-        // Outer cyan air pressure wave
-        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha * 0.75})`;
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.arc(curLen * 0.5, 0, 16 * (0.6 + progress * 0.8), -Math.PI * 0.48, Math.PI * 0.48);
-        ctx.stroke();
-
-        // Inner intense white sonic boom shockwave cone
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
-        ctx.lineWidth = 3.0;
-        ctx.beginPath();
-        ctx.arc(curLen * 0.72, 0, 13 * (0.5 + progress * 0.7), -Math.PI * 0.42, Math.PI * 0.42);
-        ctx.stroke();
-
-        // 2. Heavy Piercing Golden Spear Blade
-        // Outer radiant golden aura
-        ctx.fillStyle = `rgba(254, 240, 138, ${alpha * 0.92})`;
-        ctx.beginPath();
-        ctx.moveTo(curLen + 8, 0);
-        ctx.lineTo(curLen - 24, -7);
-        ctx.lineTo(curLen - 18, 0);
-        ctx.lineTo(curLen - 24, 7);
-        ctx.closePath();
-        ctx.fill();
-
-        // Inner glowing white core
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.beginPath();
-        ctx.moveTo(curLen + 8, 0);
-        ctx.lineTo(curLen - 20, -3.5);
-        ctx.lineTo(curLen - 15, 0);
-        ctx.lineTo(curLen - 20, 3.5);
-        ctx.closePath();
-        ctx.fill();
-
-        // Diamond tip gleam star
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.fillRect(curLen + 6, -1.5, 3, 3);
-
-        // 3. Piercing Speed Streaks (4 speed lines whistling alongside)
-        ctx.strokeStyle = `rgba(245, 158, 11, ${alpha * 0.75})`;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(curLen * 0.15, -7.5);
-        ctx.lineTo(curLen + 3, -7.5);
-        ctx.moveTo(curLen * 0.15, 7.5);
-        ctx.lineTo(curLen + 3, 7.5);
-        ctx.moveTo(curLen * 0.35, -3.8);
-        ctx.lineTo(curLen + 9, -3.8);
-        ctx.moveTo(curLen * 0.35, 3.8);
-        ctx.lineTo(curLen + 9, 3.8);
-        ctx.stroke();
-      }
-      else if (slash.type === 'bear_spin') {
-        // 360 Degree Savage Bear Claw Cyclone & Nature Spirit Shockwave
-        const curRadius = slash.radius * (0.75 + progress * 0.45);
-
-        // Outer emerald forest vacuum ring
-        ctx.lineWidth = 2.5 * alpha;
-        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.75})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius * 1.25, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Inner glowing jade blade ring
-        ctx.lineWidth = 4.5 * alpha;
-        ctx.strokeStyle = `rgba(74, 222, 128, ${alpha * 0.95})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // 4 swirling savage claw scratches
-        for (let s = 0; s < 4; s++) {
-          const startA = (s * Math.PI / 2) + progress * Math.PI * 4;
-          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
-          ctx.lineWidth = 2.8 * alpha;
+        const len = slash.radius * (0.72 + combatEaseOut(progress) * 0.45);
+        const core = isBear ? '220, 252, 231' : '255, 255, 255';
+        const glow = isBear ? '34, 197, 94' : '250, 204, 21';
+        if (isBear) {
+          for (let c = -1; c <= 1; c++) {
+            const off = c * 5;
+            const g = ctx.createLinearGradient(len * 0.1, 0, len + 6, 0);
+            g.addColorStop(0, `rgba(${glow}, 0)`);
+            g.addColorStop(1, `rgba(${core}, ${alpha})`);
+            ctx.strokeStyle = g;
+            ctx.lineWidth = (3 - Math.abs(c)) * alpha + 0.6;
+            ctx.beginPath();
+            ctx.moveTo(len * 0.15, off * 0.4);
+            ctx.lineTo(len + 6, off);
+            ctx.stroke();
+          }
+        } else {
+          const g = ctx.createLinearGradient(0, 0, len + 8, 0);
+          g.addColorStop(0, `rgba(${glow}, 0)`);
+          g.addColorStop(0.7, `rgba(${glow}, ${0.55 * alpha})`);
+          g.addColorStop(1, `rgba(${core}, ${alpha})`);
+          ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(0, 0, curRadius * 0.85, startA, startA + 0.85);
-          ctx.stroke();
-
-          ctx.strokeStyle = `rgba(250, 204, 21, ${alpha * 0.85})`;
-          ctx.lineWidth = 2.0 * alpha;
+          ctx.moveTo(len + 8, 0);
+          ctx.quadraticCurveTo(len * 0.5, -4.5, 2, -1.2);
+          ctx.lineTo(2, 1.2);
+          ctx.quadraticCurveTo(len * 0.5, 4.5, len + 8, 0);
+          ctx.fill();
+        }
+        // Druckwellen (perspektivisch gestauchte Ellipsen quer zur Stoßrichtung)
+        for (let w = 0; w < 2; w++) {
+          const wp = Math.min(1, progress * 1.3 + w * 0.25);
+          ctx.strokeStyle = `rgba(${glow}, ${(1 - wp) * 0.8})`;
+          ctx.lineWidth = 1.6 * (1 - wp) + 0.4;
           ctx.beginPath();
-          ctx.arc(0, 0, curRadius * 0.65, -startA, -startA + 0.85);
+          ctx.ellipse(len * (0.45 + wp * 0.5), 0, 2.2 + wp * 2, 6 + wp * 7, 0, -Math.PI * 0.5, Math.PI * 0.5);
           ctx.stroke();
         }
-      }
-      else if (slash.type === 'bear_thrust') {
-        // Heavy twin paw gouge / beast lunge shockwave & razor claw trails
-        ctx.rotate(slash.angle);
-        const curLen = slash.radius * (0.7 + progress * 0.5);
-
-        // Emerald shockwave rings
-        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.85})`;
-        ctx.lineWidth = 3.0 * alpha;
-        ctx.beginPath();
-        ctx.arc(curLen * 0.5, 0, 18 * (0.6 + progress * 0.8), -Math.PI * 0.45, Math.PI * 0.45);
-        ctx.stroke();
-
-        // 4 forward razor claw puncture trails
-        for (let c = -1.5; c <= 1.5; c += 1) {
-          const yOff = c * 7;
-          ctx.strokeStyle = `rgba(134, 239, 172, ${alpha * 0.95})`;
-          ctx.lineWidth = 2.5 * alpha;
-          ctx.beginPath();
-          ctx.moveTo(curLen * 0.15, yOff * 0.4);
-          ctx.lineTo(curLen + 10, yOff);
-          ctx.stroke();
-
-          // Star gleam at claw tips
-          ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-          ctx.fillRect(curLen + 9, yOff - 1.5, 3, 3);
-        }
-      }
-      else if (slash.type === 'bear_claw1' || slash.type === 'bear_claw2') {
-        // Savage Bear Claw Swipe (Triple curved lacerations in emerald green & gold)
+      } else if (slash.type === 'bear_claw1' || slash.type === 'bear_claw2') {
+        // Drei tiefe Krallenrisse, die sich schnell durch die Luft ziehen
         ctx.rotate(slash.angle);
         const flip = slash.type === 'bear_claw2' ? -1 : 1;
-        const curRadius = slash.radius * (0.8 + progress * 0.35);
-
-        // Draw 3 distinct curved claw lacerations
-        for (let c = -1; c <= 1; c++) {
-          const clawOffset = c * 7.5;
-          const r = curRadius - Math.abs(c) * 2.5;
-
-          // Outer green claw trail
-          ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.95})`;
-          ctx.lineWidth = (3.5 - Math.abs(c) * 0.6) * alpha;
-          ctx.beginPath();
-          ctx.arc(0, clawOffset, r, -0.6 * flip, 0.6 * flip, flip < 0);
-          ctx.stroke();
-
-          // Inner white razor gleam
-          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.92})`;
-          ctx.lineWidth = 1.4 * alpha;
-          ctx.beginPath();
-          ctx.arc(0, clawOffset, r, -0.45 * flip, 0.45 * flip, flip < 0);
-          ctx.stroke();
-        }
-      }
-      else {
-        // Radial Slash 1 & 2 (Curved Crescent Paper Blade Swoosh)
+        const R = slash.radius * (0.85 + progress * 0.25);
+        const reveal = Math.min(1, progress * 3);
+        const a0 = -0.85 * flip;
+        const a1 = a0 + 1.7 * flip * reveal;
+        this.drawClawMarks(ctx, R, Math.min(a0, a1), Math.max(a0, a1), alpha, flip);
+      } else {
+        // Hieb: sichelförmige Windklinge, die sich in Schlagrichtung aufbaut
         ctx.rotate(slash.angle);
         const flip = slash.type === 'slash2' ? -1 : 1;
-        const curRadius = slash.radius * (0.75 + progress * 0.35);
-
-        // Crescent Blade Arc (~70 degree paper crescent)
-        ctx.fillStyle = `rgba(240, 249, 255, ${alpha * 0.85})`;
+        const R = slash.radius * (0.82 + progress * 0.22);
+        const reveal = Math.min(1, progress * 3.2);
+        const start = -0.85 * flip;
+        const end = start + 1.7 * flip * reveal;
+        const lo = Math.min(start, end);
+        const hi = Math.max(start, end);
+        this.drawTaperedArc(ctx, 0, 0, R - 1, lo, hi, 7.5 * alpha + 1, `rgba(125, 211, 252, ${0.35 * alpha})`, flip < 0);
+        this.drawTaperedArc(ctx, 0, 0, R, lo, hi, 4.2 * alpha + 0.8, `rgba(240, 249, 255, ${0.95 * alpha})`, flip < 0);
+        // Funkelnder Punkt an der Klingenspitze
+        const tipA = flip > 0 ? hi : lo;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * alpha})`;
         ctx.beginPath();
-        ctx.arc(0, 0, curRadius, -0.6 * flip, 0.6 * flip, flip < 0);
-        ctx.arc(0, 0, curRadius - 8, 0.6 * flip, -0.6 * flip, flip > 0);
-        ctx.closePath();
+        ctx.arc(Math.cos(tipA) * R, Math.sin(tipA) * R, 2.2 * alpha + 0.5, 0, Math.PI * 2);
         ctx.fill();
-
-        // Sharp luminous cutting edge
-        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius, -0.65 * flip, 0.65 * flip, flip < 0);
-        ctx.stroke();
       }
 
       ctx.restore();
+    }
+  }
+
+  /** Sichelförmiger Bogen, der an beiden Enden spitz zuläuft (Kopf am Ende a1 bzw. a0 wenn reverse) */
+  drawTaperedArc(ctx, cx, cy, r, a0, a1, width, color, reverse = false) {
+    if (a1 - a0 < 0.01) return;
+    const N = 18;
+    const outer = [];
+    const inner = [];
+    for (let i = 0; i <= N; i++) {
+      const f = i / N;
+      const a = a0 + (a1 - a0) * f;
+      // Dicke wächst zum Kopf hin und läuft am Ende spitz aus
+      const head = reverse ? 1 - f : f;
+      const w = width * Math.sin(Math.min(1, head * 1.15) * Math.PI * 0.92) * (0.35 + 0.65 * head);
+      outer.push([cx + Math.cos(a) * (r + w * 0.5), cy + Math.sin(a) * (r + w * 0.5)]);
+      inner.push([cx + Math.cos(a) * (r - w * 0.5), cy + Math.sin(a) * (r - w * 0.5)]);
+    }
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(outer[0][0], outer[0][1]);
+    for (let i = 1; i <= N; i++) ctx.lineTo(outer[i][0], outer[i][1]);
+    for (let i = N; i >= 0; i--) ctx.lineTo(inner[i][0], inner[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  /** Drei parallele Krallenrisse (smaragdgrün mit hellem Kern) */
+  drawClawMarks(ctx, R, a0, a1, alpha, flip) {
+    for (let c = -1; c <= 1; c++) {
+      const r = R + c * 5;
+      const w = (4.2 - Math.abs(c) * 1.1) * alpha + 0.6;
+      this.drawTaperedArc(ctx, 0, 0, r, a0 + Math.abs(c) * 0.08, a1 - Math.abs(c) * 0.08, w + 2.5, `rgba(21, 128, 61, ${0.55 * alpha})`, flip < 0);
+      this.drawTaperedArc(ctx, 0, 0, r, a0 + Math.abs(c) * 0.08, a1 - Math.abs(c) * 0.08, w, `rgba(134, 239, 172, ${0.95 * alpha})`, flip < 0);
+      this.drawTaperedArc(ctx, 0, 0, r, a0 + 0.15, a1 - 0.15, w * 0.35, `rgba(255, 255, 255, ${0.9 * alpha})`, flip < 0);
     }
   }
 
@@ -1939,12 +1866,30 @@ export class CombatManager {
   }
 
   renderSparks(ctx) {
+    // Funken als leuchtende Streifen in Flugrichtung (Bewegungsunschärfe) mit hellem Kern
+    ctx.save();
+    ctx.lineCap = 'round';
     for (const sp of this.hitSparks) {
-      const alpha = sp.life / sp.maxLife;
-      ctx.fillStyle = sp.color;
+      const alpha = Math.max(0, sp.life / sp.maxLife);
+      const vx = sp.vx || 0;
+      const vy = sp.vy || 0;
+      const sz = sp.size || 1.5;
       ctx.globalAlpha = alpha;
-      ctx.fillRect(sp.x, sp.y, sp.size, sp.size);
+      ctx.strokeStyle = sp.color;
+      ctx.lineWidth = sz * (0.45 + alpha * 0.45);
+      ctx.beginPath();
+      ctx.moveTo(sp.x - vx * 0.035, sp.y - vy * 0.035);
+      ctx.lineTo(sp.x, sp.y);
+      ctx.stroke();
+      if (sz > 1.8) {
+        ctx.globalAlpha = alpha * 0.85;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, sz * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
+    ctx.restore();
     ctx.globalAlpha = 1.0;
   }
 
@@ -1965,4 +1910,9 @@ export class CombatManager {
 
     ctx.restore();
   }
+}
+
+/** Kubisches Ausklingen für Effekte */
+function combatEaseOut(t) {
+  return 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
 }

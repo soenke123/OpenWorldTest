@@ -561,6 +561,7 @@ class SkelRig {
     this.flash = 0;
     this.flashColor = '#ffffff';
     this.ink = 0.85;
+    this.tilt = RIG_TILT;
     this.setFacing(Math.PI / 2);
   }
 
@@ -577,6 +578,7 @@ class SkelRig {
     this.flashColor = o.flashColor || '#ffffff';
     this.ink = o.ink === undefined ? 0.85 : o.ink;
     this.alpha = o.alpha === undefined ? 1 : o.alpha;
+    this.tilt = o.tilt || RIG_TILT;
     this.items.length = 0;
     this.setFacing(rigFacingAngle(o.facing));
     return this;
@@ -596,7 +598,7 @@ class SkelRig {
     const gd = p.x * this.ry + p.z * this.fy;
     return {
       x: this.ox + gx * this.s,
-      y: this.oy + (-p.y + gd * RIG_TILT) * this.s,
+      y: this.oy + (-p.y + gd * this.tilt) * this.s,
       d: gd * RIG_CAM_Z + p.y * RIG_CAM_Y
     };
   }
@@ -997,8 +999,8 @@ class SkelRig {
       // Ellipsen-Achsen des horizontalen Rings auf dem Bildschirm
       const ring = (r) => {
         // Ring-Achsen: Modell-x und Modell-z, projiziert
-        const ax = { x: this.rx * r * sx * s, y: this.ry * r * sx * RIG_TILT * s };
-        const az = { x: this.fx * r * sz * s, y: this.fy * r * sz * RIG_TILT * s };
+        const ax = { x: this.rx * r * sx * s, y: this.ry * r * sx * this.tilt * s };
+        const az = { x: this.fx * r * sz * s, y: this.fy * r * sz * this.tilt * s };
         return { ax, az };
       };
       const rT = ring(rt);
@@ -1736,7 +1738,7 @@ function renderHeroSwingTrail(ctx, px, py, action, opts = {}) {
     }
     const g = ctx.createLinearGradient(outer[0][0], outer[0][1], outer[N][0], outer[N][1]);
     g.addColorStop(0, `rgba(${col},0)`);
-    g.addColorStop(1, `rgba(${col},${0.7 * fade})`);
+    g.addColorStop(1, `rgba(${col},${0.45 * fade})`);
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.moveTo(outer[0][0], outer[0][1]);
@@ -2130,6 +2132,200 @@ function heroBand(r, ctx, H, R, el, color, width, o = {}) {
   ctx.lineWidth = width * r.s;
   ctx.stroke();
   ctx.restore();
+}
+
+// -----------------------------------------------------------------------------
+// SMARAGD-DRUIDE: WERBÄR-GESTALT (Vierbeiner-Rig)
+// -----------------------------------------------------------------------------
+
+/**
+ * Druidenbär: massiger Braunbär mit Moosrücken, Zweig-Geweih, leuchtenden Runen.
+ * Gleiche Signatur wie Helden-Skins; action steuert Prankenhieb, Ansprung und Wirbel.
+ */
+function renderDruidBear(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  const t = animTime;
+  let facing = direction;
+  let swipe = 0;      // -1..1 Prankenhieb (rechte Pranke)
+  let swipeSide = 1;
+  let lunge = 0;      // 0..1 Ansprung
+  let rear = 0;       // 0..1 Aufrichten
+  if (action && action.type) {
+    facing = action.angle;
+    const p = rigClamp(action.progress || 0, 0, 1);
+    if (action.type === 'slash' || action.type === 'slash2') {
+      swipeSide = action.type === 'slash2' ? -1 : 1;
+      rear = p < 0.2 ? rigEaseOut(p / 0.2) * 0.55 : 0.55 * (1 - rigEaseInOut((p - 0.2) / 0.8));
+      swipe = p < 0.2 ? -rigEaseOut(p / 0.2) : (p < 0.5 ? heroLerp(-1, 1, rigEaseOut((p - 0.2) / 0.3)) : heroLerp(1, 0.3, (p - 0.5) / 0.5));
+    } else if (action.type === 'thrust') {
+      lunge = p < 0.2 ? -rigEaseOut(p / 0.2) * 0.4 : (p < 0.45 ? heroLerp(-0.4, 1, rigEaseOut((p - 0.2) / 0.25)) : heroLerp(1, 0, rigEaseInOut((p - 0.45) / 0.55)));
+    } else if (action.type === 'spin') {
+      facing = (action.angle || 0) + t * 26;
+      rear = 0.75;
+    }
+  }
+  const moving = Boolean(isMoving) && !action;
+  const r = RIG.begin(ctx, px, py, { facing, flash: hitFlash > 0 ? 0.55 : 0, flashColor: '#f87171' });
+
+  // Druiden-Aura am Boden mit kreisenden Blättern
+  const pulse = 1 + Math.sin(t * 4) * 0.1;
+  ctx.save();
+  const ag = ctx.createRadialGradient(px, py, 2, px, py, 17 * pulse);
+  ag.addColorStop(0, 'rgba(74, 222, 128, 0.32)');
+  ag.addColorStop(0.7, 'rgba(22, 163, 74, 0.12)');
+  ag.addColorStop(1, 'rgba(22, 101, 52, 0)');
+  ctx.fillStyle = ag;
+  ctx.beginPath();
+  ctx.ellipse(px, py, 17 * pulse, 9 * pulse, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  r.shadow(10.5, 4.5, 0.38, 0, 0.5);
+
+  const fur = '#6b3f22';
+  const furDark = '#4a2814';
+  const moss = '#3f8f3a';
+  const q = rigQuad(t, {
+    moving, freq: 10, len: 8.5, width: 2.7, upper: 2.7, lower: 2.6,
+    stride: moving ? 4.2 : 0, lift: 1.6, gait: 'walk', crouch: lunge < 0 ? -lunge * 0.6 : 0
+  });
+  // Aufrichten (Hieb/Wirbel) und Vorspringen verschieben Vorderkörper
+  const lift = rear * 4.5;
+  const fwd = lunge * 3.2;
+  q.front.y += lift;
+  q.front.z += fwd;
+  q.back.z += fwd * 0.6;
+  q.head = rigAdd(q.head, rigV(0, lift * 1.05 - lunge * 1.2, fwd + lunge * 0.8));
+
+  // Beine neu lösen (Vorderbeine folgen dem angehobenen Vorderkörper)
+  const legR = (key, root, side, isFront) => {
+    const L = q.legs[key];
+    const hip = rigV(side * 2.7, root.y - 0.5, root.z);
+    let foot = L.foot;
+    if (isFront && rear > 0) {
+      // Vorderpranken in der Luft
+      foot = rigV(side * 3.0, root.y - 3.2 + rear, root.z + 1.4);
+      if (action && action.type === 'spin') foot = rigV(side * 5.4, root.y - 1.2, root.z + 0.4);
+    }
+    if (isFront && swipe !== 0 && side === swipeSide) {
+      // Prankenhieb: Bogen von außen-hinten nach innen-vorne
+      const th = -swipe * 1.4 * swipeSide;
+      foot = rigV(Math.sin(th) * 4.6 + side * 1.0, root.y - 1.5 + Math.cos(swipe * 1.5) * 1.2, root.z + Math.cos(th) * 4.0);
+    }
+    if (isFront && lunge > 0) foot = rigV(side * 2.6, Math.max(0, 1.5 - lunge * 1.5), root.z + lunge * 2.6);
+    const knee = rigIK(hip, foot, 2.7, 2.6, isFront ? rigV(0, -0.3, -1) : rigV(0, 0, 1));
+    return { hip, knee, foot };
+  };
+  const legs = {
+    RF: legR('RF', q.front, 1, true), LF: legR('LF', q.front, -1, true),
+    RH: legR('RH', q.back, 1, false), LH: legR('LH', q.back, -1, false)
+  };
+  for (const key of ['RH', 'LH', 'RF', 'LF']) {
+    const L = legs[key];
+    const isFront = key.charAt(1) === 'F';
+    r.capsule(L.hip, L.knee, 1.95, 1.6, fur);
+    r.capsule(L.knee, L.foot, 1.6, 1.4, furDark);
+    const paw = rigAdd(L.foot, rigV(0, 0.3, 0.5));
+    r.ball(paw, 1.45, furDark, { sy: 0.75 });
+    // Krallen
+    for (let k = -1; k <= 1; k++) {
+      r.ball(rigAdd(paw, rigV(k * 0.6, -0.1, 1.25)), 0.33, '#f5f0e1', { outline: false, gloss: 0, bias: 0.05 });
+    }
+    if (isFront && swipe !== 0 && (key === 'RF') === (swipeSide === 1)) {
+      r.glow(paw, 3.2, 'rgba(134,239,172,0.9)', { alpha: 0.55 });
+    }
+  }
+
+  // Massiger Rumpf: Hinterteil, Bauch, Schulterbuckel
+  const mid = rigLerp(q.front, q.back, 0.5);
+  r.ball(rigAdd(q.back, rigV(0, 1.6, -0.6)), 4.3, fur, { sy: 0.95, gloss: 0.12 });
+  r.ball(rigAdd(mid, rigV(0, 1.9, 0)), 4.8, fur, { sx: 1.0, sy: 0.92, gloss: 0.12 });
+  const hump = rigAdd(q.front, rigV(0, 2.6, -0.8));
+  r.ball(hump, 4.4, fur, { gloss: 0.15 });
+  // Moosrücken mit Blättern und kleinen Blüten
+  const mossPts = [rigAdd(q.back, rigV(0, 5.4, -0.4)), rigAdd(mid, rigV(0.4, 6.4, 0)), rigAdd(hump, rigV(-0.3, 4.2, -0.2))];
+  mossPts.forEach((m, i) => r.ball(m, 2.2 - i * 0.2, i === 1 ? '#4ca346' : moss, { sy: 0.55, gloss: 0.25, bias: 0.3 }));
+  r.ball(rigAdd(mossPts[1], rigV(1.1, 0.8, 0.4)), 0.45, '#fde047', { bias: 0.5, gloss: 0 });
+  r.ball(rigAdd(mossPts[0], rigV(-0.9, 0.7, 0.2)), 0.4, '#f9a8d4', { bias: 0.5, gloss: 0 });
+  // Leuchtende Druidenrunen auf den Schultern
+  for (const side of [1, -1]) {
+    const rp = rigAdd(hump, rigV(side * 3.6, 0.2, 1.0));
+    const P = r.P(rp);
+    r.custom(P.d + 0.2, (c, rr) => {
+      if (rr.toCam(rigV(side, 0, 0.6)) < 0) return;
+      c.save();
+      c.globalCompositeOperation = 'lighter';
+      c.strokeStyle = `rgba(134, 239, 172, ${0.7 + Math.sin(t * 5) * 0.25})`;
+      c.lineWidth = 0.45 * rr.s;
+      c.beginPath();
+      for (let k = 0; k < 14; k++) {
+        const a = k * 0.55;
+        const rad = 0.15 * k * rr.s;
+        const x = P.x + Math.cos(a) * rad;
+        const y = P.y + Math.sin(a) * rad * 0.8;
+        if (k === 0) c.moveTo(x, y); else c.lineTo(x, y);
+      }
+      c.stroke();
+      c.restore();
+    });
+  }
+
+  // Kopf mit Schnauze, runden Ohren, Zweig-Geweih und Smaragdaugen
+  const H = q.head;
+  const HR = 3.3;
+  r.capsule(rigAdd(q.front, rigV(0, 2.4, 0.4)), H, 2.6, 2.3, fur);
+  r.ball(H, HR, fur, { gloss: 0.18, after: (c) => {
+    r.eye(c, H, HR, 0.48, 0.18, { style: 'glow', color: '#4ade80', size: 1.0, blink: heroBlink(t, 0.5) });
+    r.eye(c, H, HR, -0.48, 0.18, { style: 'glow', color: '#4ade80', size: 1.0, blink: heroBlink(t, 0.5) });
+    // Rune auf der Stirn
+    r.mark(c, H, HR, 0, 0.55, (cc, P, sq, s) => {
+      cc.globalCompositeOperation = 'lighter';
+      cc.strokeStyle = 'rgba(134,239,172,0.85)'; cc.lineWidth = 0.4 * s;
+      cc.beginPath(); cc.moveTo(P.x, P.y - 0.9 * s); cc.lineTo(P.x, P.y + 0.6 * s);
+      cc.moveTo(P.x - 0.6 * s * sq, P.y - 0.3 * s); cc.lineTo(P.x, P.y + 0.1 * s); cc.lineTo(P.x + 0.6 * s * sq, P.y - 0.3 * s); cc.stroke();
+    });
+  } });
+  const snout = rigAdd(H, rigV(0, -0.9, HR * 0.95));
+  r.ball(snout, 1.6, '#b98a5e', { sx: 1.1, sy: 0.85, bias: 0.2 });
+  r.ball(rigAdd(snout, rigV(0, 0.45, 1.25)), 0.62, '#1c1410', { sx: 1.2, sy: 0.8, gloss: 0.6, bias: 0.3 });
+  if (lunge > 0.3 || swipe !== 0) {
+    // Brüllendes Maul
+    r.ball(rigAdd(snout, rigV(0, -0.8, 0.7)), 0.8, '#7f1d1d', { sx: 1.2, sy: 0.6, bias: 0.25 });
+  }
+  for (const side of [1, -1]) {
+    r.ball(rigSurfPt(H, HR * 0.95, side * 0.9, 0.75), 1.15, furDark, { sy: 0.9, bias: -0.05 });
+    // Zweig-Geweih mit Blättchen
+    const base = rigSurfPt(H, HR, side * 0.45, 0.95);
+    const k1 = rigAdd(base, rigV(side * 0.8, 1.6, -0.2));
+    const tip = rigAdd(k1, rigV(side * 1.0, 1.4, -0.4));
+    const tine = rigAdd(k1, rigV(-side * 0.2, 1.3, 0.5));
+    r.line([base, k1, tip], '#7c5a3a', 0.45, { smooth: false, bias: 0.1 });
+    r.line([k1, tine], '#7c5a3a', 0.35, { smooth: false, bias: 0.1 });
+    const leafSway = Math.sin(t * 3 + side) * 0.3;
+    r.poly([tip, rigAdd(tip, rigV(side * 0.8 + leafSway, 0.7, 0.3)), rigAdd(tip, rigV(side * 1.2 + leafSway, 0.1, 0))], '#4ade80', { bias: 0.15 });
+    r.poly([tine, rigAdd(tine, rigV(-side * 0.4 + leafSway, 0.8, 0.5)), rigAdd(tine, rigV(side * 0.4 + leafSway, 0.7, 0.2))], '#22c55e', { bias: 0.15 });
+  }
+
+  // Kleiner Stummelschwanz
+  r.ball(rigAdd(q.back, rigV(0, 2.4, -4.6)), 1.0, furDark, { bias: -0.1 });
+
+  // Schwebende Blätter der Druidenmagie
+  for (let i = 0; i < 3; i++) {
+    const life = (t * 0.45 + i / 3) % 1;
+    const a = i * 2.1 + t * 0.8;
+    const lp = rigV(Math.cos(a) * 9, 1 + life * 12, Math.sin(a) * 7);
+    const P = r.P(lp);
+    r.custom(P.d, (c, rr) => {
+      c.save();
+      c.globalAlpha *= Math.sin(life * Math.PI) * 0.9;
+      c.translate(P.x, P.y);
+      c.rotate(t * 2 + i);
+      c.fillStyle = rr.col(i % 2 ? '#86efac' : '#4ade80');
+      c.beginPath();
+      c.ellipse(0, 0, 1.1 * rr.s, 0.5 * rr.s, 0, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    });
+  }
+  r.flush();
 }
 
 // -----------------------------------------------------------------------------
@@ -12256,110 +12452,11 @@ class MagicManager {
         continue;
       }
 
-      // Flapping wing cycle
-      const flap = Math.sin(spell.animTime * 18);
-      const halfW = (spell.width / 2) * zoom; // 40px * zoom each wing
-
-      // 1. Blazing Heat Aura / Shockwave
-      const auraGrad = ctx.createRadialGradient(0, 0, 10 * zoom, 0, 0, halfW * 1.2);
-      auraGrad.addColorStop(0, 'rgba(254, 240, 138, 0.7)');
-      auraGrad.addColorStop(0.4, 'rgba(239, 68, 68, 0.45)');
-      auraGrad.addColorStop(1, 'rgba(185, 28, 28, 0)');
-      ctx.fillStyle = auraGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, halfW * 1.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 2. Trailing Fiery Tail Feathers (3 long blazing streams)
-      for (let t = -1; t <= 1; t++) {
-        const tailWav = Math.sin(spell.animTime * 14 + t) * (6 * zoom);
-        ctx.fillStyle = t === 0 ? '#facc15' : '#dc2626';
-        ctx.beginPath();
-        ctx.moveTo(-10 * zoom, t * 8 * zoom);
-        ctx.quadraticCurveTo(-40 * zoom, (t * 16 + tailWav) * zoom, -70 * zoom, (t * 22 + tailWav * 1.4) * zoom);
-        ctx.lineTo(-45 * zoom, (t * 8) * zoom);
-        ctx.closePath();
-        ctx.fill();
-      }
-
-      // 3. Wide Majestic Origami Phoenix Wings (5 Tiles = 80px width)
-      // Left Wing
-      ctx.fillStyle = '#b91c1c';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-18 * zoom, -halfW * (0.85 + flap * 0.15));
-      ctx.lineTo(12 * zoom, -halfW * (0.65 + flap * 0.15));
-      ctx.lineTo(8 * zoom, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      // Left Wing Layer 2 (Lighter Orange Paper Fold)
-      ctx.fillStyle = '#f97316';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-12 * zoom, -halfW * (0.75 + flap * 0.12));
-      ctx.lineTo(10 * zoom, -halfW * (0.5 + flap * 0.12));
-      ctx.lineTo(6 * zoom, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      // Right Wing
-      ctx.fillStyle = '#b91c1c';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-18 * zoom, halfW * (0.85 + flap * 0.15));
-      ctx.lineTo(12 * zoom, halfW * (0.65 + flap * 0.15));
-      ctx.lineTo(8 * zoom, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      // Right Wing Layer 2
-      ctx.fillStyle = '#f97316';
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(-12 * zoom, halfW * (0.75 + flap * 0.12));
-      ctx.lineTo(10 * zoom, halfW * (0.5 + flap * 0.12));
-      ctx.lineTo(6 * zoom, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      // 4. Phoenix Body & Radiant Origami Beak
-      ctx.fillStyle = '#ef4444';
-      ctx.beginPath();
-      ctx.moveTo(-16 * zoom, 0);
-      ctx.lineTo(0, -6 * zoom);
-      ctx.lineTo(24 * zoom, 0); // Sharp golden beak forward
-      ctx.lineTo(0, 6 * zoom);
-      ctx.closePath();
-      ctx.fill();
-
-      // Golden Beak Tip
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.moveTo(14 * zoom, -3 * zoom);
-      ctx.lineTo(26 * zoom, 0);
-      ctx.lineTo(14 * zoom, 3 * zoom);
-      ctx.closePath();
-      ctx.fill();
-
-      // Blazing Head Crest (3 fire feathers)
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.moveTo(4 * zoom, 0);
-      ctx.lineTo(-10 * zoom, -8 * zoom);
-      ctx.lineTo(0, -2 * zoom);
-      ctx.lineTo(-14 * zoom, 0);
-      ctx.lineTo(0, 2 * zoom);
-      ctx.lineTo(-10 * zoom, 8 * zoom);
-      ctx.closePath();
-      ctx.fill();
-
-      // Pure White Glowing Eyes
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(10 * zoom, -2 * zoom, 3 * zoom, 1.5 * zoom);
-      ctx.fillRect(10 * zoom, 0.5 * zoom, 3 * zoom, 1.5 * zoom);
-
+      // Rubin-Phönix als Skelett-Feuervogel (Rig arbeitet in eigenen Koordinaten)
       ctx.restore();
+      const cull = (spell.width || 80) * zoom;
+      if (sx < -cull || sy < -cull || sx > ctx.canvas.width + cull || sy > ctx.canvas.height + cull) continue;
+      renderPhoenixBird(ctx, sx, sy, spell.angle, spell.animTime, zoom, spell.width);
     }
   }
 
@@ -12603,6 +12700,113 @@ class MagicManager {
 
     ctx.restore();
   }
+}
+
+// -----------------------------------------------------------------------------
+// RUBIN-PHÖNIX: Feuervogel auf dem Skelett-Rig
+// -----------------------------------------------------------------------------
+
+/**
+ * Zeichnet den Phönix im Bildschirmraum (sx, sy = Körpermitte, zoom = Kamerazoom).
+ * width ist die Spannweite in Weltpixeln (Trefferbreite des Zaubers).
+ */
+function renderPhoenixBird(ctx, sx, sy, angle, animTime, zoom, width = 80) {
+  const t = animTime;
+  const alt = 12;
+  const r = RIG.begin(ctx, sx, sy + alt * zoom * 1.0, { facing: angle, scale: zoom, ink: 0.7, tilt: 0.92 });
+  const half = width / 2;
+
+  // Hitze-Aura und Schatten am Boden
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const ag = ctx.createRadialGradient(sx, sy, 4 * zoom, sx, sy, half * 1.15 * zoom);
+  ag.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
+  ag.addColorStop(0.35, 'rgba(249, 115, 22, 0.28)');
+  ag.addColorStop(1, 'rgba(185, 28, 28, 0)');
+  ctx.fillStyle = ag;
+  ctx.beginPath();
+  ctx.arc(sx, sy, half * 1.15 * zoom, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  r.shadow(half * 0.7, 6, 0.22);
+
+  const flap = Math.sin(t * 9);
+  const flapLag = Math.sin(t * 9 - 0.7);
+  const bodyY = alt + Math.cos(t * 9) * 1.2;
+
+  // Körper: Brust -> Schweifansatz
+  const chest = rigV(0, bodyY, 6);
+  const rump = rigV(0, bodyY + 0.5, -8);
+  const neck = rigV(0, bodyY + 2.2, 11);
+  const head = rigV(0, bodyY + 3.6, 15 + Math.sin(t * 4) * 0.4);
+
+  // Flammenschweif: fünf lange, wogende Federn
+  for (let i = -2; i <= 2; i++) {
+    const base = rigAdd(rump, rigV(i * 1.3, 0, -1));
+    const len = 9 - Math.abs(i) * 1.6;
+    const pts = rigChain(t, base, rigV(i * 0.35, -0.08, -1), { n: 6, seg: len * 0.55, amp: 2.2, ampY: 1.0, freq: 10, k: 0.7 + Math.abs(i) * 0.1 });
+    const col = i === 0 ? '#fde047' : (Math.abs(i) === 1 ? '#f97316' : '#dc2626');
+    r.line(pts, col, 2.2 - Math.abs(i) * 0.3, { bias: -2 });
+    r.line(pts.slice(0, 4), '#fff7d6', 0.6, { outline: false, bias: -1.9 });
+    r.glow(pts[pts.length - 1], 5, 'rgba(251,146,60,0.9)', { alpha: 0.5 });
+    // Pfauenauge am Federende
+    r.ball(pts[pts.length - 1], 1.4, i === 0 ? '#fef08a' : '#fb923c', { outline: false, gloss: 0.5, bias: -1.8 });
+  }
+
+  // Schwingen: Arm (Schulter->Ellbogen) und Hand (Ellbogen->Spitze) mit Federstaffeln
+  for (const side of [1, -1]) {
+    const sh = rigV(side * 2.8, bodyY + 1, 3);
+    const a1 = flap * 0.55;
+    const a2 = flapLag * 0.75;
+    const elbow = rigAdd(sh, rigV(side * Math.cos(a1) * half * 0.42, Math.sin(a1) * half * 0.42, -1));
+    const tip = rigAdd(elbow, rigV(side * Math.cos(a2) * half * 0.6, Math.sin(a2) * half * 0.6, -5));
+    // Hinterkante mit gezackten Schwungfedern
+    const trail = [];
+    const N = 11;
+    for (let k = 0; k <= N; k++) {
+      const f = k / N;
+      const along = f < 0.45 ? rigLerp(sh, elbow, f / 0.45) : rigLerp(elbow, tip, (f - 0.45) / 0.55);
+      const depth = 15 * Math.sin(Math.PI * (0.2 + f * 0.7)) + (k % 2 ? 3.2 : 0);
+      trail.push(rigAdd(along, rigV(0, -0.8 * f, -depth)));
+    }
+    const wing = [sh, elbow, tip].concat(trail.slice().reverse());
+    const wd = r.depth(rigLerp(sh, tip, 0.4)) - 1;
+    r.poly(wing, '#b91c1c', { smooth: false, depth: wd });
+    // Mittlere Federlage (orange) und Deckfedern (gold)
+    const mid = [rigLerp(sh, elbow, 0.1), elbow, rigLerp(elbow, tip, 0.75)].concat(
+      trail.slice(1, 9).reverse().map((p, i) => rigLerp(p, rigLerp(sh, elbow, 0.5), 0.3 + (i % 2) * 0.12)));
+    r.poly(mid, '#f97316', { smooth: false, depth: wd + 0.01, outline: false });
+    const cov = [sh, rigLerp(sh, elbow, 0.9), rigLerp(elbow, tip, 0.4), rigAdd(rigLerp(elbow, tip, 0.2), rigV(0, -0.3, -6)), rigAdd(rigLerp(sh, elbow, 0.6), rigV(0, -0.3, -7)), rigAdd(sh, rigV(0, -0.3, -5.5))];
+    r.poly(cov, '#fbbf24', { depth: wd + 0.02, outline: false });
+    // Leuchtende Vorderkante
+    r.line([sh, elbow, tip], '#fff1b8', 0.7, { outline: false, depth: wd + 0.03 });
+    r.glow(tip, 4, 'rgba(253,186,116,0.9)', { alpha: 0.55 });
+  }
+
+  // Rumpf, Hals und Kopf
+  r.capsule(rump, chest, 2.6, 4.2, '#dc2626', { bias: 0.2 });
+  r.ball(rigAdd(chest, rigV(0, -0.6, 0.5)), 3.4, '#fb923c', { bias: 0.3, gloss: 0.4 });
+  r.capsule(chest, neck, 3.2, 2.2, '#ef4444', { bias: 0.4 });
+  r.ball(head, 2.8, '#ef4444', { bias: 0.6, gloss: 0.45, after: (c) => {
+    r.eye(c, head, 2.8, 0.75, 0.15, { style: 'glow', color: '#fef9c3', size: 0.75 });
+    r.eye(c, head, 2.8, -0.75, 0.15, { style: 'glow', color: '#fef9c3', size: 0.75 });
+  } });
+  r.capsule(rigAdd(head, rigV(0, -0.2, 2.0)), rigAdd(head, rigV(0, -1.2, 5.2)), 1.1, 0.15, '#facc15', { bias: 0.7, light: 0.4 });
+  // Flammenkamm: drei züngelnde Federn
+  for (let i = -1; i <= 1; i++) {
+    const cb = rigAdd(head, rigV(i * 0.9, 2.0, -0.5));
+    const pts = rigChain(t + i, cb, rigV(i * 0.4, 0.8, -1), { n: 4, seg: 1.6, amp: 0.7, ampY: 0.4, freq: 14, k: 1.1 });
+    r.line(pts, i === 0 ? '#fde047' : '#f97316', 0.9, { bias: 0.8 });
+  }
+  r.glow(chest, 11, 'rgba(254,215,170,0.85)', { alpha: 0.55 });
+
+  // Glutfunken, die vom Körper abreißen
+  for (let i = 0; i < 6; i++) {
+    const life = (t * 1.6 + i / 6) % 1;
+    const ep = rigV(Math.sin(i * 7.3) * 10, bodyY + Math.cos(i * 3.1) * 3 + life * 4, -6 - life * 26);
+    r.glow(ep, 2.2 * (1 - life) + 0.4, i % 2 ? 'rgba(253,224,71,0.95)' : 'rgba(249,115,22,0.95)', { alpha: 1 - life });
+  }
+  r.flush();
 }
 
 
@@ -15148,8 +15352,8 @@ class Player {
   }
 
   /** Aktuelle Kampfaktion für das Skelett-Rig des Helden (Schwert, Stich, Wirbel, Bogen) */
-  getSkinAction(animTime) {
-    if (this.isBearForm) return null;
+  getSkinAction(animTime, forBear = false) {
+    if (this.isBearForm && !forBear) return null;
     const angle = this.getFacingAngle();
     if (this.melee.isSpinning) {
       return { type: 'spin', progress: 0, angle, time: animTime };
@@ -15158,7 +15362,7 @@ class Player {
       const type = this.melee.swingType === 'slash1' ? 'slash' : this.melee.swingType;
       return { type, progress: this.melee.swingProgress, angle };
     }
-    if (this.ranged.charging || this.ranged.isHolding || this.ranged.aiming) {
+    if (!this.isBearForm && (this.ranged.charging || this.ranged.isHolding || this.ranged.aiming)) {
       let pull = 0.85;
       if (this.ranged.charging) {
         pull = Math.min(1, 0.4 + this.ranged.chargeTimer * 1.5);
@@ -17326,212 +17530,8 @@ class Player {
   }
 
   renderBearForm(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-    const vec = this.getFacingVector();
-    const dx = vec.x;
-    const dy = vec.y;
-    const waddle = isMoving ? Math.sin(animTime * 9) * 2 : Math.sin(animTime * 2.5) * 0.5;
-    const footStep = isMoving ? Math.cos(animTime * 9) * 2.5 : 0;
-
-    const drawBox = (x, y, w, h, rad) => {
-      if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(x, y, w, h, rad);
-      } else {
-        ctx.rect(x, y, w, h);
-      }
-    };
-
-    ctx.save();
-
-    // 1. Bear Paper Drop Shadow
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(px + 1, py + 2, 13, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 2. Druidic Nature Aura Ring (Forest Emerald Glow)
-    const auraPulse = 1.0 + Math.sin(animTime * 4) * 0.12;
-    if (typeof ctx.createRadialGradient === 'function') {
-      const auraGrad = ctx.createRadialGradient(px, py - 8, 4, px, py - 8, 22 * auraPulse);
-      auraGrad.addColorStop(0, 'rgba(34, 197, 94, 0.35)');
-      auraGrad.addColorStop(0.7, 'rgba(22, 163, 74, 0.15)');
-      auraGrad.addColorStop(1, 'rgba(22, 101, 52, 0)');
-      ctx.fillStyle = auraGrad;
-      ctx.beginPath();
-      ctx.arc(px, py - 8, 22 * auraPulse, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // 3. Back Paws (Hind Feet)
-    const hindY = py - 2;
-    ctx.fillStyle = '#2e1507';
-    // Left hind paw
-    ctx.beginPath();
-    ctx.ellipse(px - 7, hindY - footStep * 0.5, 4.2, 3, -0.2, 0, Math.PI * 2);
-    ctx.fill();
-    // Right hind paw
-    ctx.beginPath();
-    ctx.ellipse(px + 7, hindY + footStep * 0.5, 4.2, 3, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 4. Massive Bear Torso (Chunky Layered Papercraft Fold)
-    const bodyY = py - 13 + waddle;
-    // Darker back/shoulder shadow layer
-    ctx.fillStyle = '#3d1d0a';
-    ctx.beginPath();
-    drawBox(px - 11, bodyY - 11, 22, 20, 7);
-    ctx.fill();
-
-    // Main fur body
-    ctx.fillStyle = '#552a10';
-    ctx.beginPath();
-    drawBox(px - 10, bodyY - 10, 20, 18, 6);
-    ctx.fill();
-
-    // Papercraft Crease lines on fur
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(px - 7, bodyY - 9);
-    ctx.lineTo(px, bodyY + 6);
-    ctx.lineTo(px + 7, bodyY - 9);
-    ctx.stroke();
-
-    // Shoulder moss flakes
-    ctx.fillStyle = '#15803d';
-    ctx.fillRect(px - 9, bodyY - 8, 3, 2);
-    ctx.fillRect(px + 6, bodyY - 8, 3, 2);
-
-    // 5. Pale Honey Parchment Chest Crest with Druid Runes
-    ctx.fillStyle = '#d4a373';
-    ctx.beginPath();
-    ctx.moveTo(px, bodyY - 7);
-    ctx.lineTo(px + 6 + dx * 1.5, bodyY + 4 + dy);
-    ctx.lineTo(px, bodyY + 7 + dy);
-    ctx.lineTo(px - 6 + dx * 1.5, bodyY + 4 + dy);
-    ctx.closePath();
-    ctx.fill();
-
-    // Glowing Emerald Druid Spiral / Mark on Chest
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    ctx.arc(px + dx * 1.2, bodyY + dy * 0.8, 2.8, 0, Math.PI * 1.6);
-    ctx.stroke();
-
-    // 6. Bear Head & Snout
-    const headX = px + dx * 3;
-    const headY = bodyY - 9 + dy * 2;
-
-    // Round Paper Ears
-    // Left ear
-    ctx.fillStyle = '#3d1d0a';
-    ctx.beginPath();
-    ctx.arc(headX - 6.5, headY - 5, 3.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#e5a882'; // Inner ear fold
-    ctx.beginPath();
-    ctx.arc(headX - 6.5, headY - 5, 2.0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Right ear
-    ctx.fillStyle = '#3d1d0a';
-    ctx.beginPath();
-    ctx.arc(headX + 6.5, headY - 5, 3.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#e5a882';
-    ctx.beginPath();
-    ctx.arc(headX + 6.5, headY - 5, 2.0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Main Head Fold
-    ctx.fillStyle = '#5c3012';
-    ctx.beginPath();
-    ctx.ellipse(headX, headY, 8.5, 7.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Folded Snout / Muzzle
-    const snoutX = headX + dx * 2.5;
-    const snoutY = headY + 2 + dy * 1.5;
-    ctx.fillStyle = '#783c18';
-    ctx.beginPath();
-    ctx.ellipse(snoutX, snoutY, 4.5, 3.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Black Button Nose with tiny highlight
-    ctx.fillStyle = '#18181b';
-    ctx.beginPath();
-    ctx.arc(snoutX + dx * 0.8, snoutY - 1 + dy * 0.5, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(snoutX + dx * 0.8 - 0.6, snoutY - 1.6 + dy * 0.5, 0.9, 0.9);
-
-    // Glowing Fierce Emerald Eyes
-    if (direction !== 'up') {
-      const eyeY = headY - 1.5 + dy * 0.5;
-      const eyeSpacing = 3.8;
-      // Left eye
-      if (!direction.includes('right')) {
-        ctx.fillStyle = '#22c55e';
-        ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 0.4, eyeY + 0.4, 1.1, 1.1);
-      }
-      // Right eye
-      if (!direction.includes('left')) {
-        ctx.fillStyle = '#22c55e';
-        ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
-        ctx.fillStyle = '#fef08a';
-        ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 0.4, eyeY + 0.4, 1.1, 1.1);
-      }
-    }
-
-    // 7. Massive Front Paws with Emerald-Tipped Bone Claws
-    const pawRaise = (this.melee.charging || this.melee.swingProgress < 0.6) ? -4 : 0;
-    const lPawX = px - 9 + (dx < 0 ? -2 : 0);
-    const lPawY = bodyY + 5 + footStep + pawRaise;
-    const rPawX = px + 9 + (dx > 0 ? 2 : 0);
-    const rPawY = bodyY + 5 - footStep + pawRaise;
-
-    const drawPawWithClaws = (pawX, pawY, isLeft) => {
-      ctx.fillStyle = '#3d1d0a';
-      ctx.beginPath();
-      ctx.ellipse(pawX, pawY, 4.6, 3.8, isLeft ? -0.15 : 0.15, 0, Math.PI * 2);
-      ctx.fill();
-
-      const clawAngle = Math.atan2(dy || 1, dx || (isLeft ? -0.4 : 0.4));
-      for (let c = -1; c <= 1; c++) {
-        const ca = clawAngle + c * 0.35;
-        const cx = pawX + Math.cos(ca) * 3.5;
-        const cy = pawY + Math.sin(ca) * 3.5;
-        const tipX = pawX + Math.cos(ca) * 6.5;
-        const tipY = pawY + Math.sin(ca) * 6.5;
-
-        // Bone white claw base
-        ctx.strokeStyle = '#f8fafc';
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(tipX, tipY);
-        ctx.stroke();
-
-        // Emerald glowing claw tip
-        ctx.fillStyle = '#4ade80';
-        ctx.fillRect(tipX - 0.7, tipY - 0.7, 1.4, 1.4);
-      }
-    };
-
-    drawPawWithClaws(lPawX, lPawY, true);
-    drawPawWithClaws(rPawX, rPawY, false);
-
-    // Hit Flash Tint
-    if (hitFlash > 0) {
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.55)';
-      ctx.beginPath();
-      drawBox(px - 12, bodyY - 15, 24, 26, 7);
-      ctx.fill();
-    }
-
-    ctx.restore();
+    // Smaragd-Druide: Vierbeiner-Skelett mit Prankenhieb, Ansprung und Wirbel (siehe characters.js)
+    renderDruidBear(ctx, px, py, animTime, direction, isMoving, hitFlash, this.getSkinAction(animTime, true));
   }
 }
 
@@ -19030,117 +19030,14 @@ class RemotePlayer {
   }
 
   renderBearForm(ctx, px, py, animTime) {
-    const vec = this.getFacingVector();
-    const dx = vec.x;
-    const dy = vec.y;
-    const waddle = this.isMoving ? Math.sin(animTime * 9) * 2 : Math.sin(animTime * 2.5) * 0.5;
-    const footStep = this.isMoving ? Math.cos(animTime * 9) * 2.5 : 0;
-
-    const drawBox = (x, y, w, h, rad) => {
-      if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(x, y, w, h, rad);
-      } else {
-        ctx.rect(x, y, w, h);
-      }
-    };
-
-    ctx.save();
-
-    // 1. Druidic Nature Aura Ring (Forest Emerald Glow)
-    const auraPulse = 1.0 + Math.sin(animTime * 4) * 0.12;
-    if (typeof ctx.createRadialGradient === 'function') {
-      const auraGrad = ctx.createRadialGradient(px, py - 8, 4, px, py - 8, 22 * auraPulse);
-      auraGrad.addColorStop(0, 'rgba(34, 197, 94, 0.35)');
-      auraGrad.addColorStop(0.7, 'rgba(22, 163, 74, 0.15)');
-      auraGrad.addColorStop(1, 'rgba(22, 101, 52, 0)');
-      ctx.fillStyle = auraGrad;
-      ctx.beginPath();
-      ctx.arc(px, py - 8, 22 * auraPulse, 0, Math.PI * 2);
-      ctx.fill();
+    let action = null;
+    if (this.swingAnim > 0 && this.swingType) {
+      const progress = 1 - this.swingAnim;
+      const map = { bear_claw1: 'slash', bear_claw2: 'slash2', bear_thrust: 'thrust', bear_spin: 'spin', slash1: 'slash', slash2: 'slash2', thrust: 'thrust', spin: 'spin' };
+      const type = map[this.swingType];
+      if (type) action = { type, progress, angle: this.swingAngle, time: animTime };
     }
-
-    // 2. Back Paws
-    const hindY = py - 2;
-    ctx.fillStyle = '#2e1507';
-    ctx.beginPath();
-    ctx.ellipse(px - 7, hindY - footStep * 0.5, 4.2, 3, -0.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.ellipse(px + 7, hindY + footStep * 0.5, 4.2, 3, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 3. Massive Bear Torso
-    const bodyY = py - 13 + waddle;
-    ctx.fillStyle = '#3d1d0a';
-    ctx.beginPath();
-    drawBox(px - 11, bodyY - 11, 22, 20, 7);
-    ctx.fill();
-
-    ctx.fillStyle = '#552a10';
-    ctx.beginPath();
-    drawBox(px - 10, bodyY - 10, 20, 18, 6);
-    ctx.fill();
-
-    // 4. Chest Crest
-    ctx.fillStyle = '#d4a373';
-    ctx.beginPath();
-    ctx.moveTo(px, bodyY - 7);
-    ctx.lineTo(px + 6 + dx * 1.5, bodyY + 4 + dy);
-    ctx.lineTo(px, bodyY + 7 + dy);
-    ctx.lineTo(px - 6 + dx * 1.5, bodyY + 4 + dy);
-    ctx.closePath();
-    ctx.fill();
-
-    // Emerald Spiral Mark
-    ctx.strokeStyle = '#22c55e';
-    ctx.lineWidth = 1.3;
-    ctx.beginPath();
-    ctx.arc(px + dx * 1.2, bodyY + dy * 0.8, 2.8, 0, Math.PI * 1.6);
-    ctx.stroke();
-
-    // 5. Head & Snout
-    const headX = px + dx * 3;
-    const headY = bodyY - 9 + dy * 2;
-
-    // Ears
-    ctx.fillStyle = '#3d1d0a';
-    ctx.beginPath();
-    ctx.arc(headX - 6.5, headY - 5, 3.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(headX + 6.5, headY - 5, 3.6, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Head
-    ctx.fillStyle = '#5c3012';
-    ctx.beginPath();
-    ctx.ellipse(headX, headY, 8.5, 7.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Snout
-    const snoutX = headX + dx * 2.5;
-    const snoutY = headY + 2 + dy * 1.5;
-    ctx.fillStyle = '#783c18';
-    ctx.beginPath();
-    ctx.ellipse(snoutX, snoutY, 4.5, 3.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Nose
-    ctx.fillStyle = '#18181b';
-    ctx.beginPath();
-    ctx.arc(snoutX + dx * 0.8, snoutY - 1 + dy * 0.5, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Emerald Eyes
-    if (this.direction !== 'up') {
-      const eyeY = headY - 1.5 + dy * 0.5;
-      const eyeSpacing = 3.8;
-      ctx.fillStyle = '#22c55e';
-      ctx.fillRect(headX - eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
-      ctx.fillRect(headX + eyeSpacing + dx * 0.8 - 1, eyeY, 2.2, 2.2);
-    }
-
-    ctx.restore();
+    renderDruidBear(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash, action);
   }
 }
 
@@ -21354,218 +21251,145 @@ class CombatManager {
 
   renderSlashEffects(ctx) {
     for (const slash of this.slashEffects) {
-      const progress = slash.timer / slash.duration;
+      const progress = Math.min(1, slash.timer / slash.duration);
       const alpha = 1.0 - progress;
+      const isBear = slash.type.startsWith('bear_');
 
       ctx.save();
       ctx.translate(slash.x, slash.y);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-      if (slash.type === 'spin') {
-        // 360 Degree Whirling Cyclone & Shockwave Ring (Zelda Spin Attack)
-        const curRadius = slash.radius * (0.75 + progress * 0.45);
-
-        // Outer expanding air vacuum ring
-        ctx.lineWidth = 2 * alpha;
-        ctx.strokeStyle = `rgba(186, 230, 253, ${alpha * 0.6})`;
+      if (slash.type === 'spin' || slash.type === 'bear_spin') {
+        // Wirbelsturm: zwei rotierende, sich verjüngende Klingenbögen + Druckring
+        const R = slash.radius * (0.8 + progress * 0.35);
+        const head = progress * Math.PI * 6;
+        const core = isBear ? '187, 247, 208' : '255, 255, 255';
+        const glow = isBear ? '34, 197, 94' : '56, 189, 248';
+        for (let k = 0; k < 2; k++) {
+          const a1 = head + k * Math.PI;
+          this.drawTaperedArc(ctx, 0, 0, R, a1 - 2.2, a1, 7 * alpha + 1, `rgba(${glow}, ${0.45 * alpha})`, true);
+          this.drawTaperedArc(ctx, 0, 0, R, a1 - 1.6, a1, 3.2 * alpha + 0.6, `rgba(${core}, ${0.95 * alpha})`, true);
+        }
+        ctx.strokeStyle = `rgba(${glow}, ${0.35 * alpha})`;
+        ctx.lineWidth = 1.2;
         ctx.beginPath();
-        ctx.arc(0, 0, curRadius * 1.3, 0, Math.PI * 2);
+        ctx.arc(0, 0, R * (1.15 + progress * 0.3), 0, Math.PI * 2);
         ctx.stroke();
-
-        // Primary glowing cyan blade circle
-        ctx.lineWidth = 5 * alpha;
-        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha * 0.95})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Bright white sharp cutting rim
-        ctx.lineWidth = 2.2 * alpha;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Dual swirling whirlwind spiral blades
-        ctx.lineWidth = 3.0 * alpha;
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.92})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius * 0.78, progress * Math.PI * 5, progress * Math.PI * 5 + Math.PI * 1.4);
-        ctx.stroke();
-
-        ctx.strokeStyle = `rgba(103, 232, 249, ${alpha * 0.85})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius * 0.6, -progress * Math.PI * 5, -progress * Math.PI * 5 + Math.PI * 1.4);
-        ctx.stroke();
-      }
-      else if (slash.type === 'thrust') {
-        // Linear Forward Powerful Thrust Blade & Dual Sonic Shockwave
+        if (isBear) {
+          // Krallenspuren im Wirbel
+          for (let s = 0; s < 3; s++) {
+            const sa = -head * 0.7 + (s * Math.PI * 2) / 3;
+            this.drawClawMarks(ctx, R * 0.72, sa, sa + 0.9, alpha, 1);
+          }
+        }
+      } else if (slash.type === 'thrust' || slash.type === 'bear_thrust') {
+        // Durchstoß: Lichtlanze mit Druckwellen-Ringen in Stoßrichtung
         ctx.rotate(slash.angle);
-        const curLen = slash.radius * (0.68 + progress * 0.55);
-
-        // 1. Dual Shockwave Pressure Rings
-        // Outer cyan air pressure wave
-        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha * 0.75})`;
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.arc(curLen * 0.5, 0, 16 * (0.6 + progress * 0.8), -Math.PI * 0.48, Math.PI * 0.48);
-        ctx.stroke();
-
-        // Inner intense white sonic boom shockwave cone
-        ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
-        ctx.lineWidth = 3.0;
-        ctx.beginPath();
-        ctx.arc(curLen * 0.72, 0, 13 * (0.5 + progress * 0.7), -Math.PI * 0.42, Math.PI * 0.42);
-        ctx.stroke();
-
-        // 2. Heavy Piercing Golden Spear Blade
-        // Outer radiant golden aura
-        ctx.fillStyle = `rgba(254, 240, 138, ${alpha * 0.92})`;
-        ctx.beginPath();
-        ctx.moveTo(curLen + 8, 0);
-        ctx.lineTo(curLen - 24, -7);
-        ctx.lineTo(curLen - 18, 0);
-        ctx.lineTo(curLen - 24, 7);
-        ctx.closePath();
-        ctx.fill();
-
-        // Inner glowing white core
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.beginPath();
-        ctx.moveTo(curLen + 8, 0);
-        ctx.lineTo(curLen - 20, -3.5);
-        ctx.lineTo(curLen - 15, 0);
-        ctx.lineTo(curLen - 20, 3.5);
-        ctx.closePath();
-        ctx.fill();
-
-        // Diamond tip gleam star
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.fillRect(curLen + 6, -1.5, 3, 3);
-
-        // 3. Piercing Speed Streaks (4 speed lines whistling alongside)
-        ctx.strokeStyle = `rgba(245, 158, 11, ${alpha * 0.75})`;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(curLen * 0.15, -7.5);
-        ctx.lineTo(curLen + 3, -7.5);
-        ctx.moveTo(curLen * 0.15, 7.5);
-        ctx.lineTo(curLen + 3, 7.5);
-        ctx.moveTo(curLen * 0.35, -3.8);
-        ctx.lineTo(curLen + 9, -3.8);
-        ctx.moveTo(curLen * 0.35, 3.8);
-        ctx.lineTo(curLen + 9, 3.8);
-        ctx.stroke();
-      }
-      else if (slash.type === 'bear_spin') {
-        // 360 Degree Savage Bear Claw Cyclone & Nature Spirit Shockwave
-        const curRadius = slash.radius * (0.75 + progress * 0.45);
-
-        // Outer emerald forest vacuum ring
-        ctx.lineWidth = 2.5 * alpha;
-        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.75})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius * 1.25, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // Inner glowing jade blade ring
-        ctx.lineWidth = 4.5 * alpha;
-        ctx.strokeStyle = `rgba(74, 222, 128, ${alpha * 0.95})`;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius, 0, Math.PI * 2);
-        ctx.stroke();
-
-        // 4 swirling savage claw scratches
-        for (let s = 0; s < 4; s++) {
-          const startA = (s * Math.PI / 2) + progress * Math.PI * 4;
-          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.95})`;
-          ctx.lineWidth = 2.8 * alpha;
+        const len = slash.radius * (0.72 + combatEaseOut(progress) * 0.45);
+        const core = isBear ? '220, 252, 231' : '255, 255, 255';
+        const glow = isBear ? '34, 197, 94' : '250, 204, 21';
+        if (isBear) {
+          for (let c = -1; c <= 1; c++) {
+            const off = c * 5;
+            const g = ctx.createLinearGradient(len * 0.1, 0, len + 6, 0);
+            g.addColorStop(0, `rgba(${glow}, 0)`);
+            g.addColorStop(1, `rgba(${core}, ${alpha})`);
+            ctx.strokeStyle = g;
+            ctx.lineWidth = (3 - Math.abs(c)) * alpha + 0.6;
+            ctx.beginPath();
+            ctx.moveTo(len * 0.15, off * 0.4);
+            ctx.lineTo(len + 6, off);
+            ctx.stroke();
+          }
+        } else {
+          const g = ctx.createLinearGradient(0, 0, len + 8, 0);
+          g.addColorStop(0, `rgba(${glow}, 0)`);
+          g.addColorStop(0.7, `rgba(${glow}, ${0.55 * alpha})`);
+          g.addColorStop(1, `rgba(${core}, ${alpha})`);
+          ctx.fillStyle = g;
           ctx.beginPath();
-          ctx.arc(0, 0, curRadius * 0.85, startA, startA + 0.85);
-          ctx.stroke();
-
-          ctx.strokeStyle = `rgba(250, 204, 21, ${alpha * 0.85})`;
-          ctx.lineWidth = 2.0 * alpha;
+          ctx.moveTo(len + 8, 0);
+          ctx.quadraticCurveTo(len * 0.5, -4.5, 2, -1.2);
+          ctx.lineTo(2, 1.2);
+          ctx.quadraticCurveTo(len * 0.5, 4.5, len + 8, 0);
+          ctx.fill();
+        }
+        // Druckwellen (perspektivisch gestauchte Ellipsen quer zur Stoßrichtung)
+        for (let w = 0; w < 2; w++) {
+          const wp = Math.min(1, progress * 1.3 + w * 0.25);
+          ctx.strokeStyle = `rgba(${glow}, ${(1 - wp) * 0.8})`;
+          ctx.lineWidth = 1.6 * (1 - wp) + 0.4;
           ctx.beginPath();
-          ctx.arc(0, 0, curRadius * 0.65, -startA, -startA + 0.85);
+          ctx.ellipse(len * (0.45 + wp * 0.5), 0, 2.2 + wp * 2, 6 + wp * 7, 0, -Math.PI * 0.5, Math.PI * 0.5);
           ctx.stroke();
         }
-      }
-      else if (slash.type === 'bear_thrust') {
-        // Heavy twin paw gouge / beast lunge shockwave & razor claw trails
-        ctx.rotate(slash.angle);
-        const curLen = slash.radius * (0.7 + progress * 0.5);
-
-        // Emerald shockwave rings
-        ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.85})`;
-        ctx.lineWidth = 3.0 * alpha;
-        ctx.beginPath();
-        ctx.arc(curLen * 0.5, 0, 18 * (0.6 + progress * 0.8), -Math.PI * 0.45, Math.PI * 0.45);
-        ctx.stroke();
-
-        // 4 forward razor claw puncture trails
-        for (let c = -1.5; c <= 1.5; c += 1) {
-          const yOff = c * 7;
-          ctx.strokeStyle = `rgba(134, 239, 172, ${alpha * 0.95})`;
-          ctx.lineWidth = 2.5 * alpha;
-          ctx.beginPath();
-          ctx.moveTo(curLen * 0.15, yOff * 0.4);
-          ctx.lineTo(curLen + 10, yOff);
-          ctx.stroke();
-
-          // Star gleam at claw tips
-          ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-          ctx.fillRect(curLen + 9, yOff - 1.5, 3, 3);
-        }
-      }
-      else if (slash.type === 'bear_claw1' || slash.type === 'bear_claw2') {
-        // Savage Bear Claw Swipe (Triple curved lacerations in emerald green & gold)
+      } else if (slash.type === 'bear_claw1' || slash.type === 'bear_claw2') {
+        // Drei tiefe Krallenrisse, die sich schnell durch die Luft ziehen
         ctx.rotate(slash.angle);
         const flip = slash.type === 'bear_claw2' ? -1 : 1;
-        const curRadius = slash.radius * (0.8 + progress * 0.35);
-
-        // Draw 3 distinct curved claw lacerations
-        for (let c = -1; c <= 1; c++) {
-          const clawOffset = c * 7.5;
-          const r = curRadius - Math.abs(c) * 2.5;
-
-          // Outer green claw trail
-          ctx.strokeStyle = `rgba(34, 197, 94, ${alpha * 0.95})`;
-          ctx.lineWidth = (3.5 - Math.abs(c) * 0.6) * alpha;
-          ctx.beginPath();
-          ctx.arc(0, clawOffset, r, -0.6 * flip, 0.6 * flip, flip < 0);
-          ctx.stroke();
-
-          // Inner white razor gleam
-          ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.92})`;
-          ctx.lineWidth = 1.4 * alpha;
-          ctx.beginPath();
-          ctx.arc(0, clawOffset, r, -0.45 * flip, 0.45 * flip, flip < 0);
-          ctx.stroke();
-        }
-      }
-      else {
-        // Radial Slash 1 & 2 (Curved Crescent Paper Blade Swoosh)
+        const R = slash.radius * (0.85 + progress * 0.25);
+        const reveal = Math.min(1, progress * 3);
+        const a0 = -0.85 * flip;
+        const a1 = a0 + 1.7 * flip * reveal;
+        this.drawClawMarks(ctx, R, Math.min(a0, a1), Math.max(a0, a1), alpha, flip);
+      } else {
+        // Hieb: sichelförmige Windklinge, die sich in Schlagrichtung aufbaut
         ctx.rotate(slash.angle);
         const flip = slash.type === 'slash2' ? -1 : 1;
-        const curRadius = slash.radius * (0.75 + progress * 0.35);
-
-        // Crescent Blade Arc (~70 degree paper crescent)
-        ctx.fillStyle = `rgba(240, 249, 255, ${alpha * 0.85})`;
+        const R = slash.radius * (0.82 + progress * 0.22);
+        const reveal = Math.min(1, progress * 3.2);
+        const start = -0.85 * flip;
+        const end = start + 1.7 * flip * reveal;
+        const lo = Math.min(start, end);
+        const hi = Math.max(start, end);
+        this.drawTaperedArc(ctx, 0, 0, R - 1, lo, hi, 7.5 * alpha + 1, `rgba(125, 211, 252, ${0.35 * alpha})`, flip < 0);
+        this.drawTaperedArc(ctx, 0, 0, R, lo, hi, 4.2 * alpha + 0.8, `rgba(240, 249, 255, ${0.95 * alpha})`, flip < 0);
+        // Funkelnder Punkt an der Klingenspitze
+        const tipA = flip > 0 ? hi : lo;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * alpha})`;
         ctx.beginPath();
-        ctx.arc(0, 0, curRadius, -0.6 * flip, 0.6 * flip, flip < 0);
-        ctx.arc(0, 0, curRadius - 8, 0.6 * flip, -0.6 * flip, flip > 0);
-        ctx.closePath();
+        ctx.arc(Math.cos(tipA) * R, Math.sin(tipA) * R, 2.2 * alpha + 0.5, 0, Math.PI * 2);
         ctx.fill();
-
-        // Sharp luminous cutting edge
-        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(0, 0, curRadius, -0.65 * flip, 0.65 * flip, flip < 0);
-        ctx.stroke();
       }
 
       ctx.restore();
+    }
+  }
+
+  /** Sichelförmiger Bogen, der an beiden Enden spitz zuläuft (Kopf am Ende a1 bzw. a0 wenn reverse) */
+  drawTaperedArc(ctx, cx, cy, r, a0, a1, width, color, reverse = false) {
+    if (a1 - a0 < 0.01) return;
+    const N = 18;
+    const outer = [];
+    const inner = [];
+    for (let i = 0; i <= N; i++) {
+      const f = i / N;
+      const a = a0 + (a1 - a0) * f;
+      // Dicke wächst zum Kopf hin und läuft am Ende spitz aus
+      const head = reverse ? 1 - f : f;
+      const w = width * Math.sin(Math.min(1, head * 1.15) * Math.PI * 0.92) * (0.35 + 0.65 * head);
+      outer.push([cx + Math.cos(a) * (r + w * 0.5), cy + Math.sin(a) * (r + w * 0.5)]);
+      inner.push([cx + Math.cos(a) * (r - w * 0.5), cy + Math.sin(a) * (r - w * 0.5)]);
+    }
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(outer[0][0], outer[0][1]);
+    for (let i = 1; i <= N; i++) ctx.lineTo(outer[i][0], outer[i][1]);
+    for (let i = N; i >= 0; i--) ctx.lineTo(inner[i][0], inner[i][1]);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  /** Drei parallele Krallenrisse (smaragdgrün mit hellem Kern) */
+  drawClawMarks(ctx, R, a0, a1, alpha, flip) {
+    for (let c = -1; c <= 1; c++) {
+      const r = R + c * 5;
+      const w = (4.2 - Math.abs(c) * 1.1) * alpha + 0.6;
+      this.drawTaperedArc(ctx, 0, 0, r, a0 + Math.abs(c) * 0.08, a1 - Math.abs(c) * 0.08, w + 2.5, `rgba(21, 128, 61, ${0.55 * alpha})`, flip < 0);
+      this.drawTaperedArc(ctx, 0, 0, r, a0 + Math.abs(c) * 0.08, a1 - Math.abs(c) * 0.08, w, `rgba(134, 239, 172, ${0.95 * alpha})`, flip < 0);
+      this.drawTaperedArc(ctx, 0, 0, r, a0 + 0.15, a1 - 0.15, w * 0.35, `rgba(255, 255, 255, ${0.9 * alpha})`, flip < 0);
     }
   }
 
@@ -21627,12 +21451,30 @@ class CombatManager {
   }
 
   renderSparks(ctx) {
+    // Funken als leuchtende Streifen in Flugrichtung (Bewegungsunschärfe) mit hellem Kern
+    ctx.save();
+    ctx.lineCap = 'round';
     for (const sp of this.hitSparks) {
-      const alpha = sp.life / sp.maxLife;
-      ctx.fillStyle = sp.color;
+      const alpha = Math.max(0, sp.life / sp.maxLife);
+      const vx = sp.vx || 0;
+      const vy = sp.vy || 0;
+      const sz = sp.size || 1.5;
       ctx.globalAlpha = alpha;
-      ctx.fillRect(sp.x, sp.y, sp.size, sp.size);
+      ctx.strokeStyle = sp.color;
+      ctx.lineWidth = sz * (0.45 + alpha * 0.45);
+      ctx.beginPath();
+      ctx.moveTo(sp.x - vx * 0.035, sp.y - vy * 0.035);
+      ctx.lineTo(sp.x, sp.y);
+      ctx.stroke();
+      if (sz > 1.8) {
+        ctx.globalAlpha = alpha * 0.85;
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(sp.x, sp.y, sz * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
+    ctx.restore();
     ctx.globalAlpha = 1.0;
   }
 
@@ -21653,6 +21495,11 @@ class CombatManager {
 
     ctx.restore();
   }
+}
+
+/** Kubisches Ausklingen für Effekte */
+function combatEaseOut(t) {
+  return 1 - Math.pow(1 - Math.min(1, Math.max(0, t)), 3);
 }
 
 

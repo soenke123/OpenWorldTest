@@ -79,7 +79,7 @@ export function setSelectedPlayerName(name) {
 }
 
 import {
-  RIG, rigV, rigAdd, rigSub, rigScale, rigLerp, rigNorm, rigCross, rigBiped, rigChain, rigSurfPt,
+  RIG, rigV, rigAdd, rigSub, rigScale, rigLerp, rigNorm, rigCross, rigBiped, rigQuad, rigIK, rigChain, rigSurfPt,
   rigRotY, rigClamp, rigEaseOut, rigEaseInOut
 } from './rig.js';
 
@@ -219,7 +219,7 @@ export function renderHeroSwingTrail(ctx, px, py, action, opts = {}) {
     }
     const g = ctx.createLinearGradient(outer[0][0], outer[0][1], outer[N][0], outer[N][1]);
     g.addColorStop(0, `rgba(${col},0)`);
-    g.addColorStop(1, `rgba(${col},${0.7 * fade})`);
+    g.addColorStop(1, `rgba(${col},${0.45 * fade})`);
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.moveTo(outer[0][0], outer[0][1]);
@@ -613,6 +613,200 @@ function heroBand(r, ctx, H, R, el, color, width, o = {}) {
   ctx.lineWidth = width * r.s;
   ctx.stroke();
   ctx.restore();
+}
+
+// -----------------------------------------------------------------------------
+// SMARAGD-DRUIDE: WERBÄR-GESTALT (Vierbeiner-Rig)
+// -----------------------------------------------------------------------------
+
+/**
+ * Druidenbär: massiger Braunbär mit Moosrücken, Zweig-Geweih, leuchtenden Runen.
+ * Gleiche Signatur wie Helden-Skins; action steuert Prankenhieb, Ansprung und Wirbel.
+ */
+export function renderDruidBear(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  const t = animTime;
+  let facing = direction;
+  let swipe = 0;      // -1..1 Prankenhieb (rechte Pranke)
+  let swipeSide = 1;
+  let lunge = 0;      // 0..1 Ansprung
+  let rear = 0;       // 0..1 Aufrichten
+  if (action && action.type) {
+    facing = action.angle;
+    const p = rigClamp(action.progress || 0, 0, 1);
+    if (action.type === 'slash' || action.type === 'slash2') {
+      swipeSide = action.type === 'slash2' ? -1 : 1;
+      rear = p < 0.2 ? rigEaseOut(p / 0.2) * 0.55 : 0.55 * (1 - rigEaseInOut((p - 0.2) / 0.8));
+      swipe = p < 0.2 ? -rigEaseOut(p / 0.2) : (p < 0.5 ? heroLerp(-1, 1, rigEaseOut((p - 0.2) / 0.3)) : heroLerp(1, 0.3, (p - 0.5) / 0.5));
+    } else if (action.type === 'thrust') {
+      lunge = p < 0.2 ? -rigEaseOut(p / 0.2) * 0.4 : (p < 0.45 ? heroLerp(-0.4, 1, rigEaseOut((p - 0.2) / 0.25)) : heroLerp(1, 0, rigEaseInOut((p - 0.45) / 0.55)));
+    } else if (action.type === 'spin') {
+      facing = (action.angle || 0) + t * 26;
+      rear = 0.75;
+    }
+  }
+  const moving = Boolean(isMoving) && !action;
+  const r = RIG.begin(ctx, px, py, { facing, flash: hitFlash > 0 ? 0.55 : 0, flashColor: '#f87171' });
+
+  // Druiden-Aura am Boden mit kreisenden Blättern
+  const pulse = 1 + Math.sin(t * 4) * 0.1;
+  ctx.save();
+  const ag = ctx.createRadialGradient(px, py, 2, px, py, 17 * pulse);
+  ag.addColorStop(0, 'rgba(74, 222, 128, 0.32)');
+  ag.addColorStop(0.7, 'rgba(22, 163, 74, 0.12)');
+  ag.addColorStop(1, 'rgba(22, 101, 52, 0)');
+  ctx.fillStyle = ag;
+  ctx.beginPath();
+  ctx.ellipse(px, py, 17 * pulse, 9 * pulse, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  r.shadow(10.5, 4.5, 0.38, 0, 0.5);
+
+  const fur = '#6b3f22';
+  const furDark = '#4a2814';
+  const moss = '#3f8f3a';
+  const q = rigQuad(t, {
+    moving, freq: 10, len: 8.5, width: 2.7, upper: 2.7, lower: 2.6,
+    stride: moving ? 4.2 : 0, lift: 1.6, gait: 'walk', crouch: lunge < 0 ? -lunge * 0.6 : 0
+  });
+  // Aufrichten (Hieb/Wirbel) und Vorspringen verschieben Vorderkörper
+  const lift = rear * 4.5;
+  const fwd = lunge * 3.2;
+  q.front.y += lift;
+  q.front.z += fwd;
+  q.back.z += fwd * 0.6;
+  q.head = rigAdd(q.head, rigV(0, lift * 1.05 - lunge * 1.2, fwd + lunge * 0.8));
+
+  // Beine neu lösen (Vorderbeine folgen dem angehobenen Vorderkörper)
+  const legR = (key, root, side, isFront) => {
+    const L = q.legs[key];
+    const hip = rigV(side * 2.7, root.y - 0.5, root.z);
+    let foot = L.foot;
+    if (isFront && rear > 0) {
+      // Vorderpranken in der Luft
+      foot = rigV(side * 3.0, root.y - 3.2 + rear, root.z + 1.4);
+      if (action && action.type === 'spin') foot = rigV(side * 5.4, root.y - 1.2, root.z + 0.4);
+    }
+    if (isFront && swipe !== 0 && side === swipeSide) {
+      // Prankenhieb: Bogen von außen-hinten nach innen-vorne
+      const th = -swipe * 1.4 * swipeSide;
+      foot = rigV(Math.sin(th) * 4.6 + side * 1.0, root.y - 1.5 + Math.cos(swipe * 1.5) * 1.2, root.z + Math.cos(th) * 4.0);
+    }
+    if (isFront && lunge > 0) foot = rigV(side * 2.6, Math.max(0, 1.5 - lunge * 1.5), root.z + lunge * 2.6);
+    const knee = rigIK(hip, foot, 2.7, 2.6, isFront ? rigV(0, -0.3, -1) : rigV(0, 0, 1));
+    return { hip, knee, foot };
+  };
+  const legs = {
+    RF: legR('RF', q.front, 1, true), LF: legR('LF', q.front, -1, true),
+    RH: legR('RH', q.back, 1, false), LH: legR('LH', q.back, -1, false)
+  };
+  for (const key of ['RH', 'LH', 'RF', 'LF']) {
+    const L = legs[key];
+    const isFront = key.charAt(1) === 'F';
+    r.capsule(L.hip, L.knee, 1.95, 1.6, fur);
+    r.capsule(L.knee, L.foot, 1.6, 1.4, furDark);
+    const paw = rigAdd(L.foot, rigV(0, 0.3, 0.5));
+    r.ball(paw, 1.45, furDark, { sy: 0.75 });
+    // Krallen
+    for (let k = -1; k <= 1; k++) {
+      r.ball(rigAdd(paw, rigV(k * 0.6, -0.1, 1.25)), 0.33, '#f5f0e1', { outline: false, gloss: 0, bias: 0.05 });
+    }
+    if (isFront && swipe !== 0 && (key === 'RF') === (swipeSide === 1)) {
+      r.glow(paw, 3.2, 'rgba(134,239,172,0.9)', { alpha: 0.55 });
+    }
+  }
+
+  // Massiger Rumpf: Hinterteil, Bauch, Schulterbuckel
+  const mid = rigLerp(q.front, q.back, 0.5);
+  r.ball(rigAdd(q.back, rigV(0, 1.6, -0.6)), 4.3, fur, { sy: 0.95, gloss: 0.12 });
+  r.ball(rigAdd(mid, rigV(0, 1.9, 0)), 4.8, fur, { sx: 1.0, sy: 0.92, gloss: 0.12 });
+  const hump = rigAdd(q.front, rigV(0, 2.6, -0.8));
+  r.ball(hump, 4.4, fur, { gloss: 0.15 });
+  // Moosrücken mit Blättern und kleinen Blüten
+  const mossPts = [rigAdd(q.back, rigV(0, 5.4, -0.4)), rigAdd(mid, rigV(0.4, 6.4, 0)), rigAdd(hump, rigV(-0.3, 4.2, -0.2))];
+  mossPts.forEach((m, i) => r.ball(m, 2.2 - i * 0.2, i === 1 ? '#4ca346' : moss, { sy: 0.55, gloss: 0.25, bias: 0.3 }));
+  r.ball(rigAdd(mossPts[1], rigV(1.1, 0.8, 0.4)), 0.45, '#fde047', { bias: 0.5, gloss: 0 });
+  r.ball(rigAdd(mossPts[0], rigV(-0.9, 0.7, 0.2)), 0.4, '#f9a8d4', { bias: 0.5, gloss: 0 });
+  // Leuchtende Druidenrunen auf den Schultern
+  for (const side of [1, -1]) {
+    const rp = rigAdd(hump, rigV(side * 3.6, 0.2, 1.0));
+    const P = r.P(rp);
+    r.custom(P.d + 0.2, (c, rr) => {
+      if (rr.toCam(rigV(side, 0, 0.6)) < 0) return;
+      c.save();
+      c.globalCompositeOperation = 'lighter';
+      c.strokeStyle = `rgba(134, 239, 172, ${0.7 + Math.sin(t * 5) * 0.25})`;
+      c.lineWidth = 0.45 * rr.s;
+      c.beginPath();
+      for (let k = 0; k < 14; k++) {
+        const a = k * 0.55;
+        const rad = 0.15 * k * rr.s;
+        const x = P.x + Math.cos(a) * rad;
+        const y = P.y + Math.sin(a) * rad * 0.8;
+        if (k === 0) c.moveTo(x, y); else c.lineTo(x, y);
+      }
+      c.stroke();
+      c.restore();
+    });
+  }
+
+  // Kopf mit Schnauze, runden Ohren, Zweig-Geweih und Smaragdaugen
+  const H = q.head;
+  const HR = 3.3;
+  r.capsule(rigAdd(q.front, rigV(0, 2.4, 0.4)), H, 2.6, 2.3, fur);
+  r.ball(H, HR, fur, { gloss: 0.18, after: (c) => {
+    r.eye(c, H, HR, 0.48, 0.18, { style: 'glow', color: '#4ade80', size: 1.0, blink: heroBlink(t, 0.5) });
+    r.eye(c, H, HR, -0.48, 0.18, { style: 'glow', color: '#4ade80', size: 1.0, blink: heroBlink(t, 0.5) });
+    // Rune auf der Stirn
+    r.mark(c, H, HR, 0, 0.55, (cc, P, sq, s) => {
+      cc.globalCompositeOperation = 'lighter';
+      cc.strokeStyle = 'rgba(134,239,172,0.85)'; cc.lineWidth = 0.4 * s;
+      cc.beginPath(); cc.moveTo(P.x, P.y - 0.9 * s); cc.lineTo(P.x, P.y + 0.6 * s);
+      cc.moveTo(P.x - 0.6 * s * sq, P.y - 0.3 * s); cc.lineTo(P.x, P.y + 0.1 * s); cc.lineTo(P.x + 0.6 * s * sq, P.y - 0.3 * s); cc.stroke();
+    });
+  } });
+  const snout = rigAdd(H, rigV(0, -0.9, HR * 0.95));
+  r.ball(snout, 1.6, '#b98a5e', { sx: 1.1, sy: 0.85, bias: 0.2 });
+  r.ball(rigAdd(snout, rigV(0, 0.45, 1.25)), 0.62, '#1c1410', { sx: 1.2, sy: 0.8, gloss: 0.6, bias: 0.3 });
+  if (lunge > 0.3 || swipe !== 0) {
+    // Brüllendes Maul
+    r.ball(rigAdd(snout, rigV(0, -0.8, 0.7)), 0.8, '#7f1d1d', { sx: 1.2, sy: 0.6, bias: 0.25 });
+  }
+  for (const side of [1, -1]) {
+    r.ball(rigSurfPt(H, HR * 0.95, side * 0.9, 0.75), 1.15, furDark, { sy: 0.9, bias: -0.05 });
+    // Zweig-Geweih mit Blättchen
+    const base = rigSurfPt(H, HR, side * 0.45, 0.95);
+    const k1 = rigAdd(base, rigV(side * 0.8, 1.6, -0.2));
+    const tip = rigAdd(k1, rigV(side * 1.0, 1.4, -0.4));
+    const tine = rigAdd(k1, rigV(-side * 0.2, 1.3, 0.5));
+    r.line([base, k1, tip], '#7c5a3a', 0.45, { smooth: false, bias: 0.1 });
+    r.line([k1, tine], '#7c5a3a', 0.35, { smooth: false, bias: 0.1 });
+    const leafSway = Math.sin(t * 3 + side) * 0.3;
+    r.poly([tip, rigAdd(tip, rigV(side * 0.8 + leafSway, 0.7, 0.3)), rigAdd(tip, rigV(side * 1.2 + leafSway, 0.1, 0))], '#4ade80', { bias: 0.15 });
+    r.poly([tine, rigAdd(tine, rigV(-side * 0.4 + leafSway, 0.8, 0.5)), rigAdd(tine, rigV(side * 0.4 + leafSway, 0.7, 0.2))], '#22c55e', { bias: 0.15 });
+  }
+
+  // Kleiner Stummelschwanz
+  r.ball(rigAdd(q.back, rigV(0, 2.4, -4.6)), 1.0, furDark, { bias: -0.1 });
+
+  // Schwebende Blätter der Druidenmagie
+  for (let i = 0; i < 3; i++) {
+    const life = (t * 0.45 + i / 3) % 1;
+    const a = i * 2.1 + t * 0.8;
+    const lp = rigV(Math.cos(a) * 9, 1 + life * 12, Math.sin(a) * 7);
+    const P = r.P(lp);
+    r.custom(P.d, (c, rr) => {
+      c.save();
+      c.globalAlpha *= Math.sin(life * Math.PI) * 0.9;
+      c.translate(P.x, P.y);
+      c.rotate(t * 2 + i);
+      c.fillStyle = rr.col(i % 2 ? '#86efac' : '#4ade80');
+      c.beginPath();
+      c.ellipse(0, 0, 1.1 * rr.s, 0.5 * rr.s, 0, 0, Math.PI * 2);
+      c.fill();
+      c.restore();
+    });
+  }
+  r.flush();
 }
 
 // -----------------------------------------------------------------------------
