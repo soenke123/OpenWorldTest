@@ -2340,7 +2340,7 @@ export class CharacterShowcaseManager {
         </div>
 
         <div class="char-preview-stage">
-          <canvas id="char-canvas-${char.id}" class="char-canvas" width="80" height="80"></canvas>
+          <canvas id="char-canvas-${char.id}" class="char-canvas" width="320" height="320"></canvas>
           <div class="char-stage-controls">
             <button class="char-stage-btn btn-char-anim" title="Animation (Laufen / Stehen)">
               Modus: <span class="anim-label">${st.isMoving ? 'LAUFEN' : 'STEHEN'}</span>
@@ -2435,9 +2435,15 @@ export class CharacterShowcaseManager {
       if (canvas) {
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = true;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        // Render hero centered at py = 52 (ground base) in 80x80 canvas
-        char.render(ctx, 40, 52, st.animTime, st.direction, st.isMoving, Math.max(0, st.hitTimer));
+        // Hochauflösend: logische 80x80-Bühne, Held vergrößert, Füße bei y = 64
+        const k = canvas.width / 80;
+        ctx.setTransform(k, 0, 0, k, 0, 0);
+        ctx.translate(40, 64);
+        ctx.scale(2.2, 2.2);
+        char.render(ctx, 0, 0, st.animTime, st.direction, st.isMoving, Math.max(0, st.hitTimer));
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
       }
     });
   }

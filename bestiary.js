@@ -571,6 +571,12 @@ function monFrostGiant(ctx, cx, cy, time, state, hitFlash, opts) {
     r.ball(sk['hand' + S], 2.4, '#e2e8f0', { gloss: 0.15 });
     for (let k = -1; k <= 1; k++) r.ball(rigAdd(sk['hand' + S], rigV(k * 0.9, -1.4, 1.2)), 0.45, '#7dd3fc', { outline: false, bias: 0.05 });
   }
+  // Eiskristall-Keule in der rechten Pranke
+  const clubDir = rigNorm(raise > 0 ? rigV(0.2, 1, -0.4) : (slam > 0 ? rigV(0, -0.4 + (1 - slam) * 1.2, 1) : rigV(0.3, -0.35, 1)));
+  const clubTip = rigAdd(sk.handR, rigScale(clubDir, 8.5));
+  r.capsule(rigAdd(sk.handR, rigScale(clubDir, -1)), clubTip, 0.7, 2.1, '#7dd3fc', { light: 0.5, bias: 0.15 });
+  r.ball(clubTip, 1.6, '#e0f2fe', { gloss: 0.7, bias: 0.2 });
+  r.glow(clubTip, 3.5 + raise * 2, 'rgba(125,211,252,0.85)', { alpha: 0.35 + raise * 0.4 });
   // Eishörner (gebogen), am linken hängt die rote Laterne
   const top = rigAdd(body, rigV(0, 9.4, 0));
   for (const sd of [1, -1]) {
@@ -2082,7 +2088,7 @@ export class BestiaryManager {
         </div>
 
         <div class="enemy-preview-stage">
-          <canvas id="enemy-canvas-${enemy.id}" class="enemy-canvas" width="80" height="80"></canvas>
+          <canvas id="enemy-canvas-${enemy.id}" class="enemy-canvas" width="360" height="360"></canvas>
           <div id="dmg-float-${enemy.id}" class="dmg-float"></div>
           
           <div class="enemy-stage-controls">
@@ -2176,10 +2182,16 @@ export class BestiaryManager {
         const ctx = canvas.getContext('2d');
         // Smooth paper rendering for curved Ghibli vector aesthetics
         ctx.imageSmoothingEnabled = true;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Render enemy centered in 80x80 canvas (center at 40, 42)
-        enemy.render(ctx, 40, 42, st.animTime, st.state, Math.max(0, st.hitTimer));
+        // Hochauflösend: logische 80x80-Bühne (Mitte bei 40, 40)
+        const k = canvas.width / 80;
+        ctx.setTransform(k, 0, 0, k, 0, 0);
+        ctx.translate(40, 42);
+        ctx.scale(1.45, 1.45);
+        enemy.render(ctx, 0, 0, st.animTime, st.state, Math.max(0, st.hitTimer));
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
       }
     });
   }

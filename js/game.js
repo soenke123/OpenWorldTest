@@ -4276,7 +4276,7 @@ class Game {
 
       // Clean card with large figure only - no names or text
       card.innerHTML = `
-        <canvas width="78" height="88" class="char-card-canvas" data-char-id="${char.id}"></canvas>
+        <canvas width="234" height="264" class="char-card-canvas" data-char-id="${char.id}"></canvas>
       `;
 
       card.addEventListener('click', () => {
@@ -4299,7 +4299,7 @@ class Game {
       if (canvas) {
         const ctx = canvas.getContext('2d');
         if (ctx) {
-          ctx.imageSmoothingEnabled = false;
+          ctx.imageSmoothingEnabled = true;
           this.charPreviewCanvases[char.id] = { canvas, ctx, charDef: char };
         }
       }
@@ -4312,11 +4312,15 @@ class Game {
     if (this.charWizardStep === 2 && this.charPreviewCanvases) {
       for (const [id, item] of Object.entries(this.charPreviewCanvases)) {
         const { canvas, ctx, charDef } = item;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         if (typeof charDef.render === 'function') {
           ctx.save();
-          ctx.translate(39, 74);
-          ctx.scale(1.65, 1.65);
+          // Hochauflösende Leinwand: logisch 78x88
+          const k = canvas.width / 78;
+          ctx.setTransform(k, 0, 0, k, 0, 0);
+          ctx.translate(39, 78);
+          ctx.scale(2.15, 2.15);
           charDef.render(ctx, 0, 0, this.animTime, 'down', true, 0);
           ctx.restore();
         }
@@ -4337,10 +4341,14 @@ class Game {
     if (!defChar || typeof defChar.render !== 'function') return;
 
     const ctx = this.confirmCtx;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.confirmCanvas.width, this.confirmCanvas.height);
     ctx.save();
-    ctx.translate(60, 98);
-    ctx.scale(2.2, 2.2);
+    // Hochauflösende Leinwand: logisch 120x120
+    const k = this.confirmCanvas.width / 120;
+    ctx.setTransform(k, 0, 0, k, 0, 0);
+    ctx.translate(60, 102);
+    ctx.scale(3.0, 3.0);
     defChar.render(ctx, 0, 0, this.animTime, 'down', true, 0);
     ctx.restore();
   }

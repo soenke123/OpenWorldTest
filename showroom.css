@@ -859,9 +859,9 @@ body {
 }
 
 .enemy-canvas {
-  width: 120px;
-  height: 120px;
-  image-rendering: pixelated;
+  width: 150px;
+  height: 150px;
+  image-rendering: auto;
   display: block;
 }
 
@@ -1266,8 +1266,8 @@ body {
 }
 
 .char-canvas {
-  width: 80px;
-  height: 80px;
+  width: 160px;
+  height: 160px;
   image-rendering: auto;
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.5));
 }
