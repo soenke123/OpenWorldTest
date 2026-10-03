@@ -96,10 +96,10 @@ const HERO_BUILD = {
 
 const HERO_PI = Math.PI;
 
-function heroLerp(a, b, t) { return a + (b - a) * t; }
+export function heroLerp(a, b, t) { return a + (b - a) * t; }
 
 /** Blinzeln alle paar Sekunden (pro Held leicht versetzt) */
-function heroBlink(t, offset = 0) {
+export function heroBlink(t, offset = 0) {
   const c = (t + offset) % 3.9;
   return c < 0.13 ? 1 : 0;
 }
@@ -294,7 +294,7 @@ export function renderHeroSwingTrail(ctx, px, py, action, opts = {}) {
 }
 
 /** Schwert/Katana in der Hand */
-function heroDrawBlade(r, hand, dir, W) {
+export function heroDrawBlade(r, hand, dir, W) {
   const len = W.len || 8.6;
   const grip0 = rigSub(hand, rigScale(dir, 1.1));
   const guard = rigAdd(hand, rigScale(dir, 0.85));
@@ -312,7 +312,7 @@ function heroDrawBlade(r, hand, dir, W) {
 }
 
 /** Bogen mit Sehne und Pfeil */
-function heroDrawBow(r, bow, W) {
+export function heroDrawBow(r, bow, W) {
   const h = bow.hand;
   const top = rigAdd(h, rigV(0, 4.6, -1.0));
   const bot = rigAdd(h, rigV(0, -4.6, -1.0));
@@ -379,7 +379,7 @@ function heroRender(D, ctx, px, py, animTime, direction, isMoving, hitFlash, act
 // -----------------------------------------------------------------------------
 
 /** Beine mit Hose und Schuhen. o: shin (Unterschenkel-Farbe, z.B. Wickelgamaschen), toe (Fußlänge) */
-function heroLegs(r, sk, pants, shoes, o = {}) {
+export function heroLegs(r, sk, pants, shoes, o = {}) {
   const sides = ['R', 'L'];
   for (const S of sides) {
     const hip = sk['hip' + S];
@@ -404,7 +404,7 @@ function heroLegs(r, sk, pants, shoes, o = {}) {
 }
 
 /** Arme mit Ärmeln und Händen. o: wide (weiter Kimono-Ärmel-Farbe), cuff, handR, glove */
-function heroArms(r, sk, sleeve, skin, o = {}) {
+export function heroArms(r, sk, sleeve, skin, o = {}) {
   for (const S of ['R', 'L']) {
     const sh = sk['sh' + S];
     const el = sk['elbow' + S];
@@ -428,7 +428,7 @@ function heroArms(r, sk, sleeve, skin, o = {}) {
 }
 
 /** Oberkörper als Kegelstumpf (Schultern -> Becken). o: rt, rb, sz, hem, trim */
-function heroTorso(r, sk, color, o = {}) {
+export function heroTorso(r, sk, color, o = {}) {
   const top = rigLerp(sk.shR, sk.shL, 0.5);
   top.y += o.topUp === undefined ? 0.25 : o.topUp;
   const bot = rigAdd(sk.pelvis, rigV(0, o.botY === undefined ? -0.2 : o.botY, 0));
@@ -439,7 +439,7 @@ function heroTorso(r, sk, color, o = {}) {
  * Gewand/Rock/Umhang ab Taille, Saum schwingt beim Laufen nach.
  * o: topY (über Becken), hemY (Höhe des Saums), rt, rb, trail, hem, hemW, sz
  */
-function heroRobe(r, sk, color, t, moving, o = {}) {
+export function heroRobe(r, sk, color, t, moving, o = {}) {
   const ph = Math.sin(t * 14);
   const trail = moving ? (o.trail === undefined ? 0.9 : o.trail) : 0;
   const top = rigAdd(sk.pelvis, rigV(0, o.topY === undefined ? 1.0 : o.topY, 0));
@@ -448,14 +448,14 @@ function heroRobe(r, sk, color, t, moving, o = {}) {
 }
 
 /** Gürtel/Obi als schmaler Ring */
-function heroSash(r, sk, color, o = {}) {
+export function heroSash(r, sk, color, o = {}) {
   const top = rigAdd(sk.pelvis, rigV(0, o.y1 === undefined ? 1.7 : o.y1, 0));
   const bot = rigAdd(sk.pelvis, rigV(0, o.y0 === undefined ? 0.7 : o.y0, 0));
   r.cone(top, bot, o.r || 2.1, o.r2 || (o.r || 2.1) * 1.03, color, { sz: o.sz || 0.82, bias: o.bias === undefined ? 0.08 : o.bias, shade: true, after: o.after });
 }
 
 /** Flatternde Bänder / Schärpen-Enden hinter der Figur */
-function heroRibbon(r, base, t, moving, color, o = {}) {
+export function heroRibbon(r, base, t, moving, color, o = {}) {
   const dir = rigV(o.dx || 0, moving ? -0.6 : -0.9, moving ? -1 : -0.3);
   const pts = rigChain(t, base, dir, {
     n: o.n || 4, seg: o.seg || 1.25, amp: o.amp || (moving ? 0.9 : 0.4), ampY: o.ampY || 0.35,
@@ -466,7 +466,7 @@ function heroRibbon(r, base, t, moving, color, o = {}) {
 }
 
 /** Kopf mit Gesicht und Haaren; face/hair werden direkt nach der Kopfkugel gezeichnet */
-function heroHead(r, sk, skin, face, hair, o = {}) {
+export function heroHead(r, sk, skin, face, hair, o = {}) {
   const H = sk.H;
   const R = sk.R * (o.scale || 1);
   r.ball(H, R, skin, {
@@ -483,7 +483,7 @@ function heroHead(r, sk, skin, face, hair, o = {}) {
 }
 
 /** Standard-Ghibli-Gesicht: Augen, Wangenröte, kleiner Mund */
-function heroFace(r, ctx, H, R, info, o = {}) {
+export function heroFace(r, ctx, H, R, info, o = {}) {
   const eyeEl = o.eyeEl === undefined ? -0.12 : o.eyeEl;
   const eyeAz = o.eyeAz || 0.4;
   const eo = {
@@ -500,7 +500,7 @@ function heroFace(r, ctx, H, R, info, o = {}) {
 }
 
 /** Haarkante: Stirnfransen vorne, tiefer an den Seiten, ganz unten hinten */
-function heroHairEdge(front = 0.3, side = -0.25, back = -0.95, spikes = 0.14, count = 7) {
+export function heroHairEdge(front = 0.3, side = -0.25, back = -0.95, spikes = 0.14, count = 7) {
   return (az) => {
     const a = Math.abs(az);
     let base;
@@ -515,7 +515,7 @@ function heroHairEdge(front = 0.3, side = -0.25, back = -0.95, spikes = 0.14, co
 }
 
 /** Spitzes Ohr / Horn als Kegel auf der Kopfkugel (wirkt aus jeder Richtung räumlich) */
-function heroEar(r, H, R, az, el, color, o = {}) {
+export function heroEar(r, H, R, az, el, color, o = {}) {
   const w = o.w || 0.32;
   const len = o.len || 3.2;
   const base = rigSurfPt(H, R * 0.92, az, el);
@@ -536,7 +536,7 @@ function heroEar(r, H, R, az, el, color, o = {}) {
 }
 
 /** Punkte (Sterne, Sommersprossen, Muster) auf einer Zylinder-/Kegelfläche, nur auf der sichtbaren Seite */
-function heroSpeckles(r, center, radius, yFrom, yTo, list, color, o = {}) {
+export function heroSpeckles(r, center, radius, yFrom, yTo, list, color, o = {}) {
   for (const sp of list) {
     const az = sp[0];
     const y = yFrom + (yTo - yFrom) * sp[1];
@@ -573,7 +573,7 @@ function heroSpeckles(r, center, radius, yFrom, yTo, list, color, o = {}) {
 }
 
 /** Buschiger Schwanz aus überlappenden Kugeln entlang einer Kette */
-function heroTail(r, base, t, moving, color, tipColor, o = {}) {
+export function heroTail(r, base, t, moving, color, tipColor, o = {}) {
   const dir = o.dir || rigV(0, moving ? 0.25 : 0.6, -1);
   const pts = rigChain(t + (o.phase || 0), base, dir, {
     n: o.n || 5, seg: o.seg || 1.1, amp: o.amp || (moving ? 1.1 : 0.7), ampY: o.ampY || 0.4,
@@ -591,7 +591,7 @@ function heroTail(r, base, t, moving, color, tipColor, o = {}) {
 }
 
 /** Band um den Kopf (Stirnband, Tiara, Hutband) - nur der sichtbare Bogen wird gezeichnet */
-function heroBand(r, ctx, H, R, el, color, width, o = {}) {
+export function heroBand(r, ctx, H, R, el, color, width, o = {}) {
   const pts = [];
   for (let i = 0; i <= 24; i++) {
     const az = -HERO_PI + (i / 24) * HERO_PI * 2;

@@ -136,6 +136,11 @@ export class EnemyEntity {
     this.animTime = Math.random() * 5;
     this.hitFlash = 0;
     this.telegraphTimer = 0;
+    this.telegraphTotal = 0;   // Gesamtdauer des Ausholens (für die Rig-Animation)
+    this.strikeTimer = 0;      // Nachschwingen nach dem Schlag (Rig-Animation)
+    this.yaw = undefined;      // weich nachgeführte Blickrichtung (Bildschirmwinkel)
+    this.lastAnimX = x;
+    this.lastAnimY = y;
     this.cooldownTimer = Math.random() * 1.5;
     this.wanderTimer = Math.random() * 2 + 1;
     this.wanderTarget = { x, y };
@@ -213,6 +218,8 @@ export class EnemyEntity {
 
     this.animTime += dt;
     if (this.hitFlash > 0) this.hitFlash -= dt;
+    if (this.strikeTimer > 0) this.strikeTimer -= dt;
+    this.updateYaw(dt, player);
     if (this.cooldownTimer > 0) this.cooldownTimer -= dt;
     if (this.alertEmoteTimer > 0) this.alertEmoteTimer -= dt;
     if (this.teleportCooldown > 0) this.teleportCooldown -= dt;
@@ -319,6 +326,7 @@ export class EnemyEntity {
         }
 
         this.executeAttack(player, combatManager, enemyManager);
+        this.strikeTimer = 0.3;
         this.state = 'idle';
         this.cooldownTimer = ENEMY_CONFIG.ATTACK_RECOVERY_TIME + Math.random() * 0.4;
       }
@@ -538,6 +546,7 @@ export class EnemyEntity {
   startHookAttack(player, combatManager) {
     this.state = 'attack';
     this.telegraphTimer = 0.38;
+    this.telegraphTotal = 0.38;
     this.isHooking = true;
     this.hookCooldown = 5.5 + Math.random() * 1.5;
 
@@ -556,6 +565,7 @@ export class EnemyEntity {
     } else {
       this.telegraphTimer = ENEMY_CONFIG.ATTACK_TELEGRAPH_TIME;
     }
+    this.telegraphTotal = this.telegraphTimer;
 
     // Optisches Telegraphing (Warnkreis / Funken)
     if (combatManager) {
@@ -1016,6 +1026,35 @@ export class EnemyEntity {
     }
   }
 
+  /** Blickrichtung für das Skelett-Rig: Laufrichtung, beim Kampf zum Spieler, weich gedreht */
+  updateYaw(dt, player) {
+    const mx = this.x - this.lastAnimX;
+    const my = this.y - this.lastAnimY;
+    this.lastAnimX = this.x;
+    this.lastAnimY = this.y;
+    let target = null;
+    if (this.isCharging && this.chargeDir) {
+      target = Math.atan2(this.chargeDir.y, this.chargeDir.x);
+    } else if (this.state === 'attack' && player) {
+      target = Math.atan2(player.y - this.y, player.x - this.x);
+    } else if (mx * mx + my * my > 0.0004) {
+      target = Math.atan2(my, mx);
+    } else if (player && Math.hypot(player.x - this.x, player.y - this.y) < 140) {
+      target = Math.atan2(player.y - this.y, player.x - this.x);
+    }
+    if (target === null) {
+      if (this.yaw === undefined) this.yaw = Math.PI / 2;
+      return;
+    }
+    if (this.yaw === undefined) {
+      this.yaw = target;
+      return;
+    }
+    let d = target - this.yaw;
+    d = ((d + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+    this.yaw += d * Math.min(1, dt * 7);
+  }
+
   render(ctx, t, night) {
     if (this.state === 'dead') return;
 
@@ -1031,7 +1070,13 @@ export class EnemyEntity {
     ctx.save();
     ctx.translate(drawX, drawY);
     ctx.scale(this.scale, this.scale);
-    this.def.render(ctx, 0, 0, this.animTime, renderState, Math.max(0, this.hitFlash));
+    const rigOpts = {
+      facing: this.yaw !== undefined ? this.yaw : this.facing,
+      attackT: (this.state === 'attack' && this.telegraphTotal > 0) ? 1 - Math.max(0, this.telegraphTimer) / this.telegraphTotal : undefined,
+      strikeT: this.strikeTimer > 0 ? this.strikeTimer / 0.3 : 0,
+      charging: Boolean(this.isCharging)
+    };
+    this.def.render(ctx, 0, 0, this.animTime, renderState, Math.max(0, this.hitFlash), rigOpts);
     ctx.restore();
 
     // Alarm-Emote `!` über dem Kopf

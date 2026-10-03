@@ -1,289 +1,1568 @@
 /**
  * Ocarina of Brawls - Bestiarium & Monster-Handbuch
- * 22 detaillierte, prozedural animierte Gegner-Modelle im "Süßen Dark Ghibli 2.5D Papercraft"-Stil
- * Inspiriert von Prinzessin Mononoke, Chihiros Reise ins Zauberland, Totoro und japanischer Mythologie
+ * 22 prozedural animierte Gegner auf dem gemeinsamen Pseudo-3D-Skelett-Rig (js/rig.js)
+ * im "Süßen Dark Ghibli 2.5D Papercraft"-Stil.
+ * Inspiriert von Prinzessin Mononoke, Chihiros Reise ins Zauberland, Totoro und japanischer Mythologie.
+ *
+ * render(ctx, cx, cy, time, state, hitFlash, opts)
+ *   state: 'idle' | 'walk' | 'attack'
+ *   opts (optional, aus enemies.js): { facing (Winkel), attackT (0..1 Ausholen), strikeT (1..0 Nachschwingen) }
+ *   Ohne opts (Showroom) blicken Monster schräg nach vorne und spielen eine Angriffsschleife ab.
  */
+import {
+  RIG, rigV, rigAdd, rigSub, rigScale, rigLerp, rigNorm, rigBiped, rigQuad, rigIK, rigChain,
+  rigSerpent, rigSurfPt, rigClamp, rigEaseOut, rigEaseInOut, rigAttackPhase, rigSwingValue
+} from './js/rig.js';
+import {
+  heroBlink, heroDrawBlade, heroLegs, heroArms, heroTorso, heroRobe, heroSash, heroRibbon,
+  heroHead, heroFace, heroHairEdge, heroEar, heroTail, heroBand, heroLerp
+} from './js/characters.js';
+
+const MON_FACING = 1.05; // Showroom: leicht seitliche 3/4-Ansicht nach vorne
+const MON_PI = Math.PI;
+
+/** Startet ein Monsterbild: Rig mit Boden bei cy + ground, Angriffsphase, Bewegung */
+function monBegin(ctx, cx, cy, ground, time, state, hitFlash, opts, o = {}) {
+  const op = opts || {};
+  const facing = op.facing !== undefined ? op.facing : (o.facing !== undefined ? o.facing : MON_FACING);
+  const r = RIG.begin(ctx, cx, cy + ground, {
+    facing,
+    scale: o.scale || 1,
+    flash: hitFlash > 0 ? 0.8 : 0,
+    flashColor: '#ffffff',
+    ink: o.ink
+  });
+  const ap = rigAttackPhase(state, time, op);
+  return { r, ap, sv: rigSwingValue(ap), moving: state === 'walk', t: time, blink: heroBlink(time, o.blink || 0) };
+}
+
+/** Weicher Schwebeschatten, der mit der Flughöhe kleiner wird */
+function monHoverShadow(r, w, h, height) {
+  const k = 1 / (1 + height * 0.04);
+  r.shadow(w * k, h * k, 0.26 * k + 0.06);
+}
+
+/** Bogen in Ruhehaltung (Sehne gespannt, kein Pfeil) */
+function monBowRest(r, hand, wood, o = {}) {
+  const up = o.up || rigV(0, 1, 0.15);
+  const top = rigAdd(hand, rigScale(up, 4.6));
+  const bot = rigAdd(hand, rigScale(up, -4.6));
+  const bend = rigV(0, 0, 1.1);
+  r.line([top, rigAdd(rigLerp(hand, top, 0.55), bend), hand, rigAdd(rigLerp(hand, bot, 0.55), bend), bot], wood, 0.75, { bias: 0.1 });
+  r.line([top, bot], '#f8fafc', 0.2, { smooth: false, outline: false, bias: 0.05 });
+  return { top, bot };
+}
+
+/** Leuchtender Projektil-Aufbau (Feuer, Sporen, Magie) */
+function monCharge(r, p, size, color, alpha = 1) {
+  r.glow(p, size * 2.2, color, { alpha: 0.55 * alpha });
+  r.glow(p, size, 'rgba(255,255,255,0.9)', { alpha: 0.7 * alpha });
+}
+
+/** Kleiner Kodama-Baumgeist (Schulter-Begleiter, Reiter) */
+function monKodama(r, base, t, s = 1) {
+  const tilt = Math.sin(t * 2.6) * 0.5;
+  r.ball(rigAdd(base, rigV(0, 0.9 * s, 0)), 1.0 * s, '#f1f5f0', { sy: 1.2, gloss: 0.1 });
+  const H = rigAdd(base, rigV(tilt * 0.4 * s, 2.6 * s, 0));
+  r.ball(H, 1.35 * s, '#f8faf5', { sx: 1.1, gloss: 0.15, after: (c) => {
+    r.eye(c, H, 1.35 * s, 0.4, 0.05, { style: 'dot', color: '#1f2937', size: 0.32 * s });
+    r.eye(c, H, 1.35 * s, -0.4, 0.05, { style: 'dot', color: '#1f2937', size: 0.32 * s });
+    r.mark(c, H, 1.35 * s, 0, -0.4, (cc, P, sq, sc) => {
+      cc.fillStyle = r.col('#1f2937'); cc.beginPath(); cc.ellipse(P.x, P.y, 0.25 * sc * s * sq, 0.3 * sc * s, 0, 0, 6.29); cc.fill();
+    });
+  } });
+}
+
+/** Blatt (für Ponchos, Moos, Kronen) */
+function monLeaf(r, base, tip, w, color, o = {}) {
+  const mid = rigLerp(base, tip, 0.5);
+  const side = o.side || rigV(w, 0, 0);
+  r.poly([base, rigAdd(mid, side), tip, rigSub(mid, side)], color, { bias: o.bias || 0, depth: o.depth, outline: o.outline });
+}
 
 // =============================================================================
-// GHIBLI PAPERCRAFT DRAWING HELPERS
-// Polyfill for CanvasRenderingContext2D.prototype.roundRect on older browsers/mobile devices
-if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
-  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, radii) {
-    this.rect(x, y, w, h);
-  };
+// GEGNER-RENDERER
+// =============================================================================
+
+/** Ellipsoid-Flecken (Pilzhut-Punkte, Fellmuster) nur auf der sichtbaren Seite */
+function monSpots(r, C, rx, ry, rz, list, color, o = {}) {
+  for (const sp of list) {
+    const az = sp[0];
+    const el = sp[1];
+    const ce = Math.cos(el);
+    const n = rigV(Math.sin(az) * ce, Math.sin(el), Math.cos(az) * ce);
+    if (r.toCam(n) < 0.12) continue;
+    const p = rigV(C.x + n.x * rx, C.y + n.y * ry, C.z + n.z * rz);
+    r.ball(p, sp[2] || 0.8, color, { sy: 0.75, outline: false, gloss: 0.3, bias: o.bias || 0.4 });
+  }
 }
 
-/** Zeichnet weichen Papierschatten unter dem Wesen */
-export function drawPaperShadow(ctx, cx, cy, rx, ry, alpha = 0.28) {
-  ctx.save();
-  ctx.fillStyle = `rgba(15, 23, 42, ${alpha})`;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
-
-/** Zeichnet ausdrucksstarke Ghibli-Anime-Augen mit Glanzpunkten und Wangen-Rouge */
-export function drawGhibliEyes(ctx, lx, rx, y, r, dx = 0, dy = 0, isBlinking = false, blush = true) {
-  ctx.save();
-  if (isBlinking) {
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.8;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.arc(lx, y, r, Math.PI * 0.1, Math.PI * 0.9);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(rx, y, r, Math.PI * 0.1, Math.PI * 0.9);
-    ctx.stroke();
+// 1. WALDLÄUFER-SCHÜTZE - Kitsune-Maske, Blätterponcho mit Fuchskapuze, Kodama auf der Schulter
+function monMossArcher(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 18, time, state, hitFlash, opts, { scale: 1.4, blink: 0.4 });
+  const { r, ap, t } = M;
+  r.shadow(7.5, 2.8, 0.3, 0, 0.3);
+  const aiming = ap.phase !== 'idle';
+  const pull = ap.phase === 'windup' ? rigEaseInOut(ap.p) : (ap.phase === 'strike' ? Math.max(0, 1 - ap.p * 5) : 0);
+  const B = { thigh: 2.4, shin: 2.3, hipW: 1.3, torso: 5.6, shoulderW: 2.45, upperArm: 2.3, foreArm: 2.2, freq: 12 };
+  const shY = (B.thigh + B.shin) * 0.94 + B.torso * 0.86;
+  const sk = rigBiped(t, Object.assign({}, B, {
+    moving: M.moving,
+    handL: aiming ? rigV(-0.5, shY - 0.1, 4.5) : null,
+    handR: aiming ? rigV(-0.2, shY + 0.15, 4.3 - 3.8 * pull) : null,
+    twist: aiming ? 0.42 : 0,
+    elbowPoleR: aiming ? rigV(1, 0.4, -1) : null
+  }));
+  sk.H = rigV(sk.head.x, sk.neck.y + 3.9, sk.head.z + 0.25);
+  sk.R = 4.4;
+  heroLegs(r, sk, '#3f4a3c', '#6b3f1d', { wrap: '#a8a29e', toe: 0.85 });
+  heroTorso(r, sk, '#1f4d2b', { rt: 2.2, rb: 2.0 });
+  // Blätterponcho: Kegel mit hängenden Blattspitzen am Saum
+  const neck = rigAdd(rigLerp(sk.shR, sk.shL, 0.5), rigV(0, 0.7, -0.1));
+  const hemC = rigV(sk.pelvis.x * 0.4, sk.pelvis.y + 0.6, M.moving ? -0.8 : 0);
+  r.cone(neck, hemC, 1.6, 3.6, '#2f7a3e', { sz: 0.85, hem: '#256b33', hemW: 0.6, bias: 0.05 });
+  for (let k = 0; k < 9; k++) {
+    const a = (k / 9) * MON_PI * 2 + 0.2;
+    const n = rigV(Math.sin(a), 0, Math.cos(a));
+    if (r.toCam(n) < -0.35) continue;
+    const base = rigV(hemC.x + n.x * 3.4, hemC.y + 0.4, hemC.z + n.z * 3.1);
+    const sway = Math.sin(t * 3 + k) * 0.3;
+    const tip = rigAdd(base, rigV(n.x * 0.9 + sway, -1.9, n.z * 0.9));
+    monLeaf(r, base, tip, 0.65, k % 2 ? '#4ade80' : '#22c55e', { side: rigScale(rigV(n.z, 0, -n.x), 0.65), bias: 0.08 });
+  }
+  // Köcher mit Papierfedern auf dem Rücken
+  const q0 = rigAdd(sk.chest, rigV(1.4, 2.6, -2.4));
+  const q1 = rigAdd(sk.chest, rigV(-1.2, -2.4, -2.1));
+  r.capsule(q1, q0, 0.95, 1.05, '#7c3f17', { bias: -0.2 });
+  for (let i = 0; i < 3; i++) {
+    const fb = rigAdd(q0, rigV(-0.6 + i * 0.6, 0.4, 0));
+    r.poly([fb, rigAdd(fb, rigV(0.35, 1.8, 0.2)), rigAdd(fb, rigV(-0.35, 1.6, -0.2))], i === 1 ? '#fca5a5' : '#f8fafc', { smooth: false, bias: -0.25 });
+  }
+  heroArms(r, sk, '#1f4d2b', '#f1dcc4', { cuff: '#7c3f17' });
+  // Kopf: Kitsune-Porzellanmaske unter der Fuchskapuze
+  heroHead(r, sk, '#f8fafc', (c, H, R) => {
+    r.eye(c, H, R, 0.4, -0.02, { style: 'slit', color: '#166534', size: 0.85, tall: 0.9, blink: M.blink });
+    r.eye(c, H, R, -0.4, -0.02, { style: 'slit', color: '#166534', size: 0.85, tall: 0.9, blink: M.blink });
+    for (const sd of [1, -1]) {
+      r.mark(c, H, R, sd * 0.42, 0.24, (cc, P, sq, s) => {
+        cc.strokeStyle = r.col('#dc2626'); cc.lineWidth = 0.45 * s; cc.lineCap = 'round';
+        cc.beginPath(); cc.moveTo(P.x - sd * 0.9 * s * sq, P.y + 0.4 * s); cc.quadraticCurveTo(P.x, P.y - 0.6 * s, P.x + sd * 1.1 * s * sq, P.y - 0.1 * s); cc.stroke();
+      });
+      r.mark(c, H, R, sd * 0.68, -0.34, (cc, P, sq, s) => {
+        cc.strokeStyle = r.col('#dc2626'); cc.lineWidth = 0.4 * s;
+        cc.beginPath(); cc.moveTo(P.x - 0.6 * s * sq, P.y); cc.lineTo(P.x + 0.6 * s * sq, P.y); cc.moveTo(P.x - 0.5 * s * sq, P.y + 0.7 * s); cc.lineTo(P.x + 0.5 * s * sq, P.y + 0.7 * s); cc.stroke();
+      });
+    }
+    r.mark(c, H, R, 0, 0.42, (cc, P, sq, s) => {
+      cc.fillStyle = r.col('#dc2626'); cc.beginPath(); cc.ellipse(P.x, P.y, 0.4 * s * sq, 0.6 * s, 0, 0, 6.29); cc.fill();
+    });
+  }, (c, H, R) => {
+    r.cap(c, H, R, heroHairEdge(0.55, -0.45, -1.35, 0.04, 3), '#1f5a30', { grow: 1.13 });
+  });
+  for (const az of [0.6, -0.6]) heroEar(r, sk.H, sk.R * 1.12, az, 0.72, '#1f5a30', { len: 2.6, w: 0.32, inner: '#4ade80', tilt: rigV(0, 0.5, -0.1) });
+  // Kodama reist auf der linken Schulter mit
+  monKodama(r, rigAdd(sk.shL, rigV(-0.6, 0.6, -0.4)), t, 0.95);
+  // Bogen
+  if (aiming) {
+    const h = sk.handL;
+    const top = rigAdd(h, rigV(0, 4.8, -1.0));
+    const bot = rigAdd(h, rigV(0, -4.8, -1.0));
+    r.line([top, rigAdd(h, rigV(0, 2.7, 0.4)), h, rigAdd(h, rigV(0, -2.7, 0.4)), bot], '#854d0e', 0.8, { bias: 0.1 });
+    r.line([top, sk.handR, bot], '#f8fafc', 0.22, { smooth: false, outline: false, bias: 0.08 });
+    if (ap.phase === 'windup') {
+      const tip = rigAdd(h, rigV(0, 0, 2.4));
+      r.line([sk.handR, tip], '#bbf7d0', 0.4, { smooth: false, bias: 0.12 });
+      r.glow(tip, 2.2 + pull * 1.5, 'rgba(74,222,128,0.95)', { alpha: 0.4 + pull * 0.5 });
+    } else {
+      r.glow(rigAdd(h, rigV(0, 0, 3 + ap.p * 10)), 3, 'rgba(134,239,172,0.95)', { alpha: 1 - ap.p });
+    }
+    r.ball(rigAdd(top, rigV(0, 0, 0.3)), 0.6, '#fbcfe8', { bias: 0.15, gloss: 0 });
   } else {
-    // Sklera / Weiß
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.ellipse(lx, y, r * 1.05, r * 1.25, 0, 0, Math.PI * 2);
-    ctx.ellipse(rx, y, r * 1.05, r * 1.25, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Iris / Dunkel
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.arc(lx + dx, y + dy, r * 0.75, 0, Math.PI * 2);
-    ctx.arc(rx + dx, y + dy, r * 0.75, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Glanzpunkte (Specular highlights)
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(lx + dx - r * 0.25, y + dy - r * 0.25, r * 0.3, 0, Math.PI * 2);
-    ctx.arc(rx + dx - r * 0.25, y + dy - r * 0.25, r * 0.3, 0, Math.PI * 2);
-    ctx.arc(lx + dx + r * 0.2, y + dy + r * 0.2, r * 0.15, 0, Math.PI * 2);
-    ctx.arc(rx + dx + r * 0.2, y + dy + r * 0.2, r * 0.15, 0, Math.PI * 2);
-    ctx.fill();
+    monBowRest(r, sk.handL, '#854d0e', { up: rigV(0.15, 1, 0.3) });
   }
-
-  // Sanftes Wangen-Rouge (Blush)
-  if (blush) {
-    ctx.fillStyle = 'rgba(251, 113, 133, 0.45)';
-    ctx.beginPath();
-    ctx.ellipse(lx - r * 0.8, y + r * 0.8, r * 0.75, r * 0.38, -0.15, 0, Math.PI * 2);
-    ctx.ellipse(rx + r * 0.8, y + r * 0.8, r * 0.75, r * 0.38, 0.15, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
+  r.flush();
 }
 
-/** Zeichnet eine feine Porzellanmaske mit Zinnober-Kitsune-/Mononoke-Malereien */
-export function drawPorcelainMask(ctx, cx, cy, w, h, style = 'fox') {
+// 2. SPOREN-SPUCKER - weicher Pilz-Dumpling mit Samthaube, Punkten und Sporenwolke
+function monSporeSpitter(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 16, time, state, hitFlash, opts, { blink: 1.3 });
+  const { r, ap, t } = M;
+  const squash = ap.phase === 'windup' ? rigEaseInOut(ap.p) : (ap.phase === 'strike' ? -Math.max(0, 1 - ap.p * 2.5) : 0);
+  const hopPh = t * 7;
+  const hop = M.moving ? Math.abs(Math.sin(hopPh)) * 2.2 : 0;
+  r.shadow(10 - hop * 0.6, 3.6, 0.3);
+  const breathe = Math.sin(t * 2.4) * 0.35;
+  const sx = 1 + squash * 0.16;
+  const sy = 1 - squash * 0.2;
+  // Stummelfüßchen
+  for (const sd of [1, -1]) {
+    const lift = M.moving ? Math.max(0, Math.sin(hopPh + (sd > 0 ? 0 : MON_PI))) * 1.4 : 0;
+    r.ball(rigV(sd * 2.6, 0.8 + lift, 0.6), 1.6, '#e2cfb3', { sy: 0.7 });
+  }
+  const stem = rigV(0, 6.0 * sy + hop, 0);
+  r.ball(stem, 5.4, '#f6e8d3', { sx, sy: 1.1 * sy, gloss: 0.25, after: (c) => {
+    r.eye(c, stem, 5.4, 0.36, 0.12, { color: '#3b1d4a', size: 1.0, blink: M.blink, tall: 1.3 });
+    r.eye(c, stem, 5.4, -0.36, 0.12, { color: '#3b1d4a', size: 1.0, blink: M.blink, tall: 1.3 });
+    r.blush(c, stem, 5.4, 0.62, -0.08, '#c084fc', 1.0);
+    r.blush(c, stem, 5.4, -0.62, -0.08, '#c084fc', 1.0);
+    if (ap.phase === 'strike' && ap.p < 0.6) r.mouth(c, stem, 5.4, 0, -0.18, { open: 0.9, w: 0.9 });
+    else r.mouth(c, stem, 5.4, 0, -0.16, { w: 0.6 });
+  } });
+  // Ärmchen
+  for (const sd of [1, -1]) r.ball(rigAdd(stem, rigV(sd * 5.0 * sx, -1.0 + Math.sin(t * 3 + sd) * 0.4, 0.6)), 1.2, '#f6e8d3', { gloss: 0 });
+  // Lamellen unter dem Hut und der samtige Hut mit Punkten
+  const capC = rigV(0, 12.2 * sy + hop + breathe * 0.3, 0);
+  r.ball(rigAdd(capC, rigV(0, -1.4, 0)), 8.0, '#d8ccf5', { sx: sx * 1.02, sy: 0.3, gloss: 0, bias: 0.1 });
+  r.ball(capC, 8.4, '#7c3aed', { sx, sy: 0.64 * (1 + squash * 0.12), gloss: 0.5, bias: 0.2 });
+  monSpots(r, capC, 8.4 * sx, 8.4 * 0.64, 8.4,
+    [[0, 0.75, 1.4], [0.9, 0.45, 1.0], [-0.95, 0.5, 1.15], [1.8, 0.35, 0.9], [-1.9, 0.3, 1.0], [2.8, 0.5, 1.1], [-2.7, 0.55, 0.95], [0.4, 0.25, 0.7]],
+    '#faf5ff', { bias: 0.5 });
+  // Sporen: Aufladen kreist um den Hut, beim Spucken schießt eine Wolke nach vorne
+  if (ap.phase === 'windup') {
+    for (let i = 0; i < 5; i++) {
+      const a = t * 4 + i * 1.26;
+      const rad = 9 - ap.p * 3;
+      r.glow(rigV(Math.cos(a) * rad, capC.y + 1 + Math.sin(a * 2) * 1.2, Math.sin(a) * rad), 1.4 + ap.p, 'rgba(192,132,252,0.95)', { alpha: 0.4 + ap.p * 0.5 });
+    }
+  } else if (ap.phase === 'strike') {
+    for (let i = 0; i < 6; i++) {
+      const spread = (i - 2.5) * 0.35;
+      const d = 4 + ap.p * 16;
+      r.glow(rigV(Math.sin(spread) * d, stem.y + Math.cos(i * 1.7) * 1.5, 4 + Math.cos(spread) * d), 2.5 + ap.p * 2, 'rgba(167,139,250,0.9)', { alpha: 1 - ap.p });
+    }
+  }
+  r.flush();
+}
+
+// 9. TAU-TROPFEN BLOB - glasklarer Tautropfen mit Eichelhütchen, hüpft mit Squash & Stretch
+function monGreenSlime(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 16, time, state, hitFlash, opts, { blink: 0.8 });
+  const { r, ap, t } = M;
+  let h = 0;
+  let sq = Math.sin(t * 4) * 0.06; // + = platt, - = gestreckt
+  let lunge = 0;
+  if (M.moving) {
+    const ph = (t * 2.6) % 1;
+    if (ph < 0.6) {
+      const k = ph / 0.6;
+      h = Math.sin(k * MON_PI) * 7;
+      sq = -0.18 * Math.sin(k * MON_PI);
+    } else {
+      sq = 0.25 * Math.sin(((ph - 0.6) / 0.4) * MON_PI);
+    }
+  }
+  if (ap.phase === 'windup') sq = 0.35 * rigEaseInOut(ap.p);
+  if (ap.phase === 'strike') {
+    const k = ap.p;
+    h = Math.sin(k * MON_PI) * 6;
+    lunge = Math.sin(k * MON_PI) * 7;
+    sq = -0.25 * Math.sin(k * MON_PI);
+  }
+  r.shadow(12 / (1 + h * 0.06), 4.2 / (1 + h * 0.06), 0.3, 0, 0.2);
+  const R = 9.6;
+  const C = rigV(0, R * (1 - sq) * 0.95 + h, lunge);
+  // Gelee-Körper (durchscheinend) mit innerem Kern und Luftbläschen
+  r.ball(rigAdd(C, rigV(0, -1.5, 0)), 5.0, '#16a34a', { sy: 0.9, alpha: 0.55, outline: false, gloss: 0, bias: -0.3 });
+  for (let i = 0; i < 3; i++) {
+    const a = t * 0.8 + i * 2.1;
+    r.ball(rigAdd(C, rigV(Math.cos(a) * 3.5, Math.sin(t * 1.3 + i) * 2.5 - 1, Math.sin(a) * 2)), 0.6 + i * 0.2, '#dcfce7', { outline: false, alpha: 0.7, gloss: 0.6, bias: -0.2 });
+  }
+  r.ball(C, R, '#4ade80', { sx: 1 + sq * 0.55, sy: (1 - sq), alpha: 0.86, gloss: 0.65, after: (c) => {
+    const ey = 0.05 + sq * 0.1;
+    r.eye(c, C, R, 0.34, ey, { color: '#14532d', size: 1.45, tall: 1.25, blink: M.blink });
+    r.eye(c, C, R, -0.34, ey, { color: '#14532d', size: 1.45, tall: 1.25, blink: M.blink });
+    r.blush(c, C, R, 0.6, -0.15, '#f472b6', 1.3);
+    r.blush(c, C, R, -0.6, -0.15, '#f472b6', 1.3);
+    if (ap.phase !== 'idle') r.mouth(c, C, R, 0, -0.25, { open: 0.8, w: 0.9, inner: '#166534' });
+    else r.mouth(c, C, R, 0, -0.22, { w: 0.8 });
+  } });
+  // Eichelhütchen
+  const top = rigAdd(C, rigV(0.6, R * (1 - sq) * 0.88, -0.5));
+  r.ball(top, 3.6, '#a16207', { sy: 0.6, gloss: 0.3, bias: 0.3, after: (c, P, rr) => {
+    c.save(); c.strokeStyle = rr.col('#713f12'); c.lineWidth = 0.3 * rr.s;
+    for (let i = -1; i <= 1; i++) { c.beginPath(); c.moveTo(P.x - 2.8 * rr.s, P.y + i * 0.6 * rr.s); c.lineTo(P.x + 2.8 * rr.s, P.y + i * 0.6 * rr.s + 0.3 * rr.s); c.stroke(); }
+    c.restore();
+  } });
+  r.capsule(rigAdd(top, rigV(0, 1.6, 0)), rigAdd(top, rigV(0.6, 3.0, -0.3)), 0.5, 0.35, '#78350f', { bias: 0.35 });
+  r.flush();
+}
+
+// 10. TEER-SCHLAMM - riesiger Susuwatari-Rußball mit Glubschaugen, Teerpfütze und Konpeitō-Rußgeistern
+function monTarMire(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 18, time, state, hitFlash, opts, { blink: 2.2 });
+  const { r, ap, t } = M;
+  // Glänzende Teerpfütze
   ctx.save();
-  // Weicher Maskenschatten
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+  ctx.fillStyle = 'rgba(10, 10, 16, 0.75)';
   ctx.beginPath();
-  ctx.ellipse(cx + 1, cy + 1, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy + 18, 17 + Math.sin(t * 2) * 1, 5.6, 0, 0, Math.PI * 2);
   ctx.fill();
-
-  // Weißes Porzellan
-  ctx.fillStyle = '#fdfbf7';
-  ctx.strokeStyle = '#e2e8f0';
-  ctx.lineWidth = 1;
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.35)';
   ctx.beginPath();
-  ctx.ellipse(cx, cy, w * 0.5, h * 0.5, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx - 6, cy + 16.6, 4, 1, -0.1, 0, Math.PI * 2);
   ctx.fill();
-  ctx.stroke();
+  ctx.restore();
+  const puff = ap.phase === 'windup' ? rigEaseInOut(ap.p) : (ap.phase === 'strike' ? 1 - ap.p : 0);
+  const bounce = M.moving ? Math.abs(Math.sin(t * 6)) * 1.5 : Math.sin(t * 2) * 0.4;
+  const R = 10 + puff * 2;
+  const C = rigV(0, 10.5 + bounce + puff, 0);
+  r.ball(C, R, '#262833', { gloss: 0.12, outline: false, after: (c, P, rr) => {
+    // Rußiges Fell: viele feine Härchen entlang der Silhouette
+    c.save();
+    c.strokeStyle = rr.col('#15161d');
+    c.lineCap = 'round';
+    const Rs = R * rr.s;
+    for (let k = 0; k < 46; k++) {
+      const a = (k / 46) * Math.PI * 2;
+      const jit = Math.sin(k * 12.9898 + Math.floor(t * 6) * 0.3) * 0.5 + 0.5;
+      const len = (0.12 + jit * 0.22) * Rs;
+      c.lineWidth = (0.5 + jit * 0.5) * rr.s;
+      c.beginPath();
+      c.moveTo(P.x + Math.cos(a) * Rs * 0.86, P.y + Math.sin(a) * Rs * 0.86);
+      c.lineTo(P.x + Math.cos(a + 0.05) * (Rs + len), P.y + Math.sin(a + 0.05) * (Rs + len));
+      c.stroke();
+    }
+    c.restore();
+    const wide = 1.6 - puff * 0.4;
+    r.eye(c, C, R, 0.36, 0.18, { white: true, style: 'dot', color: '#0b0b10', size: 2.0, tall: wide * 0.62, blink: M.blink });
+    r.eye(c, C, R, -0.36, 0.18, { white: true, style: 'dot', color: '#0b0b10', size: 2.0, tall: wide * 0.62, blink: M.blink });
+    if (ap.phase === 'strike' && ap.p < 0.5) r.mouth(c, C, R, 0, -0.25, { open: 1.6, w: 1.8, inner: '#450a0a' });
+  } });
+  // Konpeitō-Rußgeister hüpfen herum und halten Sternbonbons
+  const candy = ['#f9a8d4', '#fde047', '#93c5fd'];
+  for (let i = 0; i < 3; i++) {
+    const a = t * 0.9 + i * 2.1;
+    const hop = Math.abs(Math.sin(t * 5 + i * 1.3)) * 2.5;
+    const p = rigV(Math.cos(a) * 13, 2 + hop, Math.sin(a) * 9);
+    r.ball(p, 1.9, '#1f2029', { outline: false, gloss: 0.1, after: (c, P, rr) => {
+      c.save(); c.fillStyle = '#ffffff';
+      c.beginPath(); c.arc(P.x - 0.6 * rr.s, P.y - 0.3 * rr.s, 0.55 * rr.s, 0, 6.29); c.arc(P.x + 0.6 * rr.s, P.y - 0.3 * rr.s, 0.55 * rr.s, 0, 6.29); c.fill();
+      c.fillStyle = '#000'; c.beginPath(); c.arc(P.x - 0.6 * rr.s, P.y - 0.3 * rr.s, 0.22 * rr.s, 0, 6.29); c.arc(P.x + 0.6 * rr.s, P.y - 0.3 * rr.s, 0.22 * rr.s, 0, 6.29); c.fill();
+      c.restore();
+    } });
+    r.ball(rigAdd(p, rigV(0, 2.4, 0)), 0.75, candy[i], { outline: false, gloss: 0.6, bias: 0.1 });
+  }
+  if (ap.phase === 'strike' && ap.p < 0.7) {
+    r.ball(rigV(0, C.y - 2, R + ap.p * 14), 2.4 * (1 - ap.p * 0.5), '#111118', { gloss: 0.6, bias: 1 });
+  }
+  r.flush();
+}
 
-  // Zinnoberrote Ritual-Malerei
-  ctx.fillStyle = '#e11d48';
-  ctx.strokeStyle = '#e11d48';
-  ctx.lineWidth = 1.4;
+// 11. SCHATTENWOLF - weißer Okami-Geisterwolf mit roten Zeichnungen, Flammenspiegel und Geisterschweif
+function monDireWolf(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 18, time, state, hitFlash, opts, { blink: 0.6, scale: 1.3 });
+  const { r, ap, t } = M;
+  r.shadow(10, 3.4, 0.3);
+  const crouch = ap.phase === 'windup' ? rigEaseInOut(ap.p) * 0.55 : 0;
+  const pounce = ap.phase === 'strike' ? Math.sin(ap.p * MON_PI) : 0;
+  const q = rigQuad(t, { moving: M.moving || pounce > 0, freq: pounce > 0 ? 16 : 11, len: 10, width: 2.1, upper: 3.1, lower: 3.0, gait: pounce > 0 ? 'gallop' : 'trot', crouch });
+  // Vorspringen: alles nach vorne und hoch
+  const jump = rigV(0, pounce * 3, pounce * 6);
+  q.front = rigAdd(q.front, jump);
+  q.back = rigAdd(q.back, rigScale(jump, 0.7));
+  q.head = rigAdd(q.head, rigAdd(jump, rigV(0, -crouch * 3, crouch * 1.5)));
+  const white = '#f3f4f6';
+  for (const key of ['RH', 'LH', 'RF', 'LF']) {
+    const L = q.legs[key];
+    const isF = key.charAt(1) === 'F';
+    const root = isF ? q.front : q.back;
+    const side = key.charAt(0) === 'R' ? 1 : -1;
+    const hip = rigV(side * 2.1, root.y - 0.6, root.z);
+    let foot = rigAdd(L.foot, rigScale(jump, isF ? 1.2 : 0.5));
+    if (pounce > 0 && isF) foot = rigAdd(root, rigV(side * 1.8, -2.4, 3.4));
+    const knee = rigIK(hip, foot, 3.1, 3.0, isF ? rigV(0, 0, -1) : rigV(0, 0, 1));
+    r.capsule(hip, knee, 1.35, 0.95, white);
+    r.capsule(knee, foot, 0.95, 0.7, white);
+    r.ball(rigAdd(foot, rigV(0, 0.3, 0.5)), 0.95, '#e5e7eb', { sy: 0.7 });
+  }
+  // Rumpf: Brust, Bauch, Hinterteil
+  const mid = rigLerp(q.front, q.back, 0.5);
+  r.ball(rigAdd(q.back, rigV(0, 0.8, -0.5)), 3.3, white, { gloss: 0.2, after: (c) => {
+    // rote Wirbel-Zeichnung auf der Flanke
+    for (const sd of [1, -1]) {
+      r.mark(c, rigAdd(q.back, rigV(0, 0.8, -0.5)), 3.3, sd * 1.4, 0.2, (cc, P, sq, s) => {
+        cc.strokeStyle = r.col('#dc2626'); cc.lineWidth = 0.55 * s; cc.lineCap = 'round';
+        cc.beginPath(); cc.arc(P.x, P.y, 1.1 * s, 0.3, 4.8); cc.stroke();
+      });
+    }
+  } });
+  r.capsule(rigAdd(q.back, rigV(0, 0.9, 0)), rigAdd(q.front, rigV(0, 1.0, 0)), 3.0, 3.3, white, { bias: 0.05 });
+  r.ball(rigAdd(q.front, rigV(0, 1.3, 0.6)), 3.7, white, { gloss: 0.2 });
+  // Flammender Göttlicher Spiegel auf dem Rücken
+  const disc = rigAdd(mid, rigV(0, 4.6, 0.2));
+  r.glow(disc, 5, 'rgba(251,146,60,0.9)', { alpha: 0.45 + Math.sin(t * 6) * 0.1 });
+  r.ball(disc, 2.4, '#dc2626', { sy: 0.45, gloss: 0.6, bias: 0.4, after: (c, P, rr) => {
+    c.save(); c.fillStyle = rr.col('#fde047'); c.beginPath(); c.ellipse(P.x, P.y, 1.2 * rr.s, 0.55 * rr.s, 0, 0, 6.29); c.fill(); c.restore();
+  } });
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * MON_PI * 2 + t * 2;
+    r.glow(rigAdd(disc, rigV(Math.cos(a) * 2.8, 0.6 + Math.sin(t * 9 + i) * 0.5, Math.sin(a) * 2.8)), 1.3, 'rgba(253,186,116,0.95)', { alpha: 0.7 });
+  }
+  // Geisterschweif mit blauweißer Flammenspitze
+  const tailPts = heroTail(r, rigAdd(q.back, rigV(0, 1.6, -3)), t, M.moving, white, '#bae6fd', { dir: rigV(0, M.moving ? 0.15 : 0.4, -1), n: 6, seg: 0.85, r0: 1.0, r1: 1.8, tipFrom: 0.8 });
+  r.glow(tailPts[tailPts.length - 1], 3.5, 'rgba(125,211,252,0.95)', { alpha: 0.6 });
+  // Mähne, Hals, Kopf mit langer Schnauze
+  const H = q.head;
+  r.capsule(rigAdd(q.front, rigV(0, 2.2, 1.2)), H, 2.4, 2.0, white);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * MON_PI * 2 + 0.4;
+    r.ball(rigAdd(rigLerp(q.front, H, 0.45), rigV(Math.cos(a) * 1.9, 1.6 + Math.sin(a) * 1.2, -0.4)), 1.7, '#e5e7eb', { gloss: 0.1, bias: -0.05 });
+  }
+  const HR = 2.7;
+  const open = pounce > 0.2 ? 1 : 0;
+  r.ball(H, HR, white, { gloss: 0.25, after: (c) => {
+    r.eye(c, H, HR, 0.55, 0.15, { style: 'slit', color: '#f59e0b', size: 0.75, blink: M.blink });
+    r.eye(c, H, HR, -0.55, 0.15, { style: 'slit', color: '#f59e0b', size: 0.75, blink: M.blink });
+    for (const sd of [1, -1]) {
+      r.mark(c, H, HR, sd * 0.55, 0.42, (cc, P, sq, s) => {
+        cc.strokeStyle = r.col('#dc2626'); cc.lineWidth = 0.5 * s; cc.lineCap = 'round';
+        cc.beginPath(); cc.moveTo(P.x - sd * 0.3 * s * sq, P.y + 0.3 * s); cc.quadraticCurveTo(P.x + sd * 0.5 * s * sq, P.y - 0.9 * s, P.x + sd * 1.3 * s * sq, P.y - 0.5 * s); cc.stroke();
+      });
+    }
+  } });
+  const snoutB = rigAdd(H, rigV(0, -0.5, HR * 0.7));
+  const snoutT = rigAdd(snoutB, rigV(0, -0.5 - open * 0.3, 2.6));
+  r.capsule(snoutB, snoutT, 1.5, 0.8, white, { bias: 0.1 });
+  r.ball(rigAdd(snoutT, rigV(0, 0.45, 0.35)), 0.5, '#1f2937', { gloss: 0.6, bias: 0.2 });
+  if (open) r.capsule(rigAdd(snoutB, rigV(0, -1.4, 0)), rigAdd(snoutT, rigV(0, -1.6, -0.3)), 0.8, 0.5, '#7f1d1d', { bias: 0.05 });
+  for (const sd of [1, -1]) heroEar(r, H, HR, sd * 0.6, 0.75, white, { len: 2.4, w: 0.3, inner: '#fca5a5', tilt: rigV(0, 0.5, -0.4) });
+  r.flush();
+}
 
-  if (style === 'fox') {
-    // Kitsune-Augenbrauen und Wangenwirbel
+// 3. MOOS-KOLOSS - uralter Laputa-Steinwächter mit Moosdach, Visier-Augen, langen Armen und Glühwürmchen
+function monBoulderTroll(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 22, time, state, hitFlash, opts, { blink: 1.7 });
+  const { r, ap, t } = M;
+  r.shadow(17, 5.5, 0.32);
+  const stone = '#8a9597';
+  const stoneDark = '#5f6b6e';
+  const raise = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const slam = ap.phase === 'strike' ? (ap.p < 0.3 ? rigEaseOut(ap.p / 0.3) : 1 - rigEaseInOut((ap.p - 0.3) / 0.7) * 0.6) : 0;
+  const B = { thigh: 3.0, shin: 2.8, hipW: 3.0, torso: 10, shoulderW: 7.2, upperArm: 6.8, foreArm: 7.2, freq: 7, stride: 3.5, lift: 1.4, idleArms: 1.5, bob: 0.9 };
+  const shY = (B.thigh + B.shin) * 0.94 + B.torso * 0.86;
+  let handR = null;
+  let handL = null;
+  if (raise > 0) {
+    handR = rigV(heroLerp(8, 4, raise), heroLerp(4, shY + 9, raise), heroLerp(3, 1, raise));
+    handL = rigV(heroLerp(-8, -4, raise), heroLerp(4, shY + 9, raise), heroLerp(3, 1, raise));
+  } else if (slam > 0) {
+    handR = rigV(4, heroLerp(shY + 9, 1.8, slam), heroLerp(1, 8, slam));
+    handL = rigV(-4, heroLerp(shY + 9, 1.8, slam), heroLerp(1, 8, slam));
+  }
+  const sk = rigBiped(t, Object.assign({}, B, { moving: M.moving, handR, handL, extraLean: raise * -0.15 + slam * 0.3, elbowPoleR: rigV(1, -0.3, -0.6), elbowPoleL: rigV(-1, -0.3, -0.6) }));
+  heroLegs(r, sk, stoneDark, stone, { thighR: 2.6, kneeR: 2.3, ankleR: 2.1, toe: 1.6 });
+  // Massiger Steinrumpf mit Rissen und Laputa-Rune auf der Brust
+  const body = rigAdd(sk.chest, rigV(0, -0.5, 0));
+  r.ball(body, 9.2, stone, { sy: 1.08, gloss: 0.12, after: (c) => {
+    r.mark(c, body, 9.2, 0, -0.05, (cc, P, sq, s) => {
+      cc.save(); cc.globalCompositeOperation = 'lighter';
+      cc.strokeStyle = `rgba(94, 234, 212, ${0.45 + Math.sin(t * 2) * 0.2})`; cc.lineWidth = 0.55 * s;
+      cc.beginPath(); cc.ellipse(P.x, P.y, 2.6 * s * sq, 2.6 * s, 0, 0, 6.29); cc.stroke();
+      cc.beginPath(); cc.moveTo(P.x, P.y - 2.6 * s); cc.lineTo(P.x, P.y + 2.6 * s); cc.moveTo(P.x - 1.6 * s * sq, P.y + 0.6 * s); cc.lineTo(P.x + 1.6 * s * sq, P.y + 0.6 * s); cc.stroke();
+      cc.restore();
+    });
+    for (const crack of [[0.8, 0.4], [-0.9, -0.3], [0.5, -0.6]]) {
+      r.mark(c, body, 9.2, crack[0], crack[1], (cc, P, sq, s) => {
+        cc.strokeStyle = r.col('#4b5557'); cc.lineWidth = 0.35 * s;
+        cc.beginPath(); cc.moveTo(P.x - 1.2 * s * sq, P.y - 0.8 * s); cc.lineTo(P.x, P.y); cc.lineTo(P.x + 0.4 * s * sq, P.y + 1.3 * s); cc.stroke();
+      });
+    }
+  } });
+  // Moosdach mit Blüten und einem kleinen Bäumchen
+  const mossC = rigAdd(body, rigV(0, 7.8, -0.8));
+  r.ball(mossC, 7.6, '#4d7c3a', { sy: 0.42, gloss: 0.3, bias: 0.4 });
+  monSpots(r, mossC, 7.6, 7.6 * 0.42, 7.6, [[0.5, 0.6, 0.7], [-1.2, 0.5, 0.6], [2.4, 0.4, 0.65], [-2.6, 0.5, 0.6]], '#fde047', { bias: 0.5 });
+  monSpots(r, mossC, 7.6, 7.6 * 0.42, 7.6, [[1.4, 0.5, 0.6], [-0.4, 0.7, 0.55], [3.0, 0.6, 0.6]], '#f9a8d4', { bias: 0.5 });
+  const trunk0 = rigAdd(mossC, rigV(-3, 2.2, -2));
+  const trunk1 = rigAdd(trunk0, rigV(-0.6, 4.2, -0.4));
+  r.line([trunk0, trunk1], '#6b4423', 0.9, { bias: 0.3, smooth: false });
+  r.ball(rigAdd(trunk1, rigV(0, 1.2, 0)), 2.4, '#65a30d', { gloss: 0.3, bias: 0.4 });
+  r.ball(rigAdd(trunk1, rigV(1.3, 0.3, 0.6)), 1.6, '#84cc16', { gloss: 0.3, bias: 0.45 });
+  // Kopf mit Visier und zwei glimmenden Augen
+  const H = rigAdd(sk.neck, rigV(0, 2.4, 2.4));
+  r.ball(H, 4.2, stone, { sy: 0.9, gloss: 0.25, bias: 0.2, after: (c) => {
+    r.mark(c, H, 4.2, 0, 0.05, (cc, P, sq, s) => {
+      cc.fillStyle = r.col('#2a3133'); cc.beginPath(); cc.ellipse(P.x, P.y, 3.2 * s * sq, 1.1 * s, 0, 0, 6.29); cc.fill();
+    });
+    const glowA = ap.phase !== 'idle' ? 1 : 0.7 + Math.sin(t * 3) * 0.2;
+    r.eye(c, H, 4.2, 0.35, 0.05, { style: 'glow', color: ap.phase !== 'idle' ? '#f87171' : '#fbbf24', size: 0.8 * glowA + 0.2, blink: M.blink });
+    r.eye(c, H, 4.2, -0.35, 0.05, { style: 'glow', color: ap.phase !== 'idle' ? '#f87171' : '#fbbf24', size: 0.8 * glowA + 0.2, blink: M.blink });
+  } });
+  // Lange Steinarme mit schweren Fäusten
+  for (const S of ['R', 'L']) {
+    r.capsule(sk['sh' + S], sk['elbow' + S], 2.4, 2.0, stone);
+    r.capsule(sk['elbow' + S], sk['hand' + S], 2.0, 2.2, stoneDark);
+    r.ball(sk['sh' + S], 3.0, stone, { gloss: 0.15, bias: 0.05 });
+    r.ball(sk['hand' + S], 2.9, stone, { gloss: 0.2, bias: 0.05 });
+    r.ball(rigAdd(sk['sh' + S], rigV(0, 2.2, 0)), 2.0, '#4d7c3a', { sy: 0.45, bias: 0.3 });
+  }
+  if (slam > 0.85) {
+    r.glow(rigV(0, 1, 8), 9, 'rgba(214,211,209,0.8)', { alpha: (slam - 0.85) * 5 });
+  }
+  // Glühwürmchen, die in den Steinfugen wohnen
+  for (let i = 0; i < 4; i++) {
+    const a = t * 0.7 + i * 1.6;
+    r.glow(rigV(Math.cos(a) * 12, 14 + Math.sin(t * 1.5 + i) * 5, Math.sin(a) * 9), 1.5, 'rgba(253,230,138,0.95)', { alpha: 0.5 + Math.sin(t * 4 + i * 2) * 0.4 });
+  }
+  r.flush();
+}
+
+// 4. YETI-WÄCHTER - flauschiger Schnee-Totoro mit Eishörnern und roter Papierlaterne am Horn
+function monFrostGiant(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 22, time, state, hitFlash, opts, { blink: 0.9 });
+  const { r, ap, t } = M;
+  r.shadow(16, 5.2, 0.3);
+  const fur = '#f1f5f9';
+  const raise = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const slam = ap.phase === 'strike' ? (ap.p < 0.3 ? rigEaseOut(ap.p / 0.3) : 1 - rigEaseInOut((ap.p - 0.3) / 0.7) * 0.7) : 0;
+  const B = { thigh: 2.6, shin: 2.4, hipW: 3.4, torso: 9.5, shoulderW: 7.4, upperArm: 4.6, foreArm: 4.4, freq: 8, stride: 3, lift: 1.4, idleArms: 2.2, bob: 0.8 };
+  const shY = (B.thigh + B.shin) * 0.94 + B.torso * 0.86;
+  let handR = null;
+  let handL = null;
+  if (raise > 0) {
+    handR = rigV(heroLerp(8, 3.5, raise), heroLerp(8, shY + 7, raise), heroLerp(2, 0, raise));
+    handL = rigV(heroLerp(-8, -3.5, raise), heroLerp(8, shY + 7, raise), heroLerp(2, 0, raise));
+  } else if (slam > 0) {
+    handR = rigV(3.5, heroLerp(shY + 7, 2.5, slam), heroLerp(0, 9, slam));
+    handL = rigV(-3.5, heroLerp(shY + 7, 2.5, slam), heroLerp(0, 9, slam));
+  }
+  const sk = rigBiped(t, Object.assign({}, B, { moving: M.moving, handR, handL, extraLean: slam * 0.25 }));
+  // Stämmige Fellbeine mit Eisklauen
+  for (const S of ['R', 'L']) {
+    r.capsule(sk['hip' + S], sk['ankle' + S], 3.0, 2.4, fur);
+    const f = sk['foot' + S];
+    r.ball(rigAdd(f, rigV(0, 0.8, 0.8)), 2.4, '#e2e8f0', { sy: 0.65 });
+    for (let k = -1; k <= 1; k++) r.ball(rigAdd(f, rigV(k * 1.0, 0.5, 2.8)), 0.45, '#7dd3fc', { outline: false, gloss: 0.6, bias: 0.05 });
+  }
+  // Birnenförmiger Fellkörper mit Fransen
+  const body = rigAdd(sk.pelvis, rigV(0, 5.6 + sk.breathe * 0.4, 0));
+  r.ball(body, 10.2, fur, { sy: 1.12, gloss: 0.2, after: (c) => {
+    // Eisblaue Brustzeichnung mit Pfeilsicheln
+    r.mark(c, body, 10.2, 0, -0.15, (cc, P, sq, s) => {
+      cc.fillStyle = r.col('#dbeafe'); cc.beginPath(); cc.ellipse(P.x, P.y, 5.8 * s * sq, 5.6 * s, 0, 0, 6.29); cc.fill();
+      cc.strokeStyle = r.col('#7dd3fc'); cc.lineWidth = 0.5 * s; cc.lineCap = 'round';
+      for (const m of [[-2, -2], [0, -2.6], [2, -2], [-1, 0], [1, 0]]) {
+        cc.beginPath(); cc.moveTo(P.x + (m[0] - 0.6) * s * sq, P.y + (m[1] + 0.5) * s); cc.lineTo(P.x + m[0] * s * sq, P.y + m[1] * s); cc.lineTo(P.x + (m[0] + 0.6) * s * sq, P.y + (m[1] + 0.5) * s); cc.stroke();
+      }
+    });
+    // Gesicht oben am Körper
+    r.mark(c, body, 10.2, 0, 0.5, (cc, P, sq, s) => {
+      cc.fillStyle = r.col('#bfdbfe'); cc.beginPath(); cc.ellipse(P.x, P.y, 4.6 * s * sq, 2.8 * s, 0, 0, 6.29); cc.fill();
+    });
+    r.eye(c, body, 10.2, 0.2, 0.55, { color: '#0c4a6e', size: 1.0, blink: M.blink });
+    r.eye(c, body, 10.2, -0.2, 0.55, { color: '#0c4a6e', size: 1.0, blink: M.blink });
+    r.mark(c, body, 10.2, 0, 0.44, (cc, P, sq, s) => {
+      cc.fillStyle = r.col('#1e3a5f'); cc.beginPath(); cc.ellipse(P.x, P.y, 0.7 * s * sq, 0.4 * s, 0, 0, 6.29); cc.fill();
+    });
+    if (ap.phase !== 'idle') r.mouth(c, body, 10.2, 0, 0.36, { open: 1.0, w: 1.6, inner: '#1e3a8a' });
+    else r.mouth(c, body, 10.2, 0, 0.37, { w: 1.2 });
+  } });
+  // Fellfransen entlang der Seiten
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * MON_PI * 2;
+    const n = rigV(Math.sin(a), 0, Math.cos(a));
+    if (r.toCam(n) < -0.2) continue;
+    r.ball(rigV(body.x + n.x * 9.6, body.y - 6 + Math.sin(i * 2.3) * 1.5, body.z + n.z * 9.6), 2.2, '#e2e8f0', { gloss: 0.1, bias: -0.02 });
+  }
+  // Große Arme mit Krallen
+  for (const S of ['R', 'L']) {
+    r.capsule(sk['sh' + S], sk['elbow' + S], 2.8, 2.4, fur);
+    r.capsule(sk['elbow' + S], sk['hand' + S], 2.4, 2.0, fur);
+    r.ball(sk['hand' + S], 2.4, '#e2e8f0', { gloss: 0.15 });
+    for (let k = -1; k <= 1; k++) r.ball(rigAdd(sk['hand' + S], rigV(k * 0.9, -1.4, 1.2)), 0.45, '#7dd3fc', { outline: false, bias: 0.05 });
+  }
+  // Eishörner (gebogen), am linken hängt die rote Laterne
+  const top = rigAdd(body, rigV(0, 9.4, 0));
+  for (const sd of [1, -1]) {
+    const pts = [];
+    for (let i = 0; i <= 5; i++) {
+      const f = i / 5;
+      pts.push(rigAdd(top, rigV(sd * (2.5 + f * 5.5), 1 + Math.sin(f * MON_PI) * 3.5 - f * 0.5, 0.5 - f * 1.5)));
+    }
+    for (let i = 0; i < pts.length - 1; i++) {
+      r.capsule(pts[i], pts[i + 1], 1.6 - i * 0.25, 1.35 - i * 0.25, i % 2 ? '#bae6fd' : '#7dd3fc', { light: 0.5 });
+    }
+    if (sd < 0) {
+      const tip = pts[pts.length - 1];
+      const sway = Math.sin(t * 2.2) * 0.6;
+      const lan = rigAdd(tip, rigV(sway, -3.4, 0.3));
+      r.line([tip, rigAdd(lan, rigV(0, 1.6, 0))], '#78350f', 0.2, { outline: false, smooth: false });
+      r.ball(lan, 1.7, '#dc2626', { sy: 1.25, gloss: 0.5, bias: 0.1 });
+      r.glow(lan, 4.5, 'rgba(248,113,113,0.9)', { alpha: 0.55 + Math.sin(t * 7) * 0.1 });
+    }
+  }
+  // Frostatem und Schneeflocken
+  if (ap.phase !== 'idle') r.glow(rigAdd(body, rigV(0, 3, 10)), 4 + raise * 3, 'rgba(186,230,253,0.9)', { alpha: 0.6 });
+  for (let i = 0; i < 4; i++) {
+    const life = (t * 0.35 + i / 4) % 1;
+    r.glow(rigV(Math.sin(i * 4.1 + t) * 12, 28 - life * 26, Math.cos(i * 2.7) * 8), 1.2, 'rgba(240,249,255,0.95)', { alpha: Math.sin(life * MON_PI) * 0.8 });
+  }
+  r.flush();
+}
+
+// 7. LATERNEN-PYROMANT - schwebender Geist mit lächelndem Papierlaternen-Kopf und zwei Flammenwichten
+function monPyromancer(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 18, time, state, hitFlash, opts, { blink: 2.4, scale: 1.3 });
+  const { r, ap, t } = M;
+  const hover = 2.4 + Math.sin(t * 2.6) * 0.8;
+  monHoverShadow(r, 8, 2.8, hover);
+  const charge = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const throwP = ap.phase === 'strike' ? ap.p : -1;
+  const B = { thigh: 2.2, shin: 2.1, hipW: 1.2, torso: 5.8, shoulderW: 2.4, upperArm: 2.4, foreArm: 2.3 };
+  const shY = (B.thigh + B.shin) * 0.94 + B.torso * 0.86 + hover;
+  let handR = null;
+  let handL = null;
+  if (charge > 0) {
+    handR = rigV(1.6, shY + 2 * charge, 2.6);
+    handL = rigV(-1.6, shY + 2 * charge, 2.6);
+  } else if (throwP >= 0) {
+    handR = rigV(0.8, shY + heroLerp(2, -1, rigEaseOut(Math.min(1, throwP * 2))), heroLerp(2.6, 4.4, Math.min(1, throwP * 2)));
+    handL = rigV(-2.4, shY - 2.5, 0.5);
+  }
+  const sk = rigBiped(t, Object.assign({}, B, { moving: false, handR: handR && rigSub(handR, rigV(0, hover, 0)), handL: handL && rigSub(handL, rigV(0, hover, 0)) }));
+  for (const k of Object.keys(sk)) { const v = sk[k]; if (v && typeof v === 'object' && 'y' in v) v.y += hover; }
+  // Zerfranstes Gewand (schwebt, kein Unterleib)
+  const neck = rigAdd(rigLerp(sk.shR, sk.shL, 0.5), rigV(0, 0.4, 0));
+  const hem = rigV(Math.sin(t * 2) * 0.5, hover - 0.8, M.moving ? -1.2 : Math.cos(t * 1.7) * 0.3);
+  r.cone(neck, hem, 1.8, 3.6, '#4a1d2e', { sz: 0.9, hem: '#fbbf24', hemW: 0.35, bias: 0 });
+  for (let k = 0; k < 7; k++) {
+    const a = (k / 7) * MON_PI * 2;
+    const n = rigV(Math.sin(a), 0, Math.cos(a));
+    if (r.toCam(n) < -0.3) continue;
+    const b = rigV(hem.x + n.x * 3.4, hem.y + 0.3, hem.z + n.z * 3.1);
+    r.poly([rigAdd(b, rigV(-n.z * 0.7, 0, n.x * 0.7)), rigAdd(b, rigV(n.x * 0.4, -1.6 - Math.sin(t * 5 + k) * 0.4, n.z * 0.4)), rigAdd(b, rigV(n.z * 0.7, 0, -n.x * 0.7))], '#4a1d2e', { smooth: false, bias: 0.02 });
+  }
+  heroArms(r, sk, '#5b2338', '#78350f', { wide: '#5b2338', glove: '#3f1d14' });
+  // Laternenkopf mit Rippen und gemaltem Lächeln
+  const H = rigAdd(sk.neck, rigV(0, 3.6, 0.3));
+  const bright = 0.75 + charge * 0.25 + Math.sin(t * 9) * 0.05;
+  r.glow(H, 9, 'rgba(251,146,60,0.9)', { alpha: 0.35 * bright, bias: -0.5 });
+  r.capsule(rigAdd(H, rigV(0, 4.2, 0)), rigAdd(H, rigV(0, 3.5, 0)), 1.6, 2.2, '#3f2414', { bias: 0.1 });
+  r.ball(H, 3.9, charge > 0.5 ? '#fdba74' : '#fb923c', { sy: 1.15, gloss: 0.5, bias: 0.05, after: (c, P, rr) => {
+    c.save(); c.strokeStyle = rr.col('#c2410c'); c.lineWidth = 0.3 * rr.s; c.globalAlpha *= 0.8;
+    for (let i = -2; i <= 2; i++) { c.beginPath(); c.ellipse(P.x, P.y + i * 1.5 * rr.s, 3.85 * rr.s * Math.cos(i * 0.35), 0.6 * rr.s, 0, 0, Math.PI); c.stroke(); }
+    c.restore();
+    r.eye(c, H, 3.9, 0.4, 0.1, { style: 'happy', lid: '#7c2d12', size: 0.85 });
+    r.eye(c, H, 3.9, -0.4, 0.1, { style: 'happy', lid: '#7c2d12', size: 0.85 });
+    r.mouth(c, H, 3.9, 0, -0.3, { w: 1.1, color: '#7c2d12' });
+    r.blush(c, H, 3.9, 0.65, -0.15, '#ef4444', 0.8);
+    r.blush(c, H, 3.9, -0.65, -0.15, '#ef4444', 0.8);
+  } });
+  r.capsule(rigAdd(H, rigV(0, -4.2, 0)), rigAdd(H, rigV(0, -3.6, 0)), 1.8, 2.3, '#3f2414', { bias: 0.1 });
+  // Zwei Flammenwichte kreisen um ihn
+  for (let i = 0; i < 2; i++) {
+    const a = t * 1.8 + i * MON_PI;
+    const p = rigV(Math.cos(a) * 6.5, shY + 2 + Math.sin(t * 3 + i) * 1.5, Math.sin(a) * 5);
+    r.glow(p, 3, 'rgba(251,191,36,0.9)', { alpha: 0.6 });
+    r.ball(p, 1.1, '#fbbf24', { outline: false, gloss: 0.6, after: (c, P, rr) => {
+      c.save(); c.fillStyle = '#7c2d12'; c.beginPath(); c.arc(P.x - 0.4 * rr.s, P.y, 0.2 * rr.s, 0, 6.29); c.arc(P.x + 0.4 * rr.s, P.y, 0.2 * rr.s, 0, 6.29); c.fill(); c.restore();
+    } });
+    r.poly([rigAdd(p, rigV(-0.8, 0.5, 0)), rigAdd(p, rigV(Math.sin(t * 10 + i) * 0.3, 2.3, 0)), rigAdd(p, rigV(0.8, 0.5, 0))], '#f97316', { outline: false, bias: -0.05 });
+  }
+  // Feuerball zwischen den Händen / im Flug
+  if (charge > 0) monCharge(r, rigLerp(sk.handR, sk.handL, 0.5), 1.5 + charge * 2.2, 'rgba(249,115,22,0.95)', charge);
+  if (throwP >= 0 && throwP < 0.8) monCharge(r, rigAdd(sk.handR, rigV(0, 0, 2 + throwP * 18)), 3 * (1 - throwP * 0.5), 'rgba(249,115,22,0.95)', 1 - throwP);
+  r.flush();
+}
+
+// 8. WOLKEN-ASTROLOGE - Eulen-Weiser mit Strohkegelhut, O-Mikuji-Streifen, Sternenmantel und Astrolabium
+function monStarAstromancer(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 20, time, state, hitFlash, opts, { blink: 1.1, scale: 1.2 });
+  const { r, ap, t } = M;
+  const hover = 3.2 + Math.sin(t * 2.2) * 1.0;
+  monHoverShadow(r, 10, 3.2, hover);
+  const charge = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const cast = ap.phase === 'strike' ? ap.p : -1;
+  const body = rigV(0, 7.5 + hover, 0);
+  // Sternenmantel
+  r.cone(rigAdd(body, rigV(0, 4.5, -0.3)), rigV(0, hover + 0.2, -0.6 - (M.moving ? 1 : 0)), 3.6, 6.2, '#312e81', { sz: 0.9, hem: '#fde047', hemW: 0.35, after: (c, T, Bt, rr) => {
+    c.save(); c.fillStyle = rr.col('#fde68a');
+    const stars = [[-3, -2], [2.5, -3.5], [-1, -5], [3.5, -1.2], [0.5, -1.5], [-4, -4]];
+    for (const st of stars) {
+      const x = Bt.x + st[0] * rr.s;
+      const y = Bt.y + st[1] * rr.s;
+      const s = 0.45 * rr.s * (0.7 + 0.3 * Math.sin(t * 3 + st[0]));
+      c.beginPath(); c.moveTo(x, y - s * 2); c.lineTo(x + s * 0.5, y - s * 0.5); c.lineTo(x + s * 2, y); c.lineTo(x + s * 0.5, y + s * 0.5);
+      c.lineTo(x, y + s * 2); c.lineTo(x - s * 0.5, y + s * 0.5); c.lineTo(x - s * 2, y); c.lineTo(x - s * 0.5, y - s * 0.5); c.fill();
+    }
+    c.restore();
+  } });
+  // Federbauch
+  r.ball(body, 5.6, '#4c4f8a', { sy: 1.1, gloss: 0.2, bias: 0.1, after: (c) => {
+    r.mark(c, body, 5.6, 0, -0.1, (cc, P, sq, s) => {
+      cc.fillStyle = r.col('#e9e3cf'); cc.beginPath(); cc.ellipse(P.x, P.y, 3.2 * s * sq, 3.8 * s, 0, 0, 6.29); cc.fill();
+      cc.strokeStyle = r.col('#a8a29e'); cc.lineWidth = 0.3 * s;
+      for (let i = 0; i < 3; i++) for (let j = -1; j <= 1; j++) {
+        const x = P.x + j * 1.3 * s * sq;
+        const y = P.y - 2 * s + i * 1.6 * s;
+        cc.beginPath(); cc.arc(x, y, 0.55 * s, 0.2, Math.PI - 0.2); cc.stroke();
+      }
+    });
+  } });
+  // Flügel-Arme halten den Stab
+  const handR = rigAdd(body, rigV(3.6, 1 + charge * 3, 3.0 + charge));
+  const handL = rigAdd(body, rigV(-3.8, 0.5 + Math.sin(t * 2) * 0.4, 1.8));
+  for (const [sh, hand] of [[rigAdd(body, rigV(4.4, 3, 0)), handR], [rigAdd(body, rigV(-4.4, 3, 0)), handL]]) {
+    r.capsule(sh, hand, 1.6, 1.0, '#3f427a');
+    const sdx = sh.x > 0 ? 1 : -1;
+    r.poly([sh, hand, rigAdd(hand, rigV(sdx * 0.6, -2.6, -1)), rigAdd(sh, rigV(sdx * 1.5, -4.5, -1.5))], '#3f427a', { bias: -0.05 });
+  }
+  const staffTop = rigAdd(handR, rigV(0.4, 6, 0.6));
+  r.line([rigAdd(handR, rigV(-0.4, -5, -0.6)), staffTop], '#92400e', 0.6, { smooth: false });
+  // Astrolabium: kreisende Ringe um einen Stern
+  const spin = t * (1.5 + charge * 6);
+  for (let i = 0; i < 2; i++) {
+    const pts = [];
+    for (let k = 0; k <= 16; k++) {
+      const a = (k / 16) * MON_PI * 2;
+      const tiltA = spin * (i ? -1 : 1) + i * 1.2;
+      pts.push(rigAdd(staffTop, rigV(Math.cos(a) * 2.4, Math.sin(a) * 2.4 * Math.cos(tiltA), Math.sin(a) * 2.4 * Math.sin(tiltA))));
+    }
+    r.line(pts, '#fbbf24', 0.25, { outline: false, smooth: false });
+  }
+  monCharge(r, staffTop, 1.4 + charge * 2.5, 'rgba(253,224,71,0.95)', 0.7 + charge * 0.3);
+  if (cast >= 0 && cast < 0.8) monCharge(r, rigAdd(staffTop, rigV(0, -2 * cast, 3 + cast * 16)), 2.5, 'rgba(196,181,253,0.95)', 1 - cast);
+  // Eulenkopf mit Gesichtsschleier, Riesenaugen und Federohren
+  const H = rigAdd(body, rigV(0, 8.6, 0.4));
+  r.ball(H, 5.0, '#5b5f9e', { gloss: 0.2, after: (c) => {
+    for (const sd of [1, -1]) {
+      r.mark(c, H, 5.0, sd * 0.42, 0.0, (cc, P, sq, s) => {
+        cc.fillStyle = r.col('#e0e7ff'); cc.beginPath(); cc.ellipse(P.x, P.y, 2.1 * s * sq, 2.1 * s, 0, 0, 6.29); cc.fill();
+      });
+    }
+    const big = ap.phase !== 'idle' ? 1.5 : 1.3;
+    r.eye(c, H, 5.0, 0.42, 0.0, { white: false, color: '#f59e0b', pupil: '#1e1b4b', size: big, tall: 1.0, blink: M.blink });
+    r.eye(c, H, 5.0, -0.42, 0.0, { white: false, color: '#f59e0b', pupil: '#1e1b4b', size: big, tall: 1.0, blink: M.blink });
+  } });
+  r.capsule(rigAdd(H, rigV(0, -0.6, 4.4)), rigAdd(H, rigV(0, -1.8, 5.2)), 0.7, 0.2, '#fbbf24', { bias: 0.3 });
+  for (const sd of [1, -1]) heroEar(r, H, 5.0, sd * 0.7, 0.55, '#3f427a', { len: 2.2, w: 0.25, tilt: rigV(sd * 0.6, 0.6, 0) });
+  // Strohkegelhut mit Glücksstreifen
+  const hatBot = rigAdd(H, rigV(0, 3.4, -0.2));
+  r.cone(rigAdd(hatBot, rigV(0, 5.2, -0.6)), hatBot, 0.3, 6.2, '#d4a24c', { sz: 1, bias: 0.5 });
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * MON_PI * 2 + 0.4;
+    const n = rigV(Math.sin(a), 0, Math.cos(a));
+    if (r.toCam(n) < -0.2) continue;
+    const b = rigAdd(hatBot, rigV(n.x * 5.8, 0, n.z * 5.8));
+    const sway = Math.sin(t * 3 + i) * 0.3;
+    r.poly([b, rigAdd(b, rigV(0.4 + sway, -2.4, 0)), rigAdd(b, rigV(-0.3 + sway, -2.4, 0))], '#f8fafc', { smooth: false, bias: 0.55 });
+  }
+  r.flush();
+}
+
+// 20. ORIGAMI-KRIEGER - gefalteter Papier-Samurai mit Kabuto, Mondsichel, roter Menpo-Maske und Tusche-Katana
+function monCursedKnight(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 19, time, state, hitFlash, opts, { blink: 0.2, scale: 1.4 });
+  const { r, ap, t } = M;
+  r.shadow(8.5, 3, 0.32);
+  const B = { thigh: 2.5, shin: 2.4, hipW: 1.5, torso: 5.8, shoulderW: 2.8, upperArm: 2.4, foreArm: 2.3, freq: 11 };
+  const shY = (B.thigh + B.shin) * 0.94 + B.torso * 0.86;
+  let handR = null;
+  let handL = null;
+  let bladeDir = rigNorm(rigV(0.3, 0.25, 1));
+  let twist = 0;
+  if (ap.phase === 'windup') {
+    const k = rigEaseInOut(ap.p);
+    handR = rigV(heroLerp(1.8, 1.4, k), heroLerp(shY - 3, shY + 3.2, k), heroLerp(2.5, -0.6, k));
+    handL = rigAdd(handR, rigV(-1.1, -0.4, 0.2));
+    bladeDir = rigNorm(rigV(heroLerp(0.3, 0.3, k), heroLerp(0.25, 0.9, k), heroLerp(1, -0.5, k)));
+    twist = 0.4 * k;
+  } else if (ap.phase === 'strike') {
+    const k = ap.p < 0.35 ? rigEaseOut(ap.p / 0.35) : 1;
+    handR = rigV(heroLerp(1.4, -1.6, k), heroLerp(shY + 3.2, shY - 3.6, k), heroLerp(-0.6, 3.8, k));
+    handL = rigAdd(handR, rigV(-0.9, 0.5, -0.4));
+    bladeDir = rigNorm(rigV(heroLerp(0.3, -0.6, k), heroLerp(0.9, -0.55, k), heroLerp(-0.5, 0.8, k)));
+    twist = heroLerp(0.4, -0.5, k);
+  }
+  const sk = rigBiped(t, Object.assign({}, B, { moving: M.moving, handR, handL, twist, crouch: ap.phase === 'strike' ? 0.25 : 0 }));
+  sk.H = rigV(sk.head.x, sk.neck.y + 3.9, sk.head.z + 0.2);
+  sk.R = 4.0;
+  const paper = '#f1ede4';
+  const ink = '#1c1f2b';
+  heroLegs(r, sk, ink, '#111318', { shin: paper, toe: 0.9 });
+  // Kusazuri: gefaltete Papier-Schurzplatten
+  heroRobe(r, sk, paper, t, M.moving, { topY: 1.6, hemY: sk.pelvis.y - 1.6, rt: 2.2, rb: 3.4, hem: '#b91c1c', hemW: 0.5, trail: 0.3, after: (c, T, Bt, rr) => {
+    c.save(); c.strokeStyle = rr.col('#9ca3af'); c.lineWidth = 0.3 * rr.s;
+    for (let i = -2; i <= 2; i++) { c.beginPath(); c.moveTo(T.x + i * 1.0 * rr.s, T.y); c.lineTo(Bt.x + i * 1.6 * rr.s, Bt.y + 1.2 * rr.s); c.stroke(); }
+    c.restore();
+  } });
+  // Do: Brustpanzer aus gefaltetem Papier mit roter Schnürung
+  heroTorso(r, sk, paper, { rt: 2.7, rb: 2.2, after: (c, T, Bt, rr) => {
+    c.save(); c.strokeStyle = rr.col('#b91c1c'); c.lineWidth = 0.35 * rr.s;
+    for (let i = 0; i < 3; i++) {
+      const y = T.y + (Bt.y - T.y) * (0.3 + i * 0.22);
+      c.beginPath(); c.moveTo(T.x - 2.2 * rr.s, y); c.lineTo(T.x + 2.2 * rr.s, y); c.stroke();
+    }
+    c.restore();
+  } });
+  // Sode: eckige Schulterplatten
+  for (const S of ['R', 'L']) {
+    const sh = sk['sh' + S];
+    const sd = S === 'R' ? 1 : -1;
+    r.poly([rigAdd(sh, rigV(-sd * 0.4, 1.2, 1.2)), rigAdd(sh, rigV(sd * 1.6, 0.6, 1.3)), rigAdd(sh, rigV(sd * 2.1, -2.4, 1.0)), rigAdd(sh, rigV(sd * 0.4, -2.0, 1.4))], paper, { smooth: false, bias: 0.35 });
+  }
+  heroArms(r, sk, ink, '#111318', { cuff: '#b91c1c' });
+  // Kopf: Kabuto mit Nackenschutz, goldene Mondsichel, rote Menpo mit Glutaugen
+  heroHead(r, sk, '#7f1d1d', (c, H, R) => {
+    r.eye(c, H, R, 0.38, 0.0, { style: 'glow', color: '#ef4444', size: 0.75 });
+    r.eye(c, H, R, -0.38, 0.0, { style: 'glow', color: '#ef4444', size: 0.75 });
+    r.mark(c, H, R, 0, -0.42, (cc, P, sq, s) => {
+      cc.strokeStyle = r.col('#f8fafc'); cc.lineWidth = 0.3 * s;
+      cc.beginPath(); for (let i = -2; i <= 2; i++) { cc.moveTo(P.x + i * 0.5 * s * sq, P.y - 0.3 * s); cc.lineTo(P.x + i * 0.5 * s * sq, P.y + 0.5 * s); } cc.stroke();
+    });
+  }, (c, H, R) => {
+    r.cap(c, H, R, (az) => 0.28 + Math.abs(az) * 0.02 - (Math.abs(az) > 2 ? (Math.abs(az) - 2) * 0.9 : 0), ink, { grow: 1.12, gloss: 0.5 });
+  });
+  const neckGuard0 = rigAdd(sk.H, rigV(0, 1.6, -0.3));
+  r.cone(neckGuard0, rigAdd(sk.H, rigV(0, -0.6, -1.2)), 4.2, 5.6, ink, { sz: 0.95, bias: -0.25 });
+  const crest = rigSurfPt(sk.H, sk.R * 1.15, 0, 0.42);
+  r.poly([rigAdd(crest, rigV(-0.7, -0.2, 0.3)), rigAdd(crest, rigV(-4.6, 4.8, 1.2)), rigAdd(crest, rigV(-2.6, 1.6, 0.9)), rigAdd(crest, rigV(0, 0.9, 0.8)), rigAdd(crest, rigV(2.6, 1.6, 0.9)), rigAdd(crest, rigV(4.6, 4.8, 1.2)), rigAdd(crest, rigV(0.7, -0.2, 0.3))], '#fbbf24', { bias: 1.2, lineWidth: 0.5 });
+  r.ball(rigAdd(crest, rigV(0, 0.1, 0.4)), 0.7, '#dc2626', { bias: 1.3, gloss: 0.5 });
+  // Katana mit Tuschespur
+  heroDrawBlade(r, sk.handR, bladeDir, { blade: '#f8fafc', grip: '#111318', guard: '#fbbf24', len: 9.8, curve: 0.6, bladeW: 0.5 });
+  if (ap.phase === 'strike' && ap.p < 0.6) {
+    const tip = rigAdd(sk.handR, rigScale(bladeDir, 9.8));
+    for (let i = 0; i < 4; i++) {
+      r.ball(rigAdd(tip, rigV(Math.sin(i * 2.3) * 2, -i * 1.5 * ap.p - 1, Math.cos(i * 1.7) * 2)), 0.7 - i * 0.12, '#0f0f14', { outline: false, gloss: 0.4, alpha: 1 - ap.p });
+    }
+  }
+  // Tropfende Tusche
+  const drip = (t * 0.8) % 1;
+  r.ball(rigAdd(sk.pelvis, rigV(1.4, 1.2 - drip * 4, 2.6)), 0.4 * (1 - drip * 0.5), '#0f0f14', { outline: false, alpha: 1 - drip });
+  r.flush();
+}
+
+// 5. SMARAGD-NATTER - Jade-Banddrache mit Mähne, Barteln, Geweih und Kodama-Reiter mit Seerosenschirm
+function monSlitheringViper(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 16, time, state, hitFlash, opts, { blink: 0.5, scale: 1.1 });
+  const { r, ap, t } = M;
+  r.shadow(14, 4, 0.26, 0, 0);
+  const coil = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const lunge = ap.phase === 'strike' ? Math.sin(Math.min(1, ap.p * 1.6) * MON_PI) : 0;
+  const rise = [7 + coil * 3 - lunge * 3, 5.6 + coil * 2.2 - lunge * 2, 3.9 + coil - lunge, 2.4, 1.3, 0.6, 0.2];
+  const pts = rigSerpent(t, { n: 13, seg: 1.9, moving: M.moving, amp: 2.4, idleAmp: 1.0, k: 0.7, headZ: 7 - coil * 3 + lunge * 7, rise, height: 1.2 });
+  const jade = '#10b981';
+  const belly = '#a7f3d0';
+  // Körpersegmente vom Schwanz zum Kopf, dicker in der Mitte
+  for (let i = pts.length - 1; i > 0; i--) {
+    const f = i / (pts.length - 1);
+    const rad = 0.55 + Math.sin((1 - f) * MON_PI * 0.85 + 0.25) * 1.9;
+    const radN = 0.55 + Math.sin((1 - (i - 1) / (pts.length - 1)) * MON_PI * 0.85 + 0.25) * 1.9;
+    r.capsule(pts[i], pts[i - 1], rad, radN, i % 2 ? jade : '#0ea371', { light: 0.12 });
+    // Bauchschuppen-Streifen
+    r.line([rigAdd(pts[i], rigV(0, -rad * 0.55, 0)), rigAdd(pts[i - 1], rigV(0, -radN * 0.55, 0))], belly, Math.min(rad, radN) * 0.7, { outline: false, bias: 0.05, smooth: false });
+    // Rückenflosse aus weißer Seide
+    if (i < pts.length - 2 && i % 2 === 0) {
+      const top = rigAdd(pts[i], rigV(0, rad + 0.2, 0));
+      r.poly([rigAdd(top, rigV(0, 0, 0.9)), rigAdd(top, rigV(Math.sin(t * 5 + i) * 0.3, 1.5, -0.4)), rigAdd(top, rigV(0, 0, -1.1))], '#ecfeff', { smooth: true, bias: 0.15 });
+    }
+  }
+  // Kopf mit Schnauze, Geweih, Barteln und Mähne
+  const H = pts[0];
+  const HR = 2.5;
+  const mane = rigChain(t, rigAdd(pts[1], rigV(0, 2.1, 0)), rigV(0, 0.2, -1), { n: 4, seg: 1.2, amp: 0.8, ampY: 0.4, freq: 6, k: 0.9 });
+  r.line(mane, '#e0f2fe', 1.4, { bias: -0.05 });
+  r.ball(H, HR, jade, { gloss: 0.4, after: (c) => {
+    r.eye(c, H, HR, 0.62, 0.25, { style: 'slit', color: '#fbbf24', size: 0.7, blink: M.blink });
+    r.eye(c, H, HR, -0.62, 0.25, { style: 'slit', color: '#fbbf24', size: 0.7, blink: M.blink });
+  } });
+  const snT = rigAdd(H, rigV(0, -0.4, 3.0));
+  r.capsule(rigAdd(H, rigV(0, -0.2, 1.2)), snT, 1.8, 1.0, jade, { bias: 0.1 });
+  r.ball(rigAdd(snT, rigV(0, 0.3, 0.2)), 0.55, '#065f46', { bias: 0.2, gloss: 0.4 });
+  if (lunge > 0.2) r.capsule(rigAdd(snT, rigV(0, -0.6, -0.4)), rigAdd(snT, rigV(0, -1.2, 1.6)), 0.25, 0.1, '#f43f5e', { bias: 0.2 });
+  for (const sd of [1, -1]) {
+    const w0 = rigAdd(snT, rigV(sd * 0.8, -0.2, -0.3));
+    r.line(rigChain(t + sd, w0, rigV(sd, -0.2, -0.6), { n: 4, seg: 1.1, amp: 0.5, ampY: 0.5, freq: 4, k: 1 }), '#fde68a', 0.25, { outline: false, bias: 0.15 });
+    const a0 = rigSurfPt(H, HR, sd * 0.6, 0.85);
+    const a1 = rigAdd(a0, rigV(sd * 0.6, 2.0, -1.2));
+    r.line([a0, a1, rigAdd(a1, rigV(sd * 0.8, 0.9, -0.6))], '#f8fafc', 0.38, { smooth: false, bias: 0.1 });
+    r.line([rigLerp(a0, a1, 0.6), rigAdd(rigLerp(a0, a1, 0.6), rigV(-sd * 0.3, 0.9, 0.3))], '#f8fafc', 0.3, { smooth: false, bias: 0.1 });
+  }
+  // Kodama-Reiter mit Seerosenblatt-Schirm auf der Schwanzspitze
+  const rider = pts[pts.length - 2];
+  monKodama(r, rigAdd(rider, rigV(0, 0.8, 0)), t, 0.75);
+  const umb = rigAdd(rider, rigV(0.3, 4.6, 0));
+  r.line([rigAdd(rider, rigV(0.6, 1.6, 0.2)), umb], '#65a30d', 0.2, { outline: false, smooth: false });
+  r.ball(umb, 2.2, '#4ade80', { sy: 0.32, gloss: 0.4, bias: 0.4 });
+  r.flush();
+}
+
+// 6. DÜNEN-SCHLUND - Terrakotta-Wüstenlotus mit Kintsugi-Goldadern, Perlzähnen und Tautropfen-Juwel
+function monDuneMaw(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 16, time, state, hitFlash, opts, { scale: 1.1 });
+  const { r, ap, t } = M;
+  const sink = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const burst = ap.phase === 'strike' ? (ap.p < 0.25 ? rigEaseOut(ap.p / 0.25) : 1 - rigEaseInOut((ap.p - 0.25) / 0.75)) : 0;
+  // Wirbelnder Sandtrichter
+  ctx.save();
+  for (let i = 0; i < 3; i++) {
+    const rr = (15 - i * 4) * 1.1;
+    ctx.strokeStyle = `rgba(180, 120, 50, ${0.35 - i * 0.08})`;
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.moveTo(cx - w * 0.3, cy - h * 0.15);
-    ctx.quadraticCurveTo(cx - w * 0.15, cy - h * 0.35, cx - w * 0.05, cy - h * 0.15);
+    ctx.ellipse(cx, cy + 16, rr, rr * 0.36, 0, t * (1 + i) % (Math.PI * 2), t * (1 + i) % (Math.PI * 2) + 4.2);
     ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx + w * 0.3, cy - h * 0.15);
-    ctx.quadraticCurveTo(cx + w * 0.15, cy - h * 0.35, cx + w * 0.05, cy - h * 0.15);
-    ctx.stroke();
-
-    // Rote Wangenstreifen
-    ctx.beginPath();
-    ctx.moveTo(cx - w * 0.4, cy + h * 0.1);
-    ctx.lineTo(cx - w * 0.15, cy + h * 0.18);
-    ctx.moveTo(cx + w * 0.4, cy + h * 0.1);
-    ctx.lineTo(cx + w * 0.15, cy + h * 0.18);
-    ctx.stroke();
-  } else if (style === 'noh') {
-    // Kaonashi / No-Face Tränenpunkte
-    ctx.beginPath();
-    ctx.ellipse(cx - w * 0.22, cy - h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx + w * 0.22, cy - h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx - w * 0.22, cy + h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx + w * 0.22, cy + h * 0.2, w * 0.08, h * 0.12, 0, 0, Math.PI * 2);
-    ctx.fill();
   }
-
-  // Augen-Schlitze
-  ctx.fillStyle = '#0f172a';
+  ctx.fillStyle = 'rgba(146, 84, 30, 0.45)';
   ctx.beginPath();
-  ctx.ellipse(cx - w * 0.2, cy - h * 0.05, w * 0.12, h * 0.06, 0.1, 0, Math.PI * 2);
-  ctx.ellipse(cx + w * 0.2, cy - h * 0.05, w * 0.12, h * 0.06, -0.1, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy + 16, 9, 3.2, 0, 0, Math.PI * 2);
   ctx.fill();
-
   ctx.restore();
-}
-
-/** Zeichnet einen niedlichen kleinen Kodama (Baumgeist mit Wackelkopf) */
-export function drawKodama(ctx, x, y, tilt = 0, scale = 1) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scale, scale);
-
-  // Kleiner milchweißer Körper
-  ctx.fillStyle = '#f8fafc';
-  ctx.beginPath();
-  ctx.ellipse(0, 4, 3, 5, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Wackelkopf
-  ctx.translate(0, -2);
-  ctx.rotate(tilt);
-  ctx.fillStyle = '#f8fafc';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 5, 4.2, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Neugierige hohle Augen & Mund
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.arc(-2, -0.5, 0.9, 0, Math.PI * 2);
-  ctx.arc(2, -0.5, 0.9, 0, Math.PI * 2);
-  ctx.arc(0, 1.8, 0.75, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.restore();
-}
-
-/** Zeichnet einen flauschigen Rußmännchen-Begleiter (Susuwatari) */
-export function drawSootSprite(ctx, x, y, r, time, holdingCandy = false) {
-  ctx.save();
-  ctx.translate(x, y);
-
-  // Flauschige Stachelspitzen
-  ctx.fillStyle = '#09090b';
-  ctx.beginPath();
-  const spikes = 10;
-  for (let i = 0; i < spikes; i++) {
-    const angle = (i / spikes) * Math.PI * 2;
-    const spikeR = r + Math.sin(time * 8 + i * 2) * 1.5;
-    const px = Math.cos(angle) * spikeR;
-    const py = Math.sin(angle) * spikeR;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
+  const breathe = Math.sin(t * 2.6) * 0.6;
+  const height = 4.5 - sink * 3 + burst * 6 + breathe * 0.3;
+  const terra = '#c2683a';
+  // Segmentierter Hals aus Keramikringen
+  const base = rigV(0, 0, 0);
+  const sway = Math.sin(t * 1.4) * 0.6;
+  const top = rigV(sway, height + 4.5, burst * 1.5);
+  for (let i = 0; i < 3; i++) {
+    const a = rigLerp(base, top, i / 3);
+    const b = rigLerp(base, top, (i + 1) / 3);
+    r.cone(b, a, 2.7 - i * 0.25, 3.1 - i * 0.25, i % 2 ? '#b45f34' : terra, { sz: 1, after: (c, T, Bt, rr) => {
+      c.save(); c.strokeStyle = rr.col('#fbbf24'); c.lineWidth = 0.28 * rr.s;
+      c.beginPath(); c.moveTo(Bt.x - 1.2 * rr.s, Bt.y - 0.4 * rr.s); c.lineTo(Bt.x - 0.2 * rr.s, Bt.y - 1.6 * rr.s); c.lineTo(Bt.x + 0.9 * rr.s, Bt.y - 2.0 * rr.s); c.stroke(); c.restore();
+    } });
   }
-  ctx.closePath();
-  ctx.fill();
-
-  // Zentraler runder Körper
-  ctx.beginPath();
-  ctx.arc(0, 0, r * 0.85, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Große Kulleraugen
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(-r * 0.35, -r * 0.15, r * 0.38, 0, Math.PI * 2);
-  ctx.arc(r * 0.35, -r * 0.15, r * 0.38, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Pupillen (blicken neugierig)
-  const pLook = Math.sin(time * 3) * 0.5;
-  ctx.fillStyle = '#09090b';
-  ctx.beginPath();
-  ctx.arc(-r * 0.35 + pLook, -r * 0.15, r * 0.18, 0, Math.PI * 2);
-  ctx.arc(r * 0.35 + pLook, -r * 0.15, r * 0.18, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Konpeitō (Stern-Zuckerchen in den Pfötchen)
-  if (holdingCandy) {
-    const candyY = r * 0.7;
-    ctx.fillStyle = '#fde047';
-    ctx.beginPath();
-    ctx.arc(0, candyY, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fbbf24';
-    ctx.beginPath();
-    ctx.arc(-1, candyY - 1, 1, 0, Math.PI * 2);
-    ctx.fill();
+  // Blütenblätter: geschlossen beim Ausholen, weit offen beim Zuschnappen
+  const open = 0.35 + burst * 0.9 - sink * 0.3 + breathe * 0.04;
+  const N = 8;
+  for (let layer = 0; layer < 2; layer++) {
+    for (let k = 0; k < N; k++) {
+      const a = (k / N) * MON_PI * 2 + layer * (MON_PI / N);
+      const n = rigV(Math.sin(a), 0, Math.cos(a));
+      const len = layer ? 5.6 : 7.4;
+      const lift = Math.cos(open * (layer ? 1.2 : 1.0)) * len;
+      const outv = Math.sin(open * (layer ? 1.2 : 1.0)) * len;
+      const b0 = rigAdd(top, rigV(n.x * 2.4, 0, n.z * 2.4));
+      const tip = rigAdd(b0, rigV(n.x * outv, lift, n.z * outv));
+      const side = rigV(n.z * 1.9, 0, -n.x * 1.9);
+      r.poly([rigAdd(b0, side), rigAdd(rigLerp(b0, tip, 0.6), rigScale(side, 1.3)), tip, rigSub(rigLerp(b0, tip, 0.6), rigScale(side, 1.3)), rigSub(b0, side)],
+        layer ? '#e0915e' : terra, { bias: layer ? 0.1 : 0, after: (c, Ps, rr) => {
+          // Kintsugi-Goldader
+          c.save(); c.strokeStyle = rr.col('#fbbf24'); c.lineWidth = 0.3 * rr.s;
+          c.beginPath(); c.moveTo((Ps[0].x + Ps[4].x) / 2, (Ps[0].y + Ps[4].y) / 2); c.lineTo((Ps[1].x * 0.3 + Ps[2].x * 0.7), (Ps[1].y * 0.3 + Ps[2].y * 0.7)); c.stroke();
+          c.restore();
+        } });
+    }
   }
-
-  ctx.restore();
+  // Schlund mit Perlzähnen
+  const mawR = 1.6 + burst * 1.4;
+  r.ball(rigAdd(top, rigV(0, 0.6, 0)), mawR + 0.8, '#3b0f0f', { sy: 0.45, gloss: 0, bias: 0.3 });
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * MON_PI * 2;
+    r.ball(rigAdd(top, rigV(Math.sin(a) * (mawR + 0.4), 1.0, Math.cos(a) * (mawR + 0.4))), 0.45, '#fdf6e3', { outline: false, gloss: 0.6, bias: 0.35 });
+  }
+  // Tautropfen-Juwel schwebt über dem Kelch
+  const gem = rigAdd(top, rigV(0, 4.2 + Math.sin(t * 2) * 0.6 - burst * 2, 0));
+  r.ball(gem, 0.9, '#7dd3fc', { gloss: 0.7, bias: 0.5 });
+  r.glow(gem, 2.6, 'rgba(125,211,252,0.9)', { alpha: 0.6 });
+  if (burst > 0.3) {
+    for (let i = 0; i < 5; i++) {
+      const a = i * 1.26 + t * 3;
+      r.glow(rigAdd(top, rigV(Math.cos(a) * 6 * burst, 1 + i * 0.5, Math.sin(a) * 6 * burst)), 1.6, 'rgba(234,179,8,0.85)', { alpha: burst });
+    }
+  }
+  r.flush();
 }
 
-/** Zeichnet eine traditionelle japanische Papierlaterne (Chōchin) */
-export function drawPaperLantern(ctx, x, y, w, h, time, glowColor = '#f59e0b') {
-  ctx.save();
-  ctx.translate(x, y);
-
-  // Weicher Lichtschein
-  ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
-  ctx.beginPath();
-  ctx.arc(0, 0, Math.max(w, h) * 0.9 + Math.sin(time * 4) * 2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Aufhängung
-  ctx.strokeStyle = '#451a03';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(0, -h * 0.6);
-  ctx.lineTo(0, -h * 0.4);
-  ctx.stroke();
-
-  // Laternenkörper (Rot / Pergament)
-  ctx.fillStyle = '#dc2626';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, w * 0.5, h * 0.45, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Warmes inneres Licht
-  ctx.fillStyle = glowColor;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, w * 0.28, h * 0.28, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Bambus-Rippen
-  ctx.strokeStyle = '#7f1d1d';
-  ctx.lineWidth = 0.9;
-  ctx.beginPath();
-  ctx.ellipse(0, -h * 0.2, w * 0.42, h * 0.12, 0, 0, Math.PI * 2);
-  ctx.ellipse(0, h * 0.2, w * 0.42, h * 0.12, 0, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Quaste unten
-  ctx.fillStyle = '#ef4444';
-  ctx.fillRect(-1, h * 0.45, 2, 4);
-
-  ctx.restore();
+// 12. KAISER-SKORPION - Porzellan-Jade-Skorpion mit Goldkanten, acht Beinen, Scheren und leuchtendem Stachel
+function monEmperorScorpion(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 18, time, state, hitFlash, opts, { scale: 1.15 });
+  const { r, ap, t } = M;
+  r.shadow(13, 4.5, 0.3);
+  const porcelain = '#eef6f2';
+  const jade = '#34d399';
+  const gold = '#fbbf24';
+  const aim = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const stab = ap.phase === 'strike' ? Math.sin(Math.min(1, ap.p * 1.8) * MON_PI) : 0;
+  const bob = M.moving ? Math.sin(t * 16) * 0.25 : Math.sin(t * 2) * 0.15;
+  const segs = [rigV(0, 3.6 + bob, 3.2), rigV(0, 3.8 + bob, 0.6), rigV(0, 3.6 + bob, -1.9), rigV(0, 3.3 + bob, -4.0)];
+  // Acht Beine (vier pro Seite), Knie hoch, Tripod-Gang
+  for (let i = 0; i < 4; i++) {
+    for (const sd of [1, -1]) {
+      const hip = rigV(sd * 2.0, 3.2 + bob, 2.2 - i * 1.9);
+      const ph = t * 16 + i * MON_PI * 0.5 + (sd > 0 ? 0 : MON_PI);
+      const step = M.moving ? Math.sin(ph) * 1.2 : 0;
+      const lift = M.moving ? Math.max(0, Math.cos(ph)) * 1.0 : 0;
+      const foot = rigV(sd * (6.6 - Math.abs(i - 1.5) * 0.4), lift, 3.2 - i * 2.3 + step);
+      const knee = rigIK(hip, foot, 2.8, 3.2, rigV(sd * 1, 0.55, 0));
+      r.capsule(hip, knee, 0.55, 0.45, jade);
+      r.capsule(knee, foot, 0.45, 0.22, porcelain);
+    }
+  }
+  // Gepanzerter Leib
+  segs.forEach((p, i) => r.ball(p, 2.8 - i * 0.25, i === 0 ? porcelain : (i % 2 ? '#d7ede4' : porcelain), { sx: 1.15, sy: 0.6, gloss: 0.55, after: (c, P, rr) => {
+    c.save(); c.strokeStyle = rr.col(gold); c.lineWidth = 0.3 * rr.s;
+    c.beginPath(); c.ellipse(P.x, P.y, (2.8 - i * 0.25) * 1.15 * rr.s * 0.92, (2.8 - i * 0.25) * 0.6 * rr.s * 0.9, 0, MON_PI * 1.1, MON_PI * 1.9); c.stroke();
+    c.fillStyle = rr.col(jade); c.beginPath(); c.arc(P.x, P.y - 0.4 * rr.s, 0.55 * rr.s, 0, 6.29); c.fill();
+    c.restore();
+  } }));
+  // Augen
+  r.ball(rigAdd(segs[0], rigV(0.7, 1.2, 1.6)), 0.4, '#111827', { outline: false, gloss: 0.8, bias: 0.3 });
+  r.ball(rigAdd(segs[0], rigV(-0.7, 1.2, 1.6)), 0.4, '#111827', { outline: false, gloss: 0.8, bias: 0.3 });
+  // Scheren
+  for (const sd of [1, -1]) {
+    const sh = rigAdd(segs[0], rigV(sd * 2.2, 0, 1.4));
+    const hand = rigAdd(segs[0], rigV(sd * (3.2 - aim * 1.2), 1.2 + aim * 1.5, 5.4 + stab * 1.5));
+    const el = rigIK(sh, hand, 2.6, 2.6, rigV(sd, 0.6, -0.3));
+    r.capsule(sh, el, 0.75, 0.65, jade);
+    r.capsule(el, hand, 0.65, 0.9, porcelain);
+    const snap = 0.35 + Math.abs(Math.sin(t * (ap.phase !== 'idle' ? 10 : 2))) * 0.35;
+    const jawA = rigAdd(hand, rigV(sd * snap, 0.3, 2.4));
+    const jawB = rigAdd(hand, rigV(-sd * snap, 0.3, 2.2));
+    r.capsule(hand, jawA, 0.85, 0.2, porcelain, { bias: 0.05 });
+    r.capsule(hand, jawB, 0.7, 0.18, jade, { bias: 0.04 });
+  }
+  // Gebogener Schwanz mit Stachel
+  const tail = [segs[3]];
+  const curl = 1 + aim * 0.5 - stab * 0.8;
+  for (let i = 1; i <= 6; i++) {
+    const f = i / 6;
+    const ang = f * MON_PI * 0.95 * curl;
+    tail.push(rigAdd(segs[3], rigV(Math.sin(t * 1.5 + i) * 0.2, Math.sin(ang) * 7.5, -Math.cos(ang) * 4.5 + (1 - Math.cos(ang)) * 0.5 + stab * f * 7)));
+  }
+  for (let i = 1; i < tail.length; i++) r.ball(tail[i], 1.5 - i * 0.12, i % 2 ? porcelain : '#d7ede4', { gloss: 0.5, sy: 0.9 });
+  const sting = tail[tail.length - 1];
+  r.capsule(sting, rigAdd(sting, rigV(0, -1.2 - stab, 1.6 + stab * 2)), 0.7, 0.12, gold, { bias: 0.2 });
+  r.glow(sting, 2.6 + aim * 2, 'rgba(52,211,153,0.9)', { alpha: 0.4 + aim * 0.5 });
+  r.flush();
 }
 
-/** Zeichnet ein zartes Kirschblütenblatt (Sakura) */
-export function drawSakuraPetal(ctx, x, y, rot, scale = 1) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(rot);
-  ctx.scale(scale, scale);
-  ctx.fillStyle = '#fbcfe8';
-  ctx.beginPath();
-  ctx.moveTo(0, -4);
-  ctx.quadraticCurveTo(3, -2, 2, 3);
-  ctx.quadraticCurveTo(0, 5, -2, 3);
-  ctx.quadraticCurveTo(-3, -2, 0, -4);
-  ctx.fill();
-  ctx.restore();
+// 13. GRASLAND-WILDSCHWEIN - Moosrücken-Keiler mit Elfenbeinhauern, Pilzen und einem kleinen Vogel auf dem Rücken
+function monTuskBoar(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 18, time, state, hitFlash, opts, { blink: 1.9, scale: 1.2 });
+  const { r, ap, t } = M;
+  r.shadow(12, 4.2, 0.32);
+  const scrape = ap.phase === 'windup' ? ap.p : 0;
+  const charging = M.moving && (opts && opts.charging);
+  const q = rigQuad(t, { moving: M.moving, freq: charging ? 18 : 12, len: 8.5, width: 2.4, upper: 2.1, lower: 2.0, gait: charging ? 'gallop' : 'trot', crouch: scrape * 0.35 });
+  const fur = '#6b4a33';
+  const dark = '#3f2a1d';
+  q.head = rigAdd(q.head, rigV(0, -1.5 - scrape * 1.2, -0.4));
+  for (const key of ['RH', 'LH', 'RF', 'LF']) {
+    const L = q.legs[key];
+    const isF = key.charAt(1) === 'F';
+    const side = key.charAt(0) === 'R' ? 1 : -1;
+    const root = isF ? q.front : q.back;
+    const hip = rigV(side * 2.4, root.y - 0.6, root.z);
+    let foot = L.foot;
+    if (scrape > 0 && key === 'RF') foot = rigV(side * 2.4, Math.max(0, Math.sin(t * 18)) * 1.2, root.z - 0.5 + Math.sin(t * 18) * 1.5);
+    const knee = rigIK(hip, foot, 2.1, 2.0, isF ? rigV(0, 0, -1) : rigV(0, 0, 1));
+    r.capsule(hip, knee, 1.3, 1.0, fur);
+    r.capsule(knee, foot, 1.0, 0.8, dark);
+    r.ball(rigAdd(foot, rigV(0, 0.35, 0.3)), 0.85, '#1c1410', { sy: 0.7 });
+  }
+  // Wuchtiger Rumpf mit Borstenkamm
+  const mid = rigLerp(q.front, q.back, 0.5);
+  r.ball(rigAdd(q.back, rigV(0, 1.0, -0.4)), 4.0, fur, { gloss: 0.12 });
+  r.ball(rigAdd(mid, rigV(0, 1.4, 0)), 4.5, fur, { gloss: 0.12 });
+  r.ball(rigAdd(q.front, rigV(0, 2.0, 0.4)), 4.7, fur, { gloss: 0.15 });
+  for (let i = 0; i < 5; i++) {
+    const p = rigLerp(rigAdd(q.back, rigV(0, 4.6, 0)), rigAdd(q.front, rigV(0, 6.4, 0)), i / 4);
+    r.poly([rigAdd(p, rigV(0, 0, 0.8)), rigAdd(p, rigV(0, 1.6 + Math.sin(i * 2) * 0.3, -0.3)), rigAdd(p, rigV(0, 0, -0.8))], dark, { smooth: false, bias: 0.2 });
+  }
+  // Moosrücken mit Pilzen
+  const moss = rigAdd(mid, rigV(0, 5.3, -0.6));
+  r.ball(moss, 3.6, '#4d7c3a', { sy: 0.45, gloss: 0.3, bias: 0.3 });
+  r.ball(rigAdd(moss, rigV(1.4, 1.1, -0.8)), 1.0, '#dc2626', { sy: 0.6, bias: 0.4, after: (c, P, rr) => {
+    c.save(); c.fillStyle = '#fff'; c.beginPath(); c.arc(P.x - 0.3 * rr.s, P.y - 0.2 * rr.s, 0.25 * rr.s, 0, 6.29); c.arc(P.x + 0.4 * rr.s, P.y, 0.2 * rr.s, 0, 6.29); c.fill(); c.restore();
+  } });
+  r.line([rigAdd(moss, rigV(1.4, 0.3, -0.8)), rigAdd(moss, rigV(1.4, 1.0, -0.8))], '#f5f5f4', 0.35, { outline: false, bias: 0.35 });
+  // Kleiner Blaumeisen-Vogel hüpft auf dem Rücken
+  const bird = rigAdd(moss, rigV(-1.3, 1.6 + Math.abs(Math.sin(t * 3)) * 0.8, 0.6));
+  r.ball(bird, 0.85, '#60a5fa', { gloss: 0.4, bias: 0.5 });
+  r.ball(rigAdd(bird, rigV(0, 0.4, 0.6)), 0.6, '#fde047', { bias: 0.55, gloss: 0.3 });
+  r.capsule(rigAdd(bird, rigV(0, 0.4, 1.1)), rigAdd(bird, rigV(0, 0.3, 1.6)), 0.18, 0.05, '#f97316', { outline: false, bias: 0.6 });
+  // Kopf: Schnauze mit Rüsselscheibe, Hauer, Ohren, Knopfaugen
+  const H = q.head;
+  r.capsule(rigAdd(q.front, rigV(0, 2.4, 1.0)), H, 3.6, 2.8, fur);
+  r.ball(H, 2.9, fur, { gloss: 0.15, after: (c) => {
+    r.eye(c, H, 2.9, 0.6, 0.35, { color: charging || ap.phase !== 'idle' ? '#dc2626' : '#1c1410', size: 0.5, blink: M.blink });
+    r.eye(c, H, 2.9, -0.6, 0.35, { color: charging || ap.phase !== 'idle' ? '#dc2626' : '#1c1410', size: 0.5, blink: M.blink });
+  } });
+  const sn = rigAdd(H, rigV(0, -0.6, 3.0));
+  r.capsule(rigAdd(H, rigV(0, -0.3, 1.2)), sn, 2.0, 1.5, '#7c563c', { bias: 0.1 });
+  r.ball(rigAdd(sn, rigV(0, 0, 0.6)), 1.3, '#d6a28a', { sy: 0.9, bias: 0.2, after: (c, P, rr) => {
+    c.save(); c.fillStyle = rr.col('#5b2a1a'); c.beginPath(); c.arc(P.x - 0.45 * rr.s, P.y, 0.28 * rr.s, 0, 6.29); c.arc(P.x + 0.45 * rr.s, P.y, 0.28 * rr.s, 0, 6.29); c.fill(); c.restore();
+  } });
+  for (const sd of [1, -1]) {
+    const tb = rigAdd(sn, rigV(sd * 1.3, -0.6, -0.4));
+    r.line([tb, rigAdd(tb, rigV(sd * 0.9, 0.6, 0.6)), rigAdd(tb, rigV(sd * 1.0, 2.1, 0.7))], '#f5f0e1', 0.5, { bias: 0.25 });
+    heroEar(r, H, 2.9, sd * 0.95, 0.7, dark, { len: 1.8, w: 0.3, inner: '#d6a28a', tilt: rigV(sd * 0.5, 0.2, -0.6) });
+  }
+  if (charging) {
+    for (let i = 0; i < 3; i++) r.glow(rigV(Math.sin(i * 3 + t * 9) * 3, 1, q.back.z - 3 - i * 2), 2.5, 'rgba(214,211,209,0.8)', { alpha: 0.5 - i * 0.12 });
+  }
+  r.flush();
+}
+
+// 14. HÖHLEN-KRALLENSPINNE - flauschige Seidenweberin mit Tautropfen, Glanzaugen und acht Gelenkbeinen
+function monCaveWeaver(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 22, time, state, hitFlash, opts, { blink: 1.4, scale: 1.25 });
+  const { r, ap, t } = M;
+  r.shadow(11, 3.8, 0.3);
+  const rear = ap.phase === 'windup' ? rigEaseInOut(ap.p) : (ap.phase === 'strike' ? 1 - ap.p : 0);
+  const bob = M.moving ? Math.sin(t * 18) * 0.3 : Math.sin(t * 2.2) * 0.25;
+  const ceph = rigV(0, 4.2 + bob + rear * 1.2, 1.4 + rear * 0.4);
+  const abd = rigV(0, 5.4 + bob - rear * 0.4, -3.4);
+  // Seidenfaden nach oben (Idle: baumelnde Aufhängung)
+  if (ap.phase === 'idle' && !M.moving) r.line([rigAdd(abd, rigV(0, 3.5, -1)), rigAdd(abd, rigV(0, 26, -2))], '#e2e8f0', 0.15, { outline: false, smooth: false, alpha: 0.6 });
+  // Acht Gelenkbeine
+  for (let i = 0; i < 4; i++) {
+    for (const sd of [1, -1]) {
+      const hip = rigAdd(ceph, rigV(sd * 1.4, -0.3, 0.9 - i * 0.8));
+      const ph = t * 18 + i * MON_PI * 0.5 + (sd > 0 ? 0 : MON_PI);
+      const step = M.moving ? Math.sin(ph) * 1.1 : Math.sin(t * 1.5 + i) * 0.15;
+      const lift = M.moving ? Math.max(0, Math.cos(ph)) * 1.2 : 0;
+      let foot = rigV(sd * (6.2 - Math.abs(i - 1.2) * 0.5), lift, 3.4 - i * 2.2 + step);
+      if (i === 0 && rear > 0) foot = rigAdd(ceph, rigV(sd * 3.0, 3.5 * rear + 1, 3.2));
+      const knee = rigIK(hip, foot, 3.6, 4.4, rigV(sd * 0.5, 1, 0));
+      r.capsule(hip, knee, 0.55, 0.45, '#8b7fb5');
+      r.capsule(knee, foot, 0.45, 0.2, '#6d5f9e');
+      r.ball(knee, 0.5, '#c4b5fd', { outline: false, gloss: 0.4, bias: 0.02 });
+    }
+  }
+  // Flauschiger Hinterleib mit Muster und Tautropfen
+  r.ball(abd, 5.6, '#b9a9e6', { sy: 0.9, gloss: 0.25, after: (c, P, rr) => {
+    c.save(); c.strokeStyle = rr.col('#8b7fb5'); c.lineCap = 'round';
+    for (let k = 0; k < 30; k++) {
+      const a = (k / 30) * MON_PI * 2;
+      const L = (0.5 + (Math.sin(k * 7.7) * 0.5 + 0.5) * 0.6) * rr.s;
+      c.lineWidth = 0.4 * rr.s;
+      c.beginPath(); c.moveTo(P.x + Math.cos(a) * 5.2 * rr.s, P.y + Math.sin(a) * 4.8 * rr.s); c.lineTo(P.x + Math.cos(a) * (5.6 * rr.s + L), P.y + Math.sin(a) * (5.1 * rr.s + L)); c.stroke();
+    }
+    c.restore();
+  } });
+  monSpots(r, abd, 5.6, 5.0, 5.6, [[0, 0.5, 0.9], [0.6, 0.3, 0.6], [-0.7, 0.35, 0.65], [2.6, 0.6, 0.8], [-2.5, 0.4, 0.7]], '#7dd3fc', { bias: 0.4 });
+  // Kopfbruststück mit zwei großen Glanzaugen und kleinen Nebenaugen
+  r.ball(ceph, 3.4, '#a594da', { gloss: 0.3, after: (c) => {
+    r.eye(c, ceph, 3.4, 0.38, 0.12, { color: '#1e1b2e', size: 1.15, tall: 1.1, blink: M.blink });
+    r.eye(c, ceph, 3.4, -0.38, 0.12, { color: '#1e1b2e', size: 1.15, tall: 1.1, blink: M.blink });
+    for (const az of [0.85, -0.85, 0.2, -0.2]) r.eye(c, ceph, 3.4, az, Math.abs(az) > 0.5 ? 0.3 : 0.55, { style: 'dot', color: '#1e1b2e', size: 0.4 });
+    r.blush(c, ceph, 3.4, 0.7, -0.2, '#f9a8d4', 0.8);
+    r.blush(c, ceph, 3.4, -0.7, -0.2, '#f9a8d4', 0.8);
+  } });
+  for (const sd of [1, -1]) r.capsule(rigAdd(ceph, rigV(sd * 0.7, -1.6, 2.4)), rigAdd(ceph, rigV(sd * 0.4, -2.8, 2.9)), 0.4, 0.15, '#f5f0e1', { bias: 0.2 });
+  if (ap.phase === 'strike' && ap.p < 0.8) {
+    const wp = rigAdd(ceph, rigV(0, -0.5, 3 + ap.p * 16));
+    r.glow(wp, 3 + ap.p * 2, 'rgba(241,245,249,0.9)', { alpha: 1 - ap.p });
+    r.line([rigAdd(ceph, rigV(0, -1, 3)), wp], '#f8fafc', 0.2, { outline: false, smooth: false, alpha: 1 - ap.p });
+  }
+  r.flush();
+}
+
+// 15. SCHATTEN-GOBLIN - geduckter Höhlen-Goblin mit tellergroßen Goldaugen, Lumpenkapuze und rostigem Dolch
+function monCaveStalker(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 12, time, state, hitFlash, opts, { blink: 2.9, scale: 1.25 });
+  const { r, ap, t } = M;
+  r.shadow(6.5, 2.4, 0.32);
+  const windup = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const stab = ap.phase === 'strike' ? Math.sin(Math.min(1, ap.p * 2) * MON_PI) : 0;
+  const B = { thigh: 1.9, shin: 2.0, hipW: 1.1, torso: 3.8, shoulderW: 1.9, upperArm: 2.0, foreArm: 1.9, freq: 17, stride: 3.0, lift: 1.3 };
+  const shY = (B.thigh + B.shin) * 0.94 + B.torso * 0.86;
+  const handR = (windup > 0 || stab > 0) ? rigV(1.4, shY - 0.6 + windup * 0.5, heroLerp(-0.8, 4.4, stab) - windup * 0.6) : null;
+  const sk = rigBiped(t, Object.assign({}, B, { moving: M.moving, crouch: 0.45 + windup * 0.25, extraLean: 0.42 + stab * 0.2, handR, idleArms: 1.1 }));
+  sk.H = rigAdd(sk.neck, rigV(0, 2.6, 1.0));
+  sk.R = 3.6;
+  const skin = '#5b6b4f';
+  heroLegs(r, sk, '#3a3530', '#2a2420', { thighR: 0.75, kneeR: 0.65, ankleR: 0.55, toe: 0.9 });
+  heroTorso(r, sk, '#3a3530', { rt: 1.8, rb: 1.6 });
+  // Lumpenumhang mit Fransen
+  const neck = rigAdd(rigLerp(sk.shR, sk.shL, 0.5), rigV(0, 0.5, -0.4));
+  const hem = rigV(0, sk.pelvis.y - 0.8, -1.4 - (M.moving ? 1 : 0));
+  r.cone(neck, hem, 1.4, 3.0, '#2c2838', { sz: 0.8, bias: -0.1 });
+  for (let k = 0; k < 5; k++) {
+    const a = MON_PI + (k - 2) * 0.5;
+    const b = rigV(hem.x + Math.sin(a) * 3, hem.y + 0.3, hem.z + Math.cos(a) * 2.6);
+    r.poly([rigAdd(b, rigV(-0.6, 0, 0)), rigAdd(b, rigV(0, -1.5 - Math.sin(t * 6 + k) * 0.4, -0.3)), rigAdd(b, rigV(0.6, 0, 0))], '#2c2838', { smooth: false, bias: -0.12 });
+  }
+  heroArms(r, sk, skin, skin, { upperR: 0.7, handR: 0.65 });
+  // Kopf mit langen Ohren, Hakennase und riesigen Goldaugen
+  heroHead(r, sk, skin, (c, H, R) => {
+    const big = 1.45 + windup * 0.25;
+    r.eye(c, H, R, 0.42, 0.08, { white: false, color: '#fbbf24', pupil: '#111', size: big, tall: 1.0, blink: M.blink });
+    r.eye(c, H, R, -0.42, 0.08, { white: false, color: '#fbbf24', pupil: '#111', size: big, tall: 1.0, blink: M.blink });
+    for (const az of [0.42, -0.42]) {
+      r.mark(c, H, R, az, 0.08, (cc, P, sq, s) => {
+        cc.globalCompositeOperation = 'lighter'; cc.fillStyle = 'rgba(251,191,36,0.4)';
+        cc.beginPath(); cc.ellipse(P.x, P.y, 2.4 * s * sq, 2.4 * s, 0, 0, 6.29); cc.fill();
+      });
+    }
+    r.mouth(c, H, R, 0, -0.55, { w: 0.9, smile: true, color: '#1c1917' });
+  }, (c, H, R) => {
+    r.cap(c, H, R, heroHairEdge(0.75, 0.1, -1.0, 0, 1), '#2c2838', { grow: 1.12 });
+  });
+  r.capsule(rigAdd(sk.H, rigV(0, -0.4, 3.2)), rigAdd(sk.H, rigV(0, -1.6, 5.0)), 0.8, 0.3, skin, { bias: 0.3 });
+  for (const sd of [1, -1]) heroEar(r, sk.H, sk.R, sd * 1.35, 0.15, skin, { len: 3.6, w: 0.22, inner: '#9a7a6a', tilt: rigV(sd * 1.2, 0.35, -0.5) });
+  // Rostiger Dolch
+  heroDrawBlade(r, sk.handR, rigNorm(rigV(0.1, 0.1 - stab * 0.1, 1)), { blade: '#b0a090', grip: '#3f2a1d', guard: '#78716c', len: 4.6, bladeW: 0.45 });
+  r.flush();
+}
+
+// 16. FELS-KOLOSS - urzeitlicher Basalt-Behemoth mit glühenden Magmaadern und Kristallen auf dem Rücken
+function monRockGolem(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 22, time, state, hitFlash, opts, { blink: 0.1 });
+  const { r, ap, t } = M;
+  r.shadow(17, 5.5, 0.34);
+  const basalt = '#4b4f58';
+  const basaltL = '#5d626c';
+  const raise = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const slam = ap.phase === 'strike' ? (ap.p < 0.25 ? rigEaseOut(ap.p / 0.25) : 1 - rigEaseInOut((ap.p - 0.25) / 0.75) * 0.6) : 0;
+  const B = { thigh: 3.2, shin: 3.0, hipW: 3.4, torso: 9.5, shoulderW: 7.6, upperArm: 5.4, foreArm: 5.6, freq: 6.5, stride: 3.4, lift: 1.3, idleArms: 2, bob: 1.0 };
+  const shY = (B.thigh + B.shin) * 0.94 + B.torso * 0.86;
+  const handR = raise > 0
+    ? rigV(heroLerp(8, 5, raise), heroLerp(6, shY + 8, raise), heroLerp(2, -1, raise))
+    : (slam > 0 ? rigV(heroLerp(5, 3, slam), heroLerp(shY + 8, 2.4, slam), heroLerp(-1, 8.5, slam)) : null);
+  const sk = rigBiped(t, Object.assign({}, B, { moving: M.moving, handR, twist: raise * 0.3 - slam * 0.3, extraLean: slam * 0.25 }));
+  const magma = (c, P, rr, R, seed) => {
+    c.save(); c.globalCompositeOperation = 'lighter';
+    c.strokeStyle = `rgba(251, ${120 + Math.round(Math.sin(t * 3 + seed) * 40)}, 30, ${0.65 + raise * 0.3})`;
+    c.lineWidth = 0.45 * rr.s; c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(P.x - R * 0.5 * rr.s, P.y - R * 0.2 * rr.s); c.lineTo(P.x - R * 0.1 * rr.s, P.y + R * 0.05 * rr.s); c.lineTo(P.x + R * 0.25 * rr.s, P.y - R * 0.3 * rr.s);
+    c.moveTo(P.x - R * 0.1 * rr.s, P.y + R * 0.05 * rr.s); c.lineTo(P.x, P.y + R * 0.45 * rr.s);
+    c.stroke(); c.restore();
+  };
+  for (const S of ['R', 'L']) {
+    r.capsule(sk['hip' + S], sk['knee' + S], 2.6, 2.3, basalt);
+    r.capsule(sk['knee' + S], sk['ankle' + S], 2.3, 2.5, basaltL);
+    r.ball(rigAdd(sk['foot' + S], rigV(0, 0.9, 0.8)), 2.6, basalt, { sy: 0.7 });
+  }
+  // Rumpf aus übereinander getürmten Felsbrocken
+  const body = rigAdd(sk.chest, rigV(0, -1.2, 0));
+  r.ball(rigAdd(sk.pelvis, rigV(0, 1.2, 0)), 5.8, basalt, { sy: 0.8, gloss: 0.1 });
+  r.ball(body, 8.6, basaltL, { sy: 0.95, gloss: 0.12, after: (c, P, rr) => magma(c, P, rr, 8.6, 1) });
+  // Kristalle auf dem Rücken
+  const crystals = [[-2.5, 7.5, -3.5, '#67e8f9', 5.5], [1.8, 8.0, -3.8, '#a78bfa', 4.5], [0, 6.6, -5.4, '#22d3ee', 4.0], [4.0, 5.2, -4.4, '#c4b5fd', 3.4]];
+  for (const cr of crystals) {
+    const b = rigAdd(body, rigV(cr[0], cr[1] - 3, cr[2]));
+    r.cone(rigAdd(b, rigV(cr[0] * 0.15, cr[4], -0.8)), b, 0.1, 1.1, cr[3], { sz: 1, bias: 0.1 });
+    r.glow(rigAdd(b, rigV(0, cr[4] * 0.5, 0)), 2.4, 'rgba(103,232,249,0.8)', { alpha: 0.35 + Math.sin(t * 2 + cr[0]) * 0.15 });
+  }
+  // Tief sitzender Kopf mit glühenden Augenschlitzen
+  const H = rigAdd(sk.neck, rigV(0, 0.6, 3.0));
+  r.ball(H, 3.6, basalt, { sx: 1.15, sy: 0.8, gloss: 0.2, bias: 0.3, after: (c) => {
+    const col = ap.phase !== 'idle' ? '#fb923c' : '#fbbf24';
+    r.eye(c, H, 3.6, 0.38, 0.05, { style: 'glow', color: col, size: 0.75, tall: 0.6 });
+    r.eye(c, H, 3.6, -0.38, 0.05, { style: 'glow', color: col, size: 0.75, tall: 0.6 });
+  } });
+  // Gewaltige Arme
+  for (const S of ['R', 'L']) {
+    r.ball(sk['sh' + S], 3.8, basaltL, { gloss: 0.15, after: (c, P, rr) => magma(c, P, rr, 3.8, S === 'R' ? 2 : 3) });
+    r.capsule(sk['sh' + S], sk['elbow' + S], 2.7, 2.4, basalt);
+    r.capsule(sk['elbow' + S], sk['hand' + S], 2.4, 2.9, basaltL);
+    r.ball(sk['hand' + S], 3.2, basalt, { gloss: 0.18, after: (c, P, rr) => { if (raise > 0.3 && S === 'R') magma(c, P, rr, 3.2, 4); } });
+  }
+  if (raise > 0.4) r.glow(sk.handR, 6 * raise, 'rgba(249,115,22,0.85)', { alpha: raise * 0.6 });
+  if (slam > 0.85) {
+    r.glow(rigV(3, 0.5, 8.5), 12, 'rgba(251,146,60,0.75)', { alpha: (slam - 0.85) * 5 });
+  }
+  r.flush();
+}
+
+// 17. LEEREN-VERSCHLINGER - Kaonashi-Schattensensenmann mit Noh-Maske, Sense und schimmernden Sternsteinen
+function monVoidReaper(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 20, time, state, hitFlash, opts, { scale: 1.3 });
+  const { r, ap, t } = M;
+  const hover = 1.4 + Math.sin(t * 2) * 0.6;
+  monHoverShadow(r, 9, 3, hover);
+  const raise = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const sweep = ap.phase === 'strike' ? (ap.p < 0.4 ? rigEaseOut(ap.p / 0.4) : 1) : 0;
+  const body = '#18161f';
+  const neck = rigV(0, 15 + hover, 0);
+  const hem = rigV(Math.sin(t * 1.8) * 0.6, hover - 0.6, M.moving ? -1.5 : 0);
+  r.cone(neck, hem, 2.4, 5.2, body, { sz: 0.9, hem: '#3b0764', hemW: 1.6, alpha: 0.93 });
+  // Schattenschwaden am Saum
+  for (let i = 0; i < 4; i++) {
+    const life = (t * 0.7 + i / 4) % 1;
+    r.glow(rigV(Math.sin(i * 2.4 + t) * 4, hover + life * 4, Math.cos(i * 1.9) * 3), 2.5, 'rgba(76,29,149,0.9)', { alpha: (1 - life) * 0.5 });
+  }
+  // Rechter Arm mit Sense
+  const shR = rigAdd(neck, rigV(2.4, -1, 0));
+  const shL = rigAdd(neck, rigV(-2.4, -1, 0));
+  const th = heroLerp(heroLerp(0.6, 2.2, raise), -1.2, sweep);
+  const handR = rigAdd(shR, rigV(Math.sin(th) * 3.6, -2.5 + raise * 4 - sweep * 3, Math.cos(th) * 3.6));
+  const elR = rigIK(shR, handR, 3, 3, rigV(1, -0.3, -1));
+  r.capsule(shR, elR, 0.9, 0.7, body);
+  r.capsule(elR, handR, 0.7, 0.55, body);
+  r.ball(handR, 0.7, '#d4d4d8');
+  const shaftDir = rigNorm(rigV(Math.sin(th) * 0.4, 1, Math.cos(th) * 0.4 - 0.3 + sweep * 0.8));
+  const shaftTop = rigAdd(handR, rigScale(shaftDir, 9));
+  const shaftBot = rigAdd(handR, rigScale(shaftDir, -5));
+  r.line([shaftBot, shaftTop], '#3f3f46', 0.55, { smooth: false });
+  const bladeDir = rigNorm(rigV(Math.cos(th), 0, -Math.sin(th)));
+  const b1 = rigAdd(shaftTop, rigAdd(rigScale(bladeDir, 4), rigV(0, -1.2, 0)));
+  const b2 = rigAdd(shaftTop, rigAdd(rigScale(bladeDir, 7.2), rigV(0, -3.6, 0)));
+  r.poly([shaftTop, b1, b2, rigAdd(shaftTop, rigAdd(rigScale(bladeDir, 3.2), rigV(0, -0.9, 0))), rigAdd(shaftTop, rigV(0, -0.8, 0))], '#a78bfa', { bias: 0.1 });
+  r.glow(b1, 3.5, 'rgba(167,139,250,0.85)', { alpha: 0.4 + raise * 0.4 });
+  // Linke Hand bietet funkelnde Sternsteine an
+  const handL = rigAdd(shL, rigV(-0.8, -3.2 + Math.sin(t * 1.5) * 0.3, 3.4));
+  const elL = rigIK(shL, handL, 3, 3, rigV(-1, -0.3, -1));
+  r.capsule(shL, elL, 0.9, 0.7, body);
+  r.capsule(elL, handL, 0.7, 0.55, body);
+  r.ball(handL, 0.75, '#d4d4d8', { sy: 0.7 });
+  for (let i = 0; i < 3; i++) {
+    const sp = rigAdd(handL, rigV(Math.cos(i * 2.1 + t) * 0.6, 0.7 + i * 0.15, Math.sin(i * 2.1 + t) * 0.6));
+    r.glow(sp, 1.1, ['rgba(253,224,71,0.95)', 'rgba(147,197,253,0.95)', 'rgba(244,114,182,0.95)'][i], { alpha: 0.6 + Math.sin(t * 6 + i) * 0.3 });
+  }
+  // Ovale Noh-Maske mit lila Malereien
+  const H = rigAdd(neck, rigV(0, 3.6, 0.4));
+  r.ball(rigAdd(H, rigV(0, 0.3, -0.9)), 4.2, '#0e0d13', { sy: 1.15, gloss: 0.1, bias: -0.3 });
+  r.ball(H, 3.8, '#f4f4f5', { sx: 0.88, sy: 1.22, gloss: 0.4, after: (c) => {
+    r.eye(c, H, 3.8, 0.36, 0.0, { style: 'dot', color: '#09090b', size: 0.75, tall: 0.75 });
+    r.eye(c, H, 3.8, -0.36, 0.0, { style: 'dot', color: '#09090b', size: 0.75, tall: 0.75 });
+    for (const az of [0.36, -0.36]) {
+      r.mark(c, H, 3.8, az, 0.24, (cc, P, sq, s) => {
+        cc.fillStyle = r.col('#7c3aed'); cc.beginPath(); cc.moveTo(P.x - 0.35 * s * sq, P.y + 0.4 * s); cc.lineTo(P.x, P.y - 1.1 * s); cc.lineTo(P.x + 0.35 * s * sq, P.y + 0.4 * s); cc.fill();
+      });
+      r.mark(c, H, 3.8, az, -0.32, (cc, P, sq, s) => {
+        cc.fillStyle = r.col('#8b5cf6'); cc.beginPath(); cc.moveTo(P.x - 0.3 * s * sq, P.y - 0.4 * s); cc.lineTo(P.x, P.y + 1.4 * s); cc.lineTo(P.x + 0.3 * s * sq, P.y - 0.4 * s); cc.fill();
+      });
+    }
+    r.mouth(c, H, 3.8, 0, -0.62, { smile: false, w: 0.55, color: '#3f3f46' });
+  } });
+  r.flush();
+}
+
+// 18. AUGE DES ABGRUNDS - schwebende Mond-Qualle mit Riesenauge, Sichelmuster und leuchtenden Tentakeln
+function monGazerOfTheVoid(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 20, time, state, hitFlash, opts, { blink: 1.6 });
+  const { r, ap, t } = M;
+  const hover = 9 + Math.sin(t * 1.8) * 1.5;
+  monHoverShadow(r, 11, 3.5, hover);
+  const charge = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const beam = ap.phase === 'strike' ? 1 - ap.p : 0;
+  const pulse = Math.sin(t * 3) * 0.08;
+  const C = rigV(0, hover + 5, 0);
+  // Tentakel mit Leuchtspitzen
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * MON_PI * 2;
+    const base = rigAdd(C, rigV(Math.sin(a) * 5, -1.5, Math.cos(a) * 5));
+    const pts = rigChain(t + i * 0.6, base, rigV(Math.sin(a) * 0.2, -1, Math.cos(a) * 0.2 - (M.moving ? 0.5 : 0)), { n: 5, seg: 1.6, amp: 1.0, ampY: 0.3, freq: 3.5, k: 0.8 });
+    r.line(pts, i % 2 ? '#a78bfa' : '#c4b5fd', 0.55, { alpha: 0.85 });
+    r.glow(pts[pts.length - 1], 1.6, 'rgba(196,181,253,0.95)', { alpha: 0.6 + Math.sin(t * 4 + i) * 0.3 });
+  }
+  // Rüschensaum
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * MON_PI * 2 + t * 0.3;
+    r.ball(rigAdd(C, rigV(Math.sin(a) * 7.2, -1.2 + Math.sin(t * 4 + k) * 0.3, Math.cos(a) * 7.2)), 1.3, '#8b5cf6', { sy: 0.7, alpha: 0.85, gloss: 0.3 });
+  }
+  // Riesenauge im Inneren (wird vom Glockenschirm umhüllt)
+  const eyeC = rigAdd(C, rigV(0, 1.6, 2.6));
+  r.ball(eyeC, 3.6, '#f5f3ff', { gloss: 0.3, bias: 0.2, after: (c) => {
+    r.eye(c, eyeC, 3.6, 0, -0.05, { white: false, color: charge > 0 || beam > 0 ? '#e11d48' : '#7c3aed', pupil: '#0b0716', size: 2.2 + charge * 0.4, tall: 1.0, blink: M.blink });
+  } });
+  // Durchscheinender Glockenschirm mit Mondsichel
+  r.ball(rigAdd(C, rigV(0, 1.5, 0)), 7.4, '#6d28d9', { sy: 0.78 + pulse, alpha: 0.55, gloss: 0.6, bias: 0.5, after: (c, P, rr) => {
+    c.save(); c.globalAlpha *= 0.85; c.fillStyle = rr.col('#fde68a');
+    const mx = P.x - 2.6 * rr.s;
+    const my = P.y - 3.4 * rr.s;
+    c.beginPath(); c.arc(mx, my, 1.4 * rr.s, 0.6, 5.7); c.arc(mx + 0.7 * rr.s, my - 0.2 * rr.s, 1.1 * rr.s, 5.3, 1.0, true); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(255,255,255,0.8)';
+    for (const st of [[3, -3], [1.5, -4.5], [4.2, -1.2]]) { c.beginPath(); c.arc(P.x + st[0] * rr.s, P.y + st[1] * rr.s, 0.3 * rr.s, 0, 6.29); c.fill(); }
+    c.restore();
+  } });
+  if (charge > 0) r.glow(eyeC, 4 + charge * 4, 'rgba(244,63,94,0.85)', { alpha: charge * 0.7, bias: 1 });
+  if (beam > 0) {
+    const end = rigAdd(eyeC, rigV(0, -hover * 0.5, 22));
+    r.line([eyeC, end], '#f472b6', 1.6 * beam + 0.3, { outline: false, smooth: false, alpha: beam, bias: 1 });
+    r.glow(end, 4, 'rgba(244,114,182,0.9)', { alpha: beam });
+  }
+  r.flush();
+}
+
+// 19. SCHATTEN-TENTAKEL - Glockengeist-Ranke aus einem Moosbrunnen mit bronzener Suzu-Glocke
+function monAbyssTentacle(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 16, time, state, hitFlash, opts, { scale: 1.1 });
+  const { r, ap, t } = M;
+  r.shadow(11, 3.8, 0.3);
+  const coil = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const whip = ap.phase === 'strike' ? Math.sin(Math.min(1, ap.p * 1.6) * MON_PI) : 0;
+  // Moosbewachsener Steinbrunnen
+  r.cone(rigV(0, 2.4, 0), rigV(0, 0, 0), 5.2, 5.6, '#64748b', { sz: 1, hem: '#475569', hemW: 0.5 });
+  r.ball(rigV(0, 2.5, 0), 4.6, '#0b1020', { sy: 0.3, gloss: 0, bias: 0.05 });
+  for (let k = 0; k < 6; k++) {
+    const a = (k / 6) * MON_PI * 2 + 0.3;
+    const n = rigV(Math.sin(a), 0, Math.cos(a));
+    if (r.toCam(n) < -0.2) continue;
+    r.ball(rigV(n.x * 5.3, 2.5, n.z * 5.3), 1.0, '#4d7c3a', { sy: 0.55, bias: 0.1 });
+  }
+  // Ranke als S-Kurve, die sich zum Peitschenhieb zusammenrollt
+  const pts = [];
+  const N = 9;
+  for (let i = 0; i <= N; i++) {
+    const f = i / N;
+    const sway = Math.sin(t * 2.2 - f * 3) * 1.6 * f;
+    const back = -coil * Math.sin(f * MON_PI) * 4 + whip * f * f * 9;
+    const y = 2 + f * (15 - coil * 2 - whip * 6);
+    pts.push(rigV(sway + Math.sin(f * MON_PI * 1.5) * 1.2 * (1 - whip), y, back));
+  }
+  for (let i = 0; i < N; i++) {
+    const r0 = 1.8 - (i / N) * 1.3;
+    const r1 = 1.8 - ((i + 1) / N) * 1.3;
+    r.capsule(pts[i], pts[i + 1], r0, r1, i % 2 ? '#134e4a' : '#115e59', { light: 0.15 });
+    if (i % 2 === 1) {
+      const leafTip = rigAdd(pts[i], rigV((i % 4 === 1 ? 1 : -1) * 2.2, 0.6, 0.4));
+      monLeaf(r, pts[i], leafTip, 0.6, '#14b8a6', { side: rigV(0, 0.6, 0), bias: 0.05 });
+    }
+  }
+  // Rotes Seil und bronzene Glocke an der Spitze
+  const tip = pts[N];
+  const swing = Math.sin(t * 4) * 0.5 + whip * 1.2;
+  const bell = rigAdd(tip, rigV(swing, -2.2, 0.3));
+  r.line([tip, rigAdd(bell, rigV(0, 1.2, 0))], '#dc2626', 0.35, { smooth: false });
+  r.ball(bell, 1.8, '#b45309', { sy: 1.1, gloss: 0.6, bias: 0.1, after: (c, P, rr) => {
+    c.save(); c.fillStyle = rr.col('#451a03'); c.beginPath(); c.ellipse(P.x, P.y + 0.6 * rr.s, 1.2 * rr.s, 0.35 * rr.s, 0, 0, 6.29); c.fill(); c.restore();
+  } });
+  // Klangwellen beim Läuten
+  if (whip > 0.2 || coil > 0.6) {
+    const P = r.P(bell);
+    r.custom(P.d + 1, (c, rr) => {
+      c.save();
+      for (let k = 0; k < 2; k++) {
+        const rad = (3 + k * 2.5 + (t * 8) % 2.5) * rr.s;
+        c.strokeStyle = `rgba(253, 230, 138, ${0.6 - k * 0.25})`;
+        c.lineWidth = 0.4 * rr.s;
+        c.beginPath(); c.arc(P.x, P.y, rad, -0.9, 0.9); c.stroke();
+        c.beginPath(); c.arc(P.x, P.y, rad, MON_PI - 0.9, MON_PI + 0.9); c.stroke();
+      }
+      c.restore();
+    });
+  }
+  r.flush();
+}
+
+// 21. WOLKEN-HARPYIE - Tengu-Federmädchen mit Flügelarmen, schräger Tengu-Maske und Kirschblüten-Böen
+function monSkyHarpy(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 20, time, state, hitFlash, opts, { blink: 0.7, scale: 1.3 });
+  const { r, ap, t } = M;
+  const hover = 4 + Math.sin(t * 2.4) * 1.2;
+  monHoverShadow(r, 8, 2.8, hover);
+  const pull = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const gust = ap.phase === 'strike' ? (ap.p < 0.3 ? rigEaseOut(ap.p / 0.3) : 1 - (ap.p - 0.3) / 0.7) : 0;
+  const flap = Math.sin(t * (M.moving ? 9 : 5)) * (1 - pull) * 0.5 - pull * 0.6 + gust * 0.9;
+  const hipY = 4.5 + hover;
+  const pelvis = rigV(0, hipY, 0);
+  const chest = rigV(0, hipY + 3.6, 0.2);
+  const neck = rigV(0, hipY + 5.2, 0.3);
+  // Federrock und Vogelkrallen
+  for (const sd of [1, -1]) {
+    const knee = rigAdd(pelvis, rigV(sd * 1.0, -2.2, 0.6));
+    const foot = rigAdd(pelvis, rigV(sd * 1.2, -4.2, 0.2 + Math.sin(t * 2 + sd) * 0.3));
+    r.capsule(rigAdd(pelvis, rigV(sd, 0, 0)), knee, 0.8, 0.5, '#f9a8d4');
+    r.capsule(knee, foot, 0.45, 0.35, '#f59e0b');
+    for (let k = -1; k <= 1; k++) r.capsule(foot, rigAdd(foot, rigV(k * 0.6, -0.4, 0.9)), 0.25, 0.1, '#f59e0b', { outline: false });
+  }
+  r.cone(rigAdd(pelvis, rigV(0, 1.0, 0)), rigAdd(pelvis, rigV(0, -2.0, -0.3)), 2.0, 3.4, '#fbcfe8', { sz: 0.9, hem: '#f472b6', hemW: 0.5 });
+  // Kimono-Oberteil
+  r.cone(neck, rigAdd(pelvis, rigV(0, 0.6, 0)), 1.6, 2.2, '#fdf2f8', { sz: 0.8, bias: 0.05 });
+  r.cone(rigAdd(pelvis, rigV(0, 1.6, 0)), rigAdd(pelvis, rigV(0, 0.8, 0)), 2.1, 2.2, '#db2777', { sz: 0.85, bias: 0.1 });
+  // Flügelarme mit Federstaffeln
+  for (const sd of [1, -1]) {
+    const sh = rigAdd(chest, rigV(sd * 1.8, 0.6, -0.3));
+    const a1 = 0.3 + flap * 0.7;
+    const el = rigAdd(sh, rigV(sd * 3.6 * Math.cos(a1), 3.6 * Math.sin(a1), -1.0 - pull * 1.5 + gust * 2));
+    const tip = rigAdd(el, rigV(sd * 5.2 * Math.cos(a1 * 1.3), 5.2 * Math.sin(a1 * 1.3) - 0.5, -1.8 - pull * 2 + gust * 3.5));
+    const fe = [];
+    for (let k = 0; k <= 5; k++) {
+      const f = k / 5;
+      const along = f < 0.4 ? rigLerp(sh, el, f / 0.4) : rigLerp(el, tip, (f - 0.4) / 0.6);
+      fe.push(rigAdd(along, rigV(0, -3.4 * Math.sin(f * MON_PI * 0.85 + 0.3) - (k % 2) * 0.8, -1)));
+    }
+    const wd = r.depth(rigLerp(sh, tip, 0.4)) - 0.2;
+    r.poly([sh, el, tip].concat(fe.reverse()), '#f8fafc', { smooth: false, depth: wd });
+    r.poly([sh, el, rigLerp(el, tip, 0.5), rigAdd(rigLerp(sh, el, 0.6), rigV(0, -1.6, -0.6))], '#fbcfe8', { depth: wd + 0.01, outline: false });
+    r.line([sh, el, tip], '#f9a8d4', 0.4, { outline: false, depth: wd + 0.02 });
+  }
+  // Kopf mit langem schwarzem Haar und schräger roter Tengu-Maske
+  const H = rigAdd(neck, rigV(0, 3.3, 0.2));
+  const HR = 3.3;
+  const sway = M.moving ? -1 : Math.sin(t * 1.6) * 0.3;
+  r.poly([rigAdd(H, rigV(-2.4, 1.6, -0.8)), rigAdd(H, rigV(2.4, 1.6, -0.8)), rigAdd(H, rigV(2.8, -4.5, -1.6 + sway)), rigAdd(H, rigV(0, -6, -2.2 + sway)), rigAdd(H, rigV(-2.8, -4.5, -1.6 + sway))], '#1c1424', { bias: -0.6 });
+  r.ball(H, HR, '#fde7d6', { gloss: 0.18, after: (c) => {
+    heroFace(r, c, H, HR, { blink: M.blink }, { eye: '#831843', white: true, size: 0.75, lid: '#1c1424', tall: 1.3, mouth: { w: 0.45 } });
+    r.cap(c, H, HR, heroHairEdge(0.32, -0.6, -1.2, 0.08, 5), '#1c1424', { grow: 1.07, gloss: 0.45 });
+  } });
+  const mask = rigSurfPt(H, HR * 1.1, -1.25, 0.35);
+  r.ball(mask, 1.4, '#dc2626', { sx: 0.8, gloss: 0.5, bias: 0.3 });
+  r.capsule(mask, rigAdd(mask, rigV(-1.6, 0.6, 1.4)), 0.5, 0.15, '#dc2626', { bias: 0.35 });
+  // Kirschblüten-Bö beim Angriff
+  if (gust > 0) {
+    for (let i = 0; i < 6; i++) {
+      const d = 4 + gust * 14 + i * 1.5;
+      const p = rigV(Math.sin(i * 1.9 + t * 3) * (2 + i * 0.6), hipY + 3 + Math.cos(i * 2.3) * 2, d);
+      const P = r.P(p);
+      r.custom(P.d + 1, (c, rr) => {
+        c.save(); c.globalAlpha *= gust; c.translate(P.x, P.y); c.rotate(t * 5 + i);
+        c.fillStyle = rr.col('#fda4af'); c.beginPath(); c.ellipse(0, 0, 1.1 * rr.s, 0.55 * rr.s, 0, 0, 6.29); c.fill(); c.restore();
+      });
+    }
+  }
+  r.flush();
+}
+
+// 22. MAGMA-FUNKE - Calcifer-Flammenwicht mit großen Augen, Zackengrinsen und züngelnden Flammen
+function monLavaCore(ctx, cx, cy, time, state, hitFlash, opts) {
+  const M = monBegin(ctx, cx, cy, 18, time, state, hitFlash, opts, { blink: 2.1, scale: 1.2 });
+  const { r, ap, t } = M;
+  const hover = 4 + Math.sin(t * 3) * 1.0;
+  monHoverShadow(r, 8, 2.8, hover);
+  const swell = ap.phase === 'windup' ? rigEaseInOut(ap.p) : 0;
+  const spit = ap.phase === 'strike' ? ap.p : -1;
+  const R = 4.6 * (1 + swell * 0.25);
+  const C = rigV(0, hover + R, 0);
+  r.glow(C, R * 3, 'rgba(249,115,22,0.85)', { alpha: 0.45 + swell * 0.3, bias: -3 });
+  // Züngelnde Flammen (hinter und über dem Körper)
+  const tongues = 7;
+  for (let i = 0; i < tongues; i++) {
+    const a = (i / tongues) * MON_PI * 2;
+    const n = rigV(Math.sin(a) * 0.65, 1, Math.cos(a) * 0.65 - (M.moving ? 0.6 : 0));
+    const base = rigAdd(C, rigV(Math.sin(a) * R * 0.55, R * 0.35, Math.cos(a) * R * 0.55));
+    const len = R * (0.9 + Math.sin(t * 11 + i * 2.3) * 0.25 + swell * 0.4);
+    const tip = rigAdd(base, rigScale(rigNorm(n), len));
+    const side = rigScale(rigNorm(rigV(Math.cos(a), 0, -Math.sin(a))), R * 0.42);
+    r.poly([rigAdd(base, side), rigAdd(rigLerp(base, tip, 0.55), rigScale(side, 0.5)), tip, rigSub(rigLerp(base, tip, 0.55), rigScale(side, 0.5)), rigSub(base, side)], i % 2 ? '#f97316' : '#ef4444', { outline: false, bias: -0.2 });
+  }
+  r.poly([rigAdd(C, rigV(-R * 0.7, R * 0.2, 0)), rigAdd(C, rigV(Math.sin(t * 9) * 0.6, R * 2.0 + swell * 2, -0.4)), rigAdd(C, rigV(R * 0.7, R * 0.2, 0))], '#fb923c', { outline: false, bias: -0.1 });
+  // Körper mit Farbverlauf (außen rot, innen gelb)
+  r.ball(C, R, '#f97316', { outline: false, gloss: 0, bias: 0 });
+  r.ball(rigAdd(C, rigV(0, -R * 0.15, R * 0.15)), R * 0.72, '#fbbf24', { outline: false, gloss: 0, bias: 0.05 });
+  r.ball(rigAdd(C, rigV(0, -R * 0.25, R * 0.3)), R * 0.42, '#fef3c7', { outline: false, gloss: 0, bias: 0.06, after: (c) => {
+    // Große Calcifer-Augen und Zackengrinsen auf der Vorderseite
+    const F = rigAdd(C, rigV(0, 0, 0));
+    const ew = ap.phase !== 'idle' ? 1.0 : 1.15;
+    r.eye(c, F, R, 0.36, 0.12, { white: true, style: 'dot', color: '#1c1917', size: 1.25, tall: ew, blink: M.blink });
+    r.eye(c, F, R, -0.36, 0.12, { white: true, style: 'dot', color: '#1c1917', size: 1.25, tall: ew, blink: M.blink });
+    r.mark(c, F, R, 0, -0.32, (cc, P, sq, s) => {
+      const w = (1.6 + swell * 0.6) * s * sq;
+      const h = (spit >= 0 && spit < 0.5 ? 1.6 : 0.8) * s;
+      cc.fillStyle = r.col('#7c2d12');
+      cc.beginPath(); cc.moveTo(P.x - w, P.y - 0.2 * s); cc.quadraticCurveTo(P.x, P.y + h * 1.6, P.x + w, P.y - 0.2 * s); cc.closePath(); cc.fill();
+      cc.fillStyle = '#fff7ed';
+      cc.beginPath();
+      for (let k = 0; k < 4; k++) {
+        const x = P.x - w * 0.8 + k * w * 0.53;
+        cc.moveTo(x, P.y - 0.15 * s); cc.lineTo(x + w * 0.2, P.y + 0.45 * s); cc.lineTo(x + w * 0.4, P.y - 0.15 * s);
+      }
+      cc.fill();
+    }, 1.0);
+  } });
+  // Flammen-Ärmchen
+  for (const sd of [1, -1]) {
+    const arm = rigAdd(C, rigV(sd * (R + 0.6), -R * 0.2 + Math.sin(t * 6 + sd) * 0.5, 0.5));
+    r.poly([rigAdd(arm, rigV(-sd * 0.9, -0.6, 0)), rigAdd(arm, rigV(sd * 1.0, 0.9, 0)), rigAdd(arm, rigV(-sd * 0.5, 0.8, 0))], '#fb923c', { outline: false, bias: 0.1 });
+  }
+  // Glutfunken
+  for (let i = 0; i < 4; i++) {
+    const life = (t * 0.9 + i / 4) % 1;
+    r.glow(rigV(Math.sin(i * 3.3 + t) * 3, C.y + R + life * 9, Math.cos(i * 2.1) * 2), 1.0, 'rgba(253,224,71,0.95)', { alpha: 1 - life });
+  }
+  if (spit >= 0 && spit < 0.8) monCharge(r, rigAdd(C, rigV(0, -1, R + spit * 16)), 2.6 * (1 - spit * 0.4), 'rgba(249,115,22,0.95)', 1 - spit);
+  r.flush();
 }
 
 // =============================================================================
-// BESTIARY DATA (22 ENEMY MODELS - GHIBLI PAPERCRAFT EDITION)
+// BESTIARY DATA (22 GEGNER - SKELETT-RIG EDITION)
 // =============================================================================
 
 export const BESTIARY_DATA = [
@@ -305,125 +1584,7 @@ export const BESTIARY_DATA = [
     counter: 'Mit erhobenem Schild vorrücken, um die Pfeile abprallen zu lassen. Im Moment seines Nachladens mit einem schnellen Dash zuschlagen.',
     lore: 'Trägt eine handgeschnitzte Kitsune-Porzellanmaske. Auf seiner Schulter reist stets ein kleiner Kodama-Baumgeist mit, der ihm die Windrichtung zuflüstert.',
     palette: { primary: '#15803d', secondary: '#166534', cloth: '#22c55e', bow: '#854d0e', skin: '#fde047' },
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const breath = Math.sin(time * 3) * 1.5;
-      const isAttacking = state === 'attack';
-      const isWalking = state === 'walk';
-      const walkCycle = Math.sin(time * 8) * 3;
-
-      drawPaperShadow(ctx, cx, cy + 18, 13, 4.5);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Kodama auf linker Schulter
-      const kodamaTilt = Math.sin(time * 2.5) * 0.25;
-      drawKodama(ctx, cx - 11, cy - 2 + breath * 0.6, kodamaTilt, 0.9);
-
-      // Beine & gefaltete Lederstiefel
-      ctx.fillStyle = '#334155';
-      ctx.beginPath();
-      ctx.roundRect(cx - 5.5, cy + 8, 3.2, 9 + (isWalking ? walkCycle : 0), 1.5);
-      ctx.roundRect(cx + 2.5, cy + 8, 3.2, 9 - (isWalking ? walkCycle : 0), 1.5);
-      ctx.fill();
-
-      ctx.fillStyle = '#78350f';
-      ctx.beginPath();
-      ctx.roundRect(cx - 6.5, cy + 15 + (isWalking ? walkCycle : 0), 4.5, 3.2, 1.2);
-      ctx.roundRect(cx + 1.5, cy + 15 - (isWalking ? walkCycle : 0), 4.5, 3.2, 1.2);
-      ctx.fill();
-
-      // Körper / Gestufter Blatt-Poncho
-      ctx.fillStyle = '#166534';
-      ctx.beginPath();
-      ctx.moveTo(cx - 8, cy - 3 + breath);
-      ctx.quadraticCurveTo(cx - 10, cy + 11 + breath, cx - 4, cy + 12 + breath);
-      ctx.quadraticCurveTo(cx, cy + 13 + breath, cx + 4, cy + 12 + breath);
-      ctx.quadraticCurveTo(cx + 10, cy + 11 + breath, cx + 8, cy - 3 + breath);
-      ctx.closePath();
-      ctx.fill();
-
-      // Innere Blattlage (hellgrün gestuft)
-      ctx.fillStyle = '#22c55e';
-      ctx.beginPath();
-      ctx.moveTo(cx - 5, cy + 1 + breath);
-      ctx.quadraticCurveTo(cx, cy + 11 + breath, cx + 5, cy + 1 + breath);
-      ctx.closePath();
-      ctx.fill();
-
-      // Gürtel & Eichel-Schnalle
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(cx - 7, cy + 6 + breath, 14, 2);
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.arc(cx, cy + 7 + breath, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Köcher mit zarten Papier-Pfeilfedern
-      ctx.fillStyle = '#92400e';
-      ctx.fillRect(cx - 10, cy - 7 + breath, 3.5, 12);
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(cx - 11, cy - 11 + breath, 1.8, 4);
-      ctx.fillRect(cx - 8.5, cy - 10 + breath, 1.8, 4);
-
-      // Kapuze mit Fuchsohren
-      ctx.fillStyle = '#14532d';
-      ctx.beginPath();
-      ctx.arc(cx, cy - 6 + breath, 7.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Kapuzenspitze geschwungen
-      ctx.beginPath();
-      ctx.moveTo(cx - 3, cy - 12 + breath);
-      ctx.quadraticCurveTo(cx - 8, cy - 16 + breath, cx - 11, cy - 14 + breath);
-      ctx.lineTo(cx + 1, cy - 11 + breath);
-      ctx.closePath();
-      ctx.fill();
-
-      // Kitsune Porzellan-Halbmaske mit roten Zeichen
-      drawPorcelainMask(ctx, cx, cy - 6 + breath, 10, 8.5, 'fox');
-
-      // Bogen aus Birkenholz mit Sakura-Band
-      const bowPull = isAttacking ? Math.sin(time * 12) * 4.5 : 0;
-      const bowX = cx + 8 + (isAttacking ? 3 : 0);
-      const bowY = cy + 2 + breath;
-
-      ctx.strokeStyle = '#854d0e';
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.arc(bowX, bowY, 11, -Math.PI / 2.2, Math.PI / 2.2);
-      ctx.stroke();
-
-      // Sakura-Bändchen am Bogenhorn
-      drawSakuraPetal(ctx, bowX - 2, bowY - 11, Math.sin(time * 4) * 0.4, 0.8);
-
-      // Bogensehne
-      ctx.strokeStyle = '#f8fafc';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(bowX - 4, bowY - 10);
-      ctx.lineTo(bowX - 8 - bowPull, bowY);
-      ctx.lineTo(bowX - 4, bowY + 10);
-      ctx.stroke();
-
-      // Leuchtender Waldpfeil bei Angriff
-      if (isAttacking) {
-        ctx.strokeStyle = '#4ade80';
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.moveTo(bowX - 8 - bowPull, bowY);
-        ctx.lineTo(bowX + 11, bowY);
-        ctx.stroke();
-
-        ctx.fillStyle = '#bbf7d0';
-        ctx.beginPath();
-        ctx.moveTo(bowX + 13, bowY);
-        ctx.lineTo(bowX + 9, bowY - 2.5);
-        ctx.lineTo(bowX + 9, bowY + 2.5);
-        ctx.fill();
-      }
-
-      ctx.filter = 'none';
-    }
+    render: monMossArcher
   },
 
   {
@@ -440,87 +1601,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein pummeliger Pilzgeist, der friedlich im Moos döst, bei Störung jedoch zischende Leuchtsporen im hohen Bogen spuckt. Hinterlässt beim Aufprall glitzernden Nebel.',
     counter: 'Die bogenförmigen Flugbahnen sind langsam. Seitlich ausweichen und den kurzen Moment nutzen, in dem er nach dem Spucken erschöpft seufzt.',
     lore: 'Seine samtige Haube duftet nach feuchtem Waldboden und süßen Blaubeeren. Mag es besonders, wenn man ihn sanft am Stiel krault.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const isWalking = state === 'walk';
-      const breath = Math.sin(time * 3.5) * 1.5;
-      const squash = isAttacking ? Math.sin(time * 10) * 3 : (isWalking ? Math.sin(time * 8) * 1.5 : 0);
-
-      drawPaperShadow(ctx, cx, cy + 16, 14, 5);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // 4 zarte Wurzelbeinchen
-      ctx.fillStyle = '#451a03';
-      for (let i = -1.5; i <= 1.5; i += 1) {
-        const footWiggle = isWalking ? Math.sin(time * 8 + i * 1.5) * 2.5 : 0;
-        ctx.beginPath();
-        ctx.ellipse(cx + i * 5.5, cy + 13 + footWiggle, 2.2, 3.2, 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Runder, samtiger Pilzkörper (Deep Indigo & Magenta)
-      ctx.fillStyle = '#581c87';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 4 - squash * 0.5, 13 + breath * 0.5, 11 + squash, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Bauchbereich heller (Fliederfarbenes Pergament)
-      ctx.fillStyle = '#a855f7';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 6 - squash * 0.5, 9, 7 + squash * 0.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Mintgrüne Leucht-Polkapunkte
-      ctx.fillStyle = '#6ee7b7';
-      ctx.beginPath();
-      ctx.arc(cx - 7, cy + 1, 2.5, 0, Math.PI * 2);
-      ctx.arc(cx + 7, cy + 3, 2, 0, Math.PI * 2);
-      ctx.arc(cx - 2, cy + 8, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Kamin-Mund auf dem Kopf
-      ctx.fillStyle = '#3b0764';
-      ctx.beginPath();
-      ctx.moveTo(cx - 6, cy - 6);
-      ctx.quadraticCurveTo(cx - 8, cy - 13 - squash, cx - 5, cy - 14 - squash);
-      ctx.lineTo(cx + 5, cy - 14 - squash);
-      ctx.quadraticCurveTo(cx + 8, cy - 13 - squash, cx + 6, cy - 6);
-      ctx.closePath();
-      ctx.fill();
-
-      // Mündungsschlund mit zartem Leuchten
-      ctx.fillStyle = '#34d399';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - 14 - squash, 6, 2.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Niedliche schläfrige Kulleraugen
-      const blink = Math.sin(time * 1.8) > 0.95;
-      drawGhibliEyes(ctx, cx - 4.5, cx + 4.5, cy + 2 - squash * 0.4, 2.4, 0, 0.4, blink, true);
-
-      // Schwebende Sporenbläschen
-      if (isAttacking) {
-        // Große leuchtende Sporen-Kugel
-        ctx.fillStyle = '#4ade80';
-        ctx.beginPath();
-        ctx.arc(cx, cy - 22 - squash, 5.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#bbf7d0';
-        ctx.beginPath();
-        ctx.arc(cx - 1.5, cy - 23.5 - squash, 2, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        // Zarte kleine Schwebepartikel
-        const bubbleY = (time * 18) % 24;
-        ctx.fillStyle = 'rgba(110, 231, 183, 0.7)';
-        ctx.beginPath();
-        ctx.arc(cx + Math.sin(time * 3) * 4, cy - 16 - bubbleY, 1.8, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.filter = 'none';
-    }
+    render: monSporeSpitter
   },
 
   // =========================================================================
@@ -542,92 +1623,7 @@ export const BESTIARY_DATA = [
     behavior: 'Uralter Steingolem, bewachsen mit Moos und Miniatur-Bonsai. Stampft im Takt der Bergadern. Rammt beide Fäuste in die Erde für verheerende Stoßwellen.',
     counter: 'Seine wuchtigen Schläge haben lange Vorbereitung. Während er ausholt, hinter ihn rollen und den moosfreien Riss an seinem Rücken attackieren.',
     lore: 'Wacht seit Jahrhunderten über zerfallene Himmelsruinen. Kleine Glühwürmchen schlafen nachts geborgen in seinen Steinfugen.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const breath = Math.sin(time * 2) * 1.2;
-      const isAttacking = state === 'attack';
-      const isWalking = state === 'walk';
-      const sway = isWalking ? Math.sin(time * 4) * 3 : 0;
-
-      drawPaperShadow(ctx, cx, cy + 22, 22, 7);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Uralter runder Felskörper (Slate Grey Papercraft)
-      ctx.fillStyle = '#334155';
-      ctx.beginPath();
-      ctx.ellipse(cx + sway * 0.3, cy + 3 + breath, 18, 16, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Steinstruktur / Geschichtete Felsplatten
-      ctx.fillStyle = '#475569';
-      ctx.beginPath();
-      ctx.ellipse(cx + sway * 0.3, cy + 1 + breath, 15, 12, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Moosdecke auf Schultern und Kopf (Lush Moss)
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.ellipse(cx + sway * 0.3, cy - 9 + breath, 14, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#22c55e';
-      ctx.beginPath();
-      ctx.ellipse(cx - 3 + sway * 0.3, cy - 10 + breath, 8, 4, -0.1, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Bonsai-Zweiglein mit 3 Blättern auf rechter Schulter
-      ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.moveTo(cx + 8 + sway * 0.3, cy - 10 + breath);
-      ctx.quadraticCurveTo(cx + 14 + sway * 0.3, cy - 15 + breath, cx + 12 + sway * 0.3, cy - 19 + breath);
-      ctx.stroke();
-
-      ctx.fillStyle = '#4ade80';
-      ctx.beginPath();
-      ctx.ellipse(cx + 12 + sway * 0.3, cy - 20 + breath, 2.5, 1.5, 0.4, 0, Math.PI * 2);
-      ctx.ellipse(cx + 15 + sway * 0.3, cy - 16 + breath, 2.2, 1.4, -0.3, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Uralte leuchtende Bernstein-Augenschlitze (Laputa Look)
-      const eyeBlink = Math.sin(time * 1.5) > 0.94;
-      if (!eyeBlink) {
-        ctx.fillStyle = '#fbbf24';
-        ctx.beginPath();
-        ctx.ellipse(cx - 5 + sway * 0.3, cy - 1 + breath, 3, 1.8, 0, 0, Math.PI * 2);
-        ctx.ellipse(cx + 5 + sway * 0.3, cy - 1 + breath, 3, 1.8, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.arc(cx - 5 + sway * 0.3, cy - 1 + breath, 1.2, 0, Math.PI * 2);
-        ctx.arc(cx + 5 + sway * 0.3, cy - 1 + breath, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Massive Steinfäuste
-      const armLift = isAttacking ? Math.sin(time * 8) * 12 : 0;
-      ctx.fillStyle = '#1e293b';
-      // Linke Faust
-      ctx.beginPath();
-      ctx.ellipse(cx - 16 + sway, cy + 12 + breath - armLift, 6.5, 6.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      // Rechte Faust
-      ctx.beginPath();
-      ctx.ellipse(cx + 16 + sway, cy + 12 + breath - armLift, 6.5, 6.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Umkreisende Glühwürmchen (Totoro / Waldgeist-Touch)
-      const fireflyAngle = time * 2;
-      const ffx = cx + Math.cos(fireflyAngle) * 22;
-      const ffy = cy + Math.sin(fireflyAngle) * 9 + breath;
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(ffx, ffy, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.filter = 'none';
-    }
+    render: monBoulderTroll
   },
 
   {
@@ -646,84 +1642,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein gemütlicher, flauschiger Schnee-Yeti mit mächtigen Eis-Widderhörnern. Schwingt eine uralte Eiskristall-Keule und beschwört sanfte Schneewirbel.',
     counter: 'Feuer- und Spreng-Angriffe schmelzen seine Schneefell-Rüstung. Im Moment seines Keulenschwungs unter seinen Beinen durchrollen.',
     lore: 'An seinem linken Horn baumelt eine alte rote Papierlaterne, die ihm ein verlorener Wanderer einst zum Dank schenkte. Das Licht erlischt niemals.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const breath = Math.sin(time * 2.2) * 1.5;
-      const isAttacking = state === 'attack';
-      const isWalking = state === 'walk';
-      const step = isWalking ? Math.sin(time * 6) * 3 : 0;
-
-      drawPaperShadow(ctx, cx, cy + 22, 20, 6);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Flauschiger schneeweißer Wolkenkörper (Totoro Snow Silhouette)
-      ctx.fillStyle = '#e2e8f0';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 5 + breath, 18, 16, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 3 + breath, 16, 14, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Bauchfell mit Eis-Tönung
-      ctx.fillStyle = '#e0f2fe';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 7 + breath, 11, 9, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Kulleraugen & blaue Stupsnase
-      drawGhibliEyes(ctx, cx - 5.5, cx + 5.5, cy - 2 + breath, 2.5, 0, 0.2, false, false);
-
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 2.5 + breath, 2.5, 1.8, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Transparente Gletscher-Widderhörner
-      ctx.strokeStyle = '#7dd3fc';
-      ctx.lineWidth = 3.5;
-      ctx.lineCap = 'round';
-      // Rechtes Horn
-      ctx.beginPath();
-      ctx.arc(cx + 12, cy - 9 + breath, 8, -Math.PI * 0.2, Math.PI * 0.7);
-      ctx.stroke();
-      // Linkes Horn
-      ctx.beginPath();
-      ctx.arc(cx - 12, cy - 9 + breath, 8, Math.PI * 0.3, Math.PI * 1.2);
-      ctx.stroke();
-
-      // Rote Papierlaterne am linken Horn (schwankend im Wind)
-      const lanternSwing = Math.sin(time * 3) * 0.25;
-      drawPaperLantern(ctx, cx - 18 + lanternSwing * 6, cy - 3 + breath, 8, 10, time, '#fef08a');
-
-      // Eiskristall-Keule in der rechten Pranke
-      const clubSwing = isAttacking ? Math.sin(time * 8) * 20 : 0;
-      ctx.save();
-      ctx.translate(cx + 16, cy + 4 + breath);
-      ctx.rotate(clubSwing * Math.PI / 180);
-      // Holzgriff
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(-2, -14, 4, 18);
-      // Glänzender Eisblock
-      ctx.fillStyle = '#38bdf8';
-      ctx.beginPath();
-      ctx.roundRect(-6, -22, 12, 10, 2);
-      ctx.fill();
-      ctx.fillStyle = '#e0f2fe';
-      ctx.fillRect(-4, -20, 4, 4);
-      ctx.restore();
-
-      // Flauschige Schneefüße
-      ctx.fillStyle = '#cbd5e1';
-      ctx.beginPath();
-      ctx.ellipse(cx - 8, cy + 18 + step, 6, 4, 0, 0, Math.PI * 2);
-      ctx.ellipse(cx + 8, cy + 18 - step, 6, 4, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.filter = 'none';
-    }
+    render: monFrostGiant
   },
 
   // =========================================================================
@@ -743,98 +1662,7 @@ export const BESTIARY_DATA = [
     behavior: 'Gleitet in weichen, eleganten Sinuswellen lautlos durchs Gras. Schnellt blitzartig vor für einen giftigen Überraschungsbiss.',
     counter: 'Ihre Gleitbahn ist vorhersehbar. Im Moment ihres Ausholens zur Seite hechten und mit einem Rundumschlag den Schwanz treffen.',
     lore: 'Eine heilige Bote des Waldgeistes. Auf ihrer Schwanzspitze reitet ein winziger Kodama mit einem Seerosenblatt als Sonnenschirm.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const isWalking = state === 'walk';
-      const speed = isWalking ? 6.5 : (isAttacking ? 8 : 4);
-
-      drawPaperShadow(ctx, cx, cy + 16, 22, 5);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // 8 geschmeidige Jade-Körperscheiben in Sinuswellen
-      const segments = 8;
-      const points = [];
-
-      for (let i = segments - 1; i >= 0; i--) {
-        const segWave = Math.sin(time * speed - i * 0.55);
-        const px = cx + segWave * (12 + (segments - i) * 0.8);
-        const py = cy + 12 - i * 3.5;
-        const rad = 3.5 + (1 - i / segments) * 4;
-
-        points.push({ x: px, y: py, r: rad });
-
-        // Bauchtönung (Creme-Pergament)
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.arc(px, py + 1.5, rad * 0.8, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Jadegrüner Rückenschuppen-Körper
-        ctx.fillStyle = i % 2 === 0 ? '#059669' : '#10b981';
-        ctx.beginPath();
-        ctx.arc(px, py, rad, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Feine goldene Zierflecken
-        ctx.fillStyle = '#fde047';
-        ctx.beginPath();
-        ctx.arc(px, py - rad * 0.3, rad * 0.25, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Reitender Kodama auf dem letzten Schwanzsegment! (Ghibli-Charm Pur)
-      const tail = points[0];
-      drawKodama(ctx, tail.x, tail.y - 6, Math.sin(time * 3) * 0.3, 0.75);
-
-      // Edler Drachen- / Schlangenkopf
-      const head = points[points.length - 1];
-      const headX = isAttacking ? head.x + Math.sin(time * 12) * 5 : head.x;
-      const headY = head.y - 3;
-
-      ctx.fillStyle = '#047857';
-      ctx.beginPath();
-      ctx.ellipse(headX, headY, 7.5, 5.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Rubinrote Glasaugen
-      ctx.fillStyle = '#f43f5e';
-      ctx.beginPath();
-      ctx.arc(headX - 3.5, headY - 1.5, 2, 0, Math.PI * 2);
-      ctx.arc(headX + 3.5, headY - 1.5, 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(headX - 4, headY - 2, 0.8, 0, Math.PI * 2);
-      ctx.arc(headX + 3, headY - 2, 0.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Goldene Fühler / Schnurrhaare
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(headX - 4, headY - 3);
-      ctx.quadraticCurveTo(headX - 8, headY - 8, headX - 6, headY - 11);
-      ctx.moveTo(headX + 4, headY - 3);
-      ctx.quadraticCurveTo(headX + 8, headY - 8, headX + 6, headY - 11);
-      ctx.stroke();
-
-      // Zarte gespaltene Zunge bei Zischen
-      if (Math.sin(time * 6) > 0.4) {
-        ctx.strokeStyle = '#fb7185';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(headX, headY + 4);
-        ctx.lineTo(headX, headY + 8);
-        ctx.lineTo(headX - 2, headY + 10);
-        ctx.moveTo(headX, headY + 8);
-        ctx.lineTo(headX + 2, headY + 10);
-        ctx.stroke();
-      }
-
-      ctx.filter = 'none';
-    }
+    render: monSlitheringViper
   },
 
   {
@@ -853,75 +1681,7 @@ export const BESTIARY_DATA = [
     behavior: 'Bricht wie eine blühende Keramik-Wüstenlotus aus dem Treibsand hervor. Erzeugt wirbelnde Sandtrichter und schnappt mit glatten Perlzähnen zu.',
     counter: 'Auf die zarten Blütenblätter am Kragen zielen, wenn sich der Schlund öffnet. Bomben direkt in seinen Sandtrichter werfen.',
     lore: 'Aus antiken Terrakotta-Scherben und goldenen Kintsugi-Adern geformt. Sammelt Tautropfen der Wüstennächte in seinem Blütenkelch.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const breath = Math.sin(time * 3) * 1.5;
-      const mawOpen = isAttacking ? 6 + Math.sin(time * 12) * 3 : 2 + Math.sin(time * 3) * 1;
-
-      // Wirbelnder Sandtrichter am Boden
-      ctx.fillStyle = 'rgba(217, 119, 6, 0.35)';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 16, 20 + Math.sin(time * 4) * 2, 7, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Segmentierter Terrakotta-Hals
-      for (let i = 0; i < 3; i++) {
-        const segY = cy + 12 - i * 6 + breath;
-        ctx.fillStyle = i % 2 === 0 ? '#c2410c' : '#ea580c';
-        ctx.beginPath();
-        ctx.ellipse(cx, segY, 14 - i * 2, 5, 0, 0, Math.PI * 2);
-        ctx.fill();
-        // Kintsugi-Goldader
-        ctx.strokeStyle = '#fde047';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(cx - 6 + i * 2, segY);
-        ctx.lineTo(cx + 4 - i, segY + 2);
-        ctx.stroke();
-      }
-
-      // Lotus-Blütenblätter (Korallen-Rosa & Gold)
-      const petals = 6;
-      ctx.fillStyle = '#fb7185';
-      for (let p = 0; p < petals; p++) {
-        const angle = (p / petals) * Math.PI * 2;
-        const petX = cx + Math.cos(angle) * (11 + mawOpen);
-        const petY = cy - 2 + Math.sin(angle) * (5 + mawOpen * 0.4) + breath;
-        ctx.beginPath();
-        ctx.ellipse(petX, petY, 4.5, 3, angle, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Innerer Schlund (Tiefes Dunkel mit leuchtendem Sonnenkern)
-      ctx.fillStyle = '#1c1917';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy - 2 + breath, 10 + mawOpen * 0.5, 6 + mawOpen * 0.3, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Goldener Sonnen-Nektarkern
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.arc(cx, cy - 2 + breath, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Kreis glatter weißer Perlzähne
-      ctx.fillStyle = '#f8fafc';
-      for (let t = 0; t < 8; t++) {
-        const tAngle = (t / 8) * Math.PI * 2;
-        const tx = cx + Math.cos(tAngle) * (7 + mawOpen * 0.4);
-        const ty = cy - 2 + Math.sin(tAngle) * (4 + mawOpen * 0.25) + breath;
-        ctx.beginPath();
-        ctx.arc(tx, ty, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Zwei neugierige Bernstein-Augen an den Seiten
-      drawGhibliEyes(ctx, cx - 11, cx + 11, cy - 6 + breath, 2, 0, 0, false, false);
-
-      ctx.filter = 'none';
-    }
+    render: monDuneMaw
   },
 
   // =========================================================================
@@ -941,80 +1701,7 @@ export const BESTIARY_DATA = [
     behavior: 'Schwebender Geistermönch mit einer traditionellen roten Chōchin-Laterne als Kopf. Wird von zwei verspielten Flämmchen-Begleitern (Hi-no-Tama) umtanzt.',
     counter: 'Feuersäulen kündigen sich durch kleine Funkenwirbel am Boden an. Im Schwebemodus mit Pfeilen aus der Distanz unterbrechen.',
     lore: 'Sein Laternenkopf lächelt stets sanft, selbst im heißesten Gefecht. Die zwei kleinen Flämmchen bringen ihm getrocknete Teeblätter zum Verglühen.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const floatBob = Math.sin(time * 2.5) * 3;
-
-      drawPaperShadow(ctx, cx, cy + 18, 12, 4);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Flatterndes Indigo-Papiergewand mit Talismanen
-      ctx.fillStyle = '#1e1b4b';
-      ctx.beginPath();
-      ctx.moveTo(cx - 8, cy - 2 + floatBob);
-      ctx.quadraticCurveTo(cx - 12, cy + 14 + floatBob, cx - 6, cy + 17 + floatBob);
-      ctx.quadraticCurveTo(cx, cy + 15 + floatBob, cx + 6, cy + 17 + floatBob);
-      ctx.quadraticCurveTo(cx + 12, cy + 14 + floatBob, cx + 8, cy - 2 + floatBob);
-      ctx.closePath();
-      ctx.fill();
-
-      // Goldene Talisman-Schärfe
-      ctx.fillStyle = '#fde047';
-      ctx.fillRect(cx - 2, cy + 2 + floatBob, 4, 10);
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(cx - 1, cy + 4 + floatBob, 2, 2);
-      ctx.fillRect(cx - 1, cy + 8 + floatBob, 2, 2);
-
-      // Kopf ist eine leuchtende rote Papierlaterne (Chōchin)
-      drawPaperLantern(ctx, cx, cy - 8 + floatBob, 14, 15, time, '#fef08a');
-
-      // Freundliches Lächel-Gesicht auf der Laterne ausgeschnitten
-      ctx.fillStyle = '#451a03';
-      ctx.beginPath();
-      ctx.arc(cx - 3, cy - 9 + floatBob, 1.2, 0, Math.PI * 2);
-      ctx.arc(cx + 3, cy - 9 + floatBob, 1.2, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cx, cy - 7 + floatBob, 2, 0.1, Math.PI * 0.9);
-      ctx.stroke();
-
-      // Zwei niedliche tanzende Flämmchen-Geister (Hi-no-Tama / Calcifers)
-      const f1Angle = time * 3;
-      const f2Angle = time * 3 + Math.PI;
-
-      const drawFlameSprite = (fx, fy, scale = 1) => {
-        ctx.save();
-        ctx.translate(fx, fy);
-        ctx.scale(scale, scale);
-        // Flammenkörper
-        ctx.fillStyle = '#f97316';
-        ctx.beginPath();
-        ctx.arc(0, 2, 4, 0, Math.PI * 2);
-        ctx.moveTo(0, -5);
-        ctx.quadraticCurveTo(4, -1, 3, 3);
-        ctx.quadraticCurveTo(-4, -1, 0, -5);
-        ctx.fill();
-        // Leuchtendes Gelb
-        ctx.fillStyle = '#fde047';
-        ctx.beginPath();
-        ctx.arc(0, 2, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-        // Zwei kleine Pünktchen-Augen
-        ctx.fillStyle = '#0f172a';
-        ctx.beginPath();
-        ctx.arc(-1.2, 1.5, 0.6, 0, Math.PI * 2);
-        ctx.arc(1.2, 1.5, 0.6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      };
-
-      const flameRadius = isAttacking ? 18 + Math.sin(time * 10) * 4 : 14;
-      drawFlameSprite(cx + Math.cos(f1Angle) * flameRadius, cy + floatBob + Math.sin(f1Angle) * 6, 0.9);
-      drawFlameSprite(cx + Math.cos(f2Angle) * flameRadius, cy + floatBob + Math.sin(f2Angle) * 6, 0.9);
-
-      ctx.filter = 'none';
-    }
+    render: monPyromancer
   },
 
   {
@@ -1033,90 +1720,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein weiser Eulen-Mönch im Sternen-Kimono. Schwebt auf einer zarten rosa Traumwolke und beschwört leuchtende Sternschnuppen-Kaskaden.',
     counter: 'Seine Sternschnuppen schlagen mit kurzer Verzögerung ein. Nach den Einschlägen ist er kurz geblendet – perfekte Zeit für Kombo-Angriffe.',
     lore: 'Trägt einen Kegelhut aus Reisstroh mit kleinen Papier-Glücksstreifen (O-Mikuji). Kennt jeden Stern der Geisterwelt beim Vornamen.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const cloudBob = Math.sin(time * 2.2) * 2.5;
-
-      drawPaperShadow(ctx, cx, cy + 20, 16, 5);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Zartrosa fluffige Traumwolke (Pink Spirit Cloud)
-      ctx.fillStyle = '#fbcfe8';
-      ctx.beginPath();
-      ctx.arc(cx - 8, cy + 12 + cloudBob, 7, 0, Math.PI * 2);
-      ctx.arc(cx, cy + 10 + cloudBob, 9, 0, Math.PI * 2);
-      ctx.arc(cx + 8, cy + 12 + cloudBob, 7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Kleiner weiser Eulen-Körper im Mitternachts-Kimono
-      ctx.fillStyle = '#1e3a8a';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 1 + cloudBob, 10, 11, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Goldene Sternen-Muster auf dem Kimono
-      ctx.fillStyle = '#fde047';
-      ctx.beginPath();
-      ctx.arc(cx - 4, cy + 4 + cloudBob, 1, 0, Math.PI * 2);
-      ctx.arc(cx + 3, cy + 6 + cloudBob, 1.2, 0, Math.PI * 2);
-      ctx.arc(cx - 1, cy + 8 + cloudBob, 0.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Flauschige weiße Brustfedern
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 2 + cloudBob, 5, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Große, weise goldene Eulenaugen & Schnabel
-      drawGhibliEyes(ctx, cx - 4, cx + 4, cy - 4 + cloudBob, 2.6, 0, 0, false, false);
-
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 2 + cloudBob);
-      ctx.lineTo(cx - 1.5, cy - 0.5 + cloudBob);
-      ctx.lineTo(cx + 1.5, cy - 0.5 + cloudBob);
-      ctx.fill();
-
-      // Kegelhut aus Reisstroh (Kasa) mit O-Mikuji Papierstreifen
-      ctx.fillStyle = '#d97706';
-      ctx.beginPath();
-      ctx.moveTo(cx - 13, cy - 6 + cloudBob);
-      ctx.lineTo(cx, cy - 14 + cloudBob);
-      ctx.lineTo(cx + 13, cy - 6 + cloudBob);
-      ctx.closePath();
-      ctx.fill();
-
-      // Glücks-Papierstreifen am Hutrand
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(cx - 8, cy - 5 + cloudBob, 2, 5);
-      ctx.fillRect(cx + 6, cy - 5 + cloudBob, 2, 5);
-
-      // Knorriges Holzstabsystem mit kreisendem Sternkristall
-      const staffX = cx + 12;
-      const staffY = cy + cloudBob;
-      ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.moveTo(staffX, staffY + 10);
-      ctx.lineTo(staffX, staffY - 10);
-      ctx.stroke();
-
-      // Kreisender 8-zackiger Stern
-      const starRot = time * 3;
-      ctx.save();
-      ctx.translate(staffX, staffY - 14);
-      ctx.rotate(starRot);
-      ctx.fillStyle = isAttacking ? '#facc15' : '#38bdf8';
-      for (let s = 0; s < 4; s++) {
-        ctx.rotate(Math.PI / 4);
-        ctx.fillRect(-1, -4, 2, 8);
-      }
-      ctx.restore();
-
-      ctx.filter = 'none';
-    }
+    render: monStarAstromancer
   },
 
   // =========================================================================
@@ -1138,83 +1742,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein herziges, transparentes Tropfen-Wesen mit einem kleinen Eichelkern und Kleeblatt im Bauch. Hüpft fröhlich und teilt sich bei Gefahr kurz in zwei Mini-Tröpfchen.',
     counter: 'Mit einfachen Schwerthieben schnell besiegbar. Vorsicht beim Zerschlagen: Mini-Blobs hüpfen flink davon!',
     lore: 'Entsteht aus Morgentautropfen auf uralten Eichenblättern. Kitzelt sanft an den Zehen und liebt sonnige Waldlichtungen.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const isWalking = state === 'walk';
-      const squish = Math.sin(time * 5) * (isWalking ? 3.5 : 1.8);
-      const hop = isWalking ? Math.abs(Math.sin(time * 5)) * 6 : 0;
-
-      drawPaperShadow(ctx, cx, cy + 16, 15 + squish, 5 - squish * 0.2);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      const blobY = cy + 4 - hop;
-
-      // Transparenter Smaragd-Gelee-Körper
-      ctx.fillStyle = 'rgba(34, 197, 94, 0.88)';
-      ctx.beginPath();
-      ctx.moveTo(cx, blobY - 14 - squish);
-      ctx.bezierCurveTo(cx + 14 + squish, blobY - 10, cx + 16 + squish, blobY + 11, cx, blobY + 12 + squish * 0.5);
-      ctx.bezierCurveTo(cx - 16 - squish, blobY + 11, cx - 14 - squish, blobY - 10, cx, blobY - 14 - squish);
-      ctx.fill();
-
-      // Eingeschlossene goldene Eichel im Geleebauch (Ghibli-Detail!)
-      ctx.fillStyle = '#b45309';
-      ctx.beginPath();
-      ctx.ellipse(cx - 3, blobY + 2, 3, 4, 0.3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#78350f';
-      ctx.beginPath();
-      ctx.arc(cx - 4, blobY - 1, 2.5, 0, Math.PI);
-      ctx.fill();
-
-      // Glanz-Highlight auf dem Gelee (Papercraft-Glanz)
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.beginPath();
-      ctx.ellipse(cx - 6, blobY - 6, 4, 2, -0.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Wackelndes 4-blättriges Kleeblatt auf dem Kopf
-      const leafSway = Math.sin(time * 4) * 0.3;
-      ctx.save();
-      ctx.translate(cx, blobY - 14 - squish);
-      ctx.rotate(leafSway);
-      ctx.fillStyle = '#15803d';
-      ctx.fillRect(-0.8, -4, 1.6, 5);
-      ctx.fillStyle = '#4ade80';
-      ctx.beginPath();
-      ctx.arc(-2, -5, 2, 0, Math.PI * 2);
-      ctx.arc(2, -5, 2, 0, Math.PI * 2);
-      ctx.arc(0, -7, 2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Riesen-Kulleraugen & niedlicher Katzenmund
-      drawGhibliEyes(ctx, cx - 5, cx + 5, blobY - 1, 2.8, 0, 0, false, true);
-
-      // Kleiner süßer Mund
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 1.1;
-      ctx.beginPath();
-      ctx.arc(cx - 1.2, blobY + 4, 1.2, 0.2, Math.PI * 0.9);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(cx + 1.2, blobY + 4, 1.2, 0.2, Math.PI * 0.9);
-      ctx.stroke();
-
-      // Bei Angriff: Zwei winzige jubelnde Baby-Tröpfchen hüpfen an den Seiten!
-      if (isAttacking) {
-        ctx.fillStyle = '#22c55e';
-        ctx.beginPath();
-        ctx.arc(cx - 16, blobY + 6, 4, 0, Math.PI * 2);
-        ctx.arc(cx + 16, blobY + 6, 4, 0, Math.PI * 2);
-        ctx.fill();
-        drawGhibliEyes(ctx, cx - 17, cx - 15, blobY + 5, 1, 0, 0, false, false);
-        drawGhibliEyes(ctx, cx + 15, cx + 17, blobY + 5, 1, 0, 0, false, false);
-      }
-
-      ctx.filter = 'none';
-    }
+    render: monGreenSlime
   },
 
   {
@@ -1231,42 +1759,7 @@ export const BESTIARY_DATA = [
     behavior: 'Eine große kuschelige Rußmännchen-Königin (Susuwatari) aus samtigem Tintenflaum. Umgeben von flinken kleinen Rußmännchen, die bunte Zuckerchen tragen.',
     counter: 'Seine klebrige Hülle verlangsamt Nahkämpfer. Mit Fackeln oder Feuerschwert anzünden, um die Tintenhülle zu verbrennen.',
     lore: 'Lebt in verlassenen Dachböden und alten Kaminen. Versteckt glitzernde Sternbonbons (Konpeitō) in seinem weichen Tintenbauch.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const breath = Math.sin(time * 3) * 1.5;
-
-      drawPaperShadow(ctx, cx, cy + 18, 18, 5.5);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Großer flauschiger Ruß-Körper (Susuwatari Queen)
-      drawSootSprite(ctx, cx, cy + 4 + breath, 14, time, false);
-
-      // Große verdutzte Kulleraugen blicken umher
-      const lookX = Math.sin(time * 2) * 1.5;
-      drawGhibliEyes(ctx, cx - 5, cx + 5, cy + 2 + breath, 3.2, lookX, 0, false, false);
-
-      // 3 kleine flinke Rußmännchen-Kinder um sie herum!
-      // 1. Rußmännchen links mit Sternzuckerchen (Konpeitō)
-      drawSootSprite(ctx, cx - 18, cy + 14 + Math.sin(time * 6) * 1.5, 4, time, true);
-
-      // 2. Rußmännchen rechts hüpfend
-      drawSootSprite(ctx, cx + 17, cy + 12 + Math.abs(Math.sin(time * 7)) * -3, 3.5, time, false);
-
-      // 3. Rußmännchen vorne neugierig
-      drawSootSprite(ctx, cx + 2, cy + 17, 3, time, false);
-
-      // Bei Angriff: Pustet sich auf und sprüht kleine harmlose Zuckerchen!
-      if (isAttacking) {
-        ctx.fillStyle = '#fde047';
-        ctx.beginPath();
-        ctx.arc(cx + Math.cos(time * 12) * 14, cy - 10 + Math.sin(time * 12) * 6, 2, 0, Math.PI * 2);
-        ctx.arc(cx - Math.cos(time * 12) * 14, cy - 8 - Math.sin(time * 12) * 6, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.filter = 'none';
-    }
+    render: monTarMire
   },
 
   // =========================================================================
@@ -1286,89 +1779,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein majestätischer Geisterwolf, inspiriert vom Wolfsgott aus Prinzessin Mononoke und Okami. Trägt heilige Shimenawa-Seile mit Zickzack-Papier.',
     counter: 'Reißt beim Anspringen die Deckung auf. Exakt im Moment seines Sprungs zur Seite rollen und von der Flanke attackieren.',
     lore: 'Beschützt heilige Schreine im tiefen Wald. Heult nur bei Neumond, wenn die Geisterbrücke zur Anderswelt offen steht.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const isWalking = state === 'walk';
-      const breath = Math.sin(time * 3) * 1.2;
-      const gallop = isWalking ? Math.sin(time * 9) * 3 : 0;
-
-      drawPaperShadow(ctx, cx, cy + 18, 18, 5);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Geschwungener buschiger Geister-Schweif
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.moveTo(cx - 10, cy + 6 + breath);
-      ctx.quadraticCurveTo(cx - 20, cy - 2 + Math.sin(time * 4) * 4, cx - 22, cy - 10);
-      ctx.quadraticCurveTo(cx - 14, cy - 4, cx - 8, cy + 8 + breath);
-      ctx.fill();
-
-      // Beine
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(cx - 8, cy + 8, 3, 10 + gallop);
-      ctx.fillRect(cx + 6, cy + 8, 3, 10 - gallop);
-
-      // Wolfskörper (Elegantes tiefdunkles Pergament mit weißer Brust)
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 5 + breath, 13, 8, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Weiße Brustpartie
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.ellipse(cx + 4, cy + 4 + breath, 6, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Heiliges Shimenawa-Seil mit Shide-Papieranhängern um den Hals
-      ctx.strokeStyle = '#d97706';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.ellipse(cx + 6, cy + 2 + breath, 5, 6, 0.4, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Weiße Zickzack-Papieranhänger (Shide)
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(cx + 7, cy + 6 + breath, 2, 4);
-      ctx.fillRect(cx + 4, cy + 7 + breath, 2, 3.5);
-
-      // Edler Wolfskopf mit spitzen Ohren
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.ellipse(cx + 9, cy - 4 + breath, 7, 5.5, 0.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Spitze aufmerksame Ohren
-      ctx.beginPath();
-      ctx.moveTo(cx + 5, cy - 8 + breath);
-      ctx.lineTo(cx + 7, cy - 15 + breath);
-      ctx.lineTo(cx + 10, cy - 7 + breath);
-      ctx.moveTo(cx + 10, cy - 8 + breath);
-      ctx.lineTo(cx + 13, cy - 14 + breath);
-      ctx.lineTo(cx + 14, cy - 6 + breath);
-      ctx.fill();
-
-      // Zinnoberrote Ritual-Kriegsbemalung um die Augen (Mononoke Look)
-      ctx.strokeStyle = '#e11d48';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(cx + 7, cy - 5 + breath);
-      ctx.lineTo(cx + 12, cy - 3 + breath);
-      ctx.stroke();
-
-      // Bernstein-Glanzaugen
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.arc(cx + 10, cy - 4 + breath, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(cx + 9.5, cy - 4.5 + breath, 0.7, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.filter = 'none';
-    }
+    render: monDireWolf
   },
 
   {
@@ -1385,91 +1796,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein Tempelwächter-Skorpion aus antiker Seladon-Keramik. Seine Scheren ähneln zarten Lotusknospen; sein Stachelschwanz trägt eine leuchtende Spinnenlilien-Laterne.',
     counter: 'Blockt frontale Schläge mit den Keramikscheren ab. Umkreisen und den weichen Ansatz des Stachelschwanzes anvisieren.',
     lore: 'Wurde vor Jahrtausenden von Kaiserlichen Kunsthandwerkern geschaffen, um Juwelenkammern vor Grabräubern zu beschützen.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const breath = Math.sin(time * 3) * 1.2;
-
-      drawPaperShadow(ctx, cx, cy + 18, 19, 5);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // 6 feine Scherenschreitbeine
-      ctx.strokeStyle = '#065f46';
-      ctx.lineWidth = 1.6;
-      for (let i = -1; i <= 1; i++) {
-        const legSway = Math.sin(time * 6 + i * 2) * 2;
-        ctx.beginPath();
-        ctx.moveTo(cx - 6, cy + 4 + i * 4);
-        ctx.lineTo(cx - 15, cy + 8 + legSway);
-        ctx.lineTo(cx - 18, cy + 16);
-        ctx.moveTo(cx + 6, cy + 4 + i * 4);
-        ctx.lineTo(cx + 15, cy + 8 - legSway);
-        ctx.lineTo(cx + 18, cy + 16);
-        ctx.stroke();
-      }
-
-      // Seladon-Jade Panzerplatte mit Kintsugi-Linien
-      ctx.fillStyle = '#065f46';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 6 + breath, 11, 8, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#0d9488';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 5 + breath, 9, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Kintsugi Goldriss
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(cx - 4, cy + 4 + breath);
-      ctx.lineTo(cx + 2, cy + 7 + breath);
-      ctx.stroke();
-
-      // Lotus-Scherenarme vorne
-      const drawLotusClaw = (clawX, clawY, angle) => {
-        ctx.save();
-        ctx.translate(clawX, clawY);
-        ctx.rotate(angle);
-        ctx.fillStyle = '#0d9488';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, 6, 4, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fb7185'; // Rosa Lotusspitze
-        ctx.beginPath();
-        ctx.arc(3, -1, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      };
-
-      const clawClick = Math.sin(time * 5) * 0.2;
-      drawLotusClaw(cx - 12, cy - 2 + breath, -0.4 + clawClick);
-      drawLotusClaw(cx + 12, cy - 2 + breath, 0.4 - clawClick);
-
-      // Geschwungener Skorpionschwanz
-      const tailWhip = isAttacking ? Math.sin(time * 12) * 15 : Math.sin(time * 3) * 4;
-      ctx.strokeStyle = '#047857';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy + 10 + breath);
-      ctx.quadraticCurveTo(cx - 8, cy - 6, cx - 4 + tailWhip * 0.3, cy - 14 + breath);
-      ctx.stroke();
-
-      // Spinnenlilien-Laterne an der Stachelspitze (Higanbana Lantern)
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.arc(cx - 4 + tailWhip * 0.3, cy - 15 + breath, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glänzender Gift-Tautropfen
-      ctx.fillStyle = '#fef08a';
-      ctx.beginPath();
-      ctx.arc(cx - 4 + tailWhip * 0.3, cy - 17 + breath, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.filter = 'none';
-    }
+    render: monEmperorScorpion
   },
 
   {
@@ -1486,75 +1813,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein pummeliges Waldhüter-Wildschwein mit Moosdecke und Kirschblüten auf dem Rücken. Schnaubt gemütlich, stürmt bei Bedrohung wie ein Rammbock vor.',
     counter: 'Beim Ansturm kann es nicht lenken. Rechtzeitig zur Seite springen; prallt es gegen einen Felsen, ist es für 3 Sekunden benommen.',
     lore: 'Schläft am liebsten unter alten Kastanienbäumen. Kleine Waldvögel baden gerne in den weichen Pfützen seiner Trittspuren.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const isWalking = state === 'walk';
-      const breath = Math.sin(time * 3.5) * 1.5;
-      const trot = isWalking ? Math.sin(time * 9) * 3 : 0;
-
-      drawPaperShadow(ctx, cx, cy + 18, 18, 6);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // 4 kurze, stämmige Beinchen
-      ctx.fillStyle = '#451a03';
-      ctx.fillRect(cx - 9, cy + 8, 4, 9 + trot);
-      ctx.fillRect(cx + 6, cy + 8, 4, 9 - trot);
-
-      // Runder kuscheliger Wildschweinkörper (Warm Cocoa Brown)
-      ctx.fillStyle = '#78350f';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 4 + breath, 15, 11, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Saftige Moosdecke auf dem Rücken
-      ctx.fillStyle = '#15803d';
-      ctx.beginPath();
-      ctx.ellipse(cx - 2, cy - 3 + breath, 12, 5, -0.1, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Eingebettete Sakura-Kirschblütenblätter im Moos
-      drawSakuraPetal(ctx, cx - 6, cy - 5 + breath, 0.3, 0.8);
-      drawSakuraPetal(ctx, cx + 2, cy - 4 + breath, -0.4, 0.7);
-
-      // Kuschelige Schlappohren
-      ctx.fillStyle = '#542307';
-      ctx.beginPath();
-      ctx.ellipse(cx + 4, cy - 4 + breath, 3, 5, 0.4, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glänzende schwarze Schnauze mit Nüstern
-      ctx.fillStyle = '#1c1917';
-      ctx.beginPath();
-      ctx.ellipse(cx + 13, cy + 4 + breath, 4.5, 3.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.arc(cx + 12.5, cy + 3.5 + breath, 0.8, 0, Math.PI * 2);
-      ctx.arc(cx + 14.5, cy + 3.5 + breath, 0.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Weiße geschwungene Elfenbeinhauer
-      ctx.strokeStyle = '#f8fafc';
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.moveTo(cx + 11, cy + 6 + breath);
-      ctx.quadraticCurveTo(cx + 16, cy + 8 + breath, cx + 15, cy + 1 + breath);
-      ctx.stroke();
-
-      // Kulleraugen mit Glanz
-      drawGhibliEyes(ctx, cx + 7, cx + 7, cy - 1 + breath, 2, 0, 0, false, false);
-
-      // Dampfwölkchen aus der Schnauze
-      if (Math.sin(time * 3) > 0.5) {
-        ctx.fillStyle = 'rgba(248, 250, 252, 0.6)';
-        ctx.beginPath();
-        ctx.arc(cx + 18, cy + 2 + breath, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.filter = 'none';
-    }
+    render: monTuskBoar
   },
 
   {
@@ -1573,63 +1832,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein zuckersüßes flauschiges Ruß-Spinnchen mit bunten Ringelsöckchen an den Beinen. Schwingt an einem elastischen Silberfaden und verwebt glitzernde Tautropfen.',
     counter: 'Feuer entzündet ihre Seidennetze sofort. Wenn sie sich am Faden herablässt, mit dem Schild abfangen und mit dem Schwert kontern.',
     lore: 'Ihre Netze klingen wie feine Harfensaiten, wenn der Höhlenwind hindurchweht. Höhlenforscher lauschen oft stundenlang ihrer Musik.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const bungeeBob = Math.sin(time * 4) * (isAttacking ? 6 : 2.5);
-
-      drawPaperShadow(ctx, cx, cy + 22, 14, 4);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Glänzender silberner Seidenfaden nach oben
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 22);
-      ctx.lineTo(cx, cy - 4 + bungeeBob);
-      ctx.stroke();
-
-      // 6 spindeldürre Beinchen mit gestreiften Ringelsöckchen
-      for (let i = -1; i <= 1; i++) {
-        const legWave = Math.sin(time * 5 + i * 2) * 3;
-        // Links
-        ctx.strokeStyle = '#09090b';
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(cx - 5, cy + bungeeBob + i * 3);
-        ctx.lineTo(cx - 14, cy - 3 + bungeeBob + legWave);
-        ctx.lineTo(cx - 18, cy + 12 + bungeeBob);
-        ctx.stroke();
-        // Ringelsöckchen rot-weiß
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(cx - 19, cy + 10 + bungeeBob, 2.5, 2.5);
-
-        // Rechts
-        ctx.beginPath();
-        ctx.moveTo(cx + 5, cy + bungeeBob + i * 3);
-        ctx.lineTo(cx + 14, cy - 3 + bungeeBob - legWave);
-        ctx.lineTo(cx + 18, cy + 12 + bungeeBob);
-        ctx.stroke();
-        // Ringelsöckchen rot-weiß
-        ctx.fillRect(cx + 16.5, cy + 10 + bungeeBob, 2.5, 2.5);
-      }
-
-      // Flauschiger runder Pom-Pom Spinnenkörper
-      drawSootSprite(ctx, cx, cy + bungeeBob, 9, time, false);
-
-      // Große, neugierige Anime-Augen & 4 winzige Stirn-Pünktchen
-      drawGhibliEyes(ctx, cx - 3.5, cx + 3.5, cy - 1 + bungeeBob, 2.2, 0, 0, false, true);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(cx - 4, cy - 5 + bungeeBob, 0.8, 0, Math.PI * 2);
-      ctx.arc(cx - 1.5, cy - 6 + bungeeBob, 0.8, 0, Math.PI * 2);
-      ctx.arc(cx + 1.5, cy - 6 + bungeeBob, 0.8, 0, Math.PI * 2);
-      ctx.arc(cx + 4, cy - 5 + bungeeBob, 0.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.filter = 'none';
-    }
+    render: monCaveWeaver
   },
 
   {
@@ -1648,177 +1851,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein unheimlich flinker, kleiner Höhlen-Goblin mit spitzen Fledermausohren und riesigen, im Dunkeln gleißenden Augen. Lauert geduckt im Halbschatten, flitzt auf leisen Sohlen blitzschnell heran, stößt mit spitzen Klauendolchen zu und huscht sofort wieder kichernd in die Finsternis zurück.',
     counter: 'Den Ansturm mit erhobenem Schild abfangen und mit einem schnellen Konterschlag bestrafen, bevor er wieder in den Schatten flieht!',
     lore: 'Uralte Bergwerksstollen sind voll von ihren leisen Schritten. Wenn man in den tiefen Höhlen zwei tellergroße, goldgelb glühende Augen in der Schwärze aufblitzen sieht, sollte man den Schild heben.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const bob = Math.sin(time * 9) * (isAttacking ? 2.5 : 1.2);
-      const walkCycle = Math.sin(time * 12);
-
-      drawPaperShadow(ctx, cx, cy + 12, 12, 4);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.4) saturate(0.2)';
-
-      // Schatten-Aura / Rauch am Boden
-      for (let i = 0; i < 3; i++) {
-        const sOff = Math.sin(time * 5 + i * 2) * 3;
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.4)';
-        ctx.beginPath();
-        ctx.arc(cx - 5 + i * 5 + sOff, cy + 8 + bob, 4 + i * 0.7, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // 1. Kleine, flinke Goblin-Beine (2 grüne Beine mit Klauen, kein Insekt!)
-      const leftLeg = walkCycle * 4;
-      const rightLeg = -walkCycle * 4;
-
-      ctx.fillStyle = '#4d7c0f'; // Goblin-Moosgrün
-      ctx.strokeStyle = '#1e3a0a';
-      ctx.lineWidth = 1.2;
-
-      // Linkes Bein + kleiner Fuß
-      ctx.beginPath();
-      ctx.roundRect(cx - 6, cy + 5 + bob + leftLeg * 0.5, 3.5, 7, 1.5);
-      ctx.fill();
-      ctx.stroke();
-      // Linker Fuß mit Zehenkrallen
-      ctx.beginPath();
-      ctx.ellipse(cx - 5.5, cy + 12 + bob + leftLeg * 0.5, 3, 1.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Rechtes Bein + kleiner Fuß
-      ctx.beginPath();
-      ctx.roundRect(cx + 2.5, cy + 5 + bob + rightLeg * 0.5, 3.5, 7, 1.5);
-      ctx.fill();
-      ctx.stroke();
-      // Rechter Fuß mit Zehenkrallen
-      ctx.beginPath();
-      ctx.ellipse(cx + 4, cy + 12 + bob + rightLeg * 0.5, 3, 1.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 2. Geduckter Goblin-Oberkörper (Hinterhalt-Haltung mit braunem Lederwams)
-      ctx.fillStyle = '#4d7c0f';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 2 + bob, 7, 6, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Zerlumpter brauner Lederwams & Gürtel
-      ctx.fillStyle = '#78350f';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 1 + bob, 6.2, 4.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#451a03';
-      ctx.fillRect(cx - 5.5, cy + 4 + bob, 11, 2.5);
-
-      // 3. Goblin-Kopf (grün, mit spitzem Kinn)
-      ctx.fillStyle = '#4d7c0f';
-      ctx.beginPath();
-      ctx.arc(cx, cy - 2 + bob, 6.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Fieses kleines Grinsen mit zwei weißen Hauzähnen
-      ctx.fillStyle = '#14532d';
-      ctx.beginPath();
-      ctx.arc(cx, cy + 1 + bob, 3, 0.2, Math.PI - 0.2);
-      ctx.fill();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(cx - 2, cy + 1 + bob, 1.2, 1.8);
-      ctx.fillRect(cx + 0.8, cy + 1 + bob, 1.2, 1.8);
-
-      // 4. Lange spitze Goblin-Ohren (Charakteristisch für Kobolde / Goblins)
-      const earWiggle = Math.sin(time * 6) * 1.5;
-      ctx.fillStyle = '#65a30d'; // Helleres Goblin-Ohrgrün
-      ctx.strokeStyle = '#1e3a0a';
-      ctx.lineWidth = 1.1;
-
-      // Linkes langes spitzes Ohr
-      ctx.beginPath();
-      ctx.moveTo(cx - 4, cy - 3 + bob);
-      ctx.lineTo(cx - 15, cy - 6 + bob + earWiggle);
-      ctx.lineTo(cx - 5, cy + 1.5 + bob);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Rechtes langes spitzes Ohr
-      ctx.beginPath();
-      ctx.moveTo(cx + 4, cy - 3 + bob);
-      ctx.lineTo(cx + 15, cy - 6 + bob - earWiggle);
-      ctx.lineTo(cx + 5, cy + 1.5 + bob);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // 5. RIESIGE GLÜHENDE AUGEN (Das Kern-Merkmal!)
-      const eyePulse = 0.85 + Math.sin(time * 8) * 0.15;
-      const eyeR = 3.8;
-
-      // Äußere Glüh-Aura
-      ctx.save();
-      ctx.shadowColor = '#facc15';
-      ctx.shadowBlur = 12;
-
-      // Linkes großes Auge
-      ctx.fillStyle = `rgba(250, 204, 21, ${eyePulse})`;
-      ctx.beginPath();
-      ctx.arc(cx - 3.2, cy - 2.5 + bob, eyeR, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Rechtes großes Auge
-      ctx.beginPath();
-      ctx.arc(cx + 3.2, cy - 2.5 + bob, eyeR, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Heller Pupillen-Kern (strahlend weiß-gelb)
-      ctx.fillStyle = '#fef9c3';
-      ctx.beginPath();
-      ctx.arc(cx - 3.2, cy - 2.5 + bob, 1.8, 0, Math.PI * 2);
-      ctx.arc(cx + 3.2, cy - 2.5 + bob, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Vertikale Schlitz-Pupillen (Katzen-/Kobold-Look)
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.ellipse(cx - 3.2, cy - 2.5 + bob, 0.7, 2.2, 0, 0, Math.PI * 2);
-      ctx.ellipse(cx + 3.2, cy - 2.5 + bob, 0.7, 2.2, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // 6. Goblin-Arme & Schattenschlag
-      const armSwing = isAttacking ? 6 : Math.sin(time * 12) * 3;
-      ctx.strokeStyle = '#4d7c0f';
-      ctx.lineWidth = 1.8;
-
-      // Linker Arm
-      ctx.beginPath();
-      ctx.moveTo(cx - 5, cy + 2 + bob);
-      ctx.lineTo(cx - 10, cy + 6 + bob - armSwing);
-      ctx.stroke();
-
-      // Rechter Arm mit geschwungenem Knochendolch
-      ctx.beginPath();
-      ctx.moveTo(cx + 5, cy + 2 + bob);
-      ctx.lineTo(cx + 10, cy + 5 + bob + armSwing);
-      ctx.stroke();
-
-      // Knochendolch in der rechten Hand
-      ctx.strokeStyle = '#e2e8f0';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.moveTo(cx + 10, cy + 5 + bob + armSwing);
-      ctx.lineTo(cx + 16, cy + 1 + bob + armSwing);
-      ctx.stroke();
-
-      // Rote Klingenfunken bei Angriff
-      if (isAttacking) {
-        ctx.strokeStyle = 'rgba(239, 68, 68, 0.8)';
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(cx - 7, cy - 3);
-        ctx.lineTo(cx + 12, cy + 7);
-        ctx.stroke();
-      }
-
-      ctx.filter = 'none';
-    }
+    render: monCaveStalker
   },
 
   {
@@ -1837,73 +1870,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein massives lebendiges Felsengebilde. Seine gewaltige Masse absorbiert fast jeden Rückstoß. Schlägt mit schweren Steinäxten zu und entfesselt Erdbeben, die Felsbrocken von der Decke herabstürzen lassen.',
     counter: 'Wenn er zum Erdbeben ausholt, sofort auf die roten Warnzonen am Boden achten und per Dash ausweichen, bevor die Felsbrocken einschlagen!',
     lore: 'Jahrtausende lang ruhten sie als scheinbar lebloses Urgestein in den tiefsten Höhlenschichten, bis die Welt wieder von magischer Glut erfüllt wurde.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const step = Math.sin(time * 2.8) * 2;
-      const armLift = isAttacking ? -8 : Math.sin(time * 2.8) * 3;
-
-      drawPaperShadow(ctx, cx, cy + 22, 22, 6);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // 1. Wuchtige Fels-Beine
-      ctx.fillStyle = '#334155';
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 1.5;
-
-      // Linkes Bein
-      ctx.fillRect(cx - 14, cy + 12 + (step > 0 ? -step : 0), 9, 12);
-      ctx.strokeRect(cx - 14, cy + 12 + (step > 0 ? -step : 0), 9, 12);
-
-      // Rechtes Bein
-      ctx.fillRect(cx + 5, cy + 12 + (step < 0 ? step : 0), 9, 12);
-      ctx.strokeRect(cx + 5, cy + 12 + (step < 0 ? step : 0), 9, 12);
-
-      // 2. Massiver Rumpf aus Felsplatten
-      ctx.fillStyle = '#475569';
-      ctx.beginPath();
-      ctx.moveTo(cx - 18, cy + 12);
-      ctx.lineTo(cx - 20, cy - 6);
-      ctx.lineTo(cx - 10, cy - 14);
-      ctx.lineTo(cx + 10, cy - 14);
-      ctx.lineTo(cx + 20, cy - 6);
-      ctx.lineTo(cx + 18, cy + 12);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Glühende Magma- / Kristalladern im Rumpf
-      const veinGlow = 0.6 + Math.sin(time * 4) * 0.4;
-      ctx.strokeStyle = `rgba(245, 158, 11, ${veinGlow})`;
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(cx - 8, cy - 8);
-      ctx.lineTo(cx, cy - 2);
-      ctx.lineTo(cx + 7, cy - 6);
-      ctx.lineTo(cx + 4, cy + 4);
-      ctx.stroke();
-
-      // 3. Wuchtige Schulter-Felsen & Steinfäuste
-      ctx.fillStyle = '#334155';
-      // Linke Faust
-      ctx.fillRect(cx - 24, cy - 4 + armLift, 9, 14);
-      ctx.strokeRect(cx - 24, cy - 4 + armLift, 9, 14);
-
-      // Rechte Faust
-      ctx.fillRect(cx + 15, cy - 4 - armLift, 9, 14);
-      ctx.strokeRect(cx + 15, cy - 4 - armLift, 9, 14);
-
-      // 4. Steinkopf mit glühenden Augen
-      ctx.fillStyle = '#1e293b';
-      ctx.fillRect(cx - 7, cy - 18, 14, 8);
-      ctx.strokeRect(cx - 7, cy - 18, 14, 8);
-
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(cx - 4, cy - 15, 2.5, 2);
-      ctx.fillRect(cx + 1.5, cy - 15, 2.5, 2);
-
-      ctx.filter = 'none';
-    }
+    render: monRockGolem
   },
 
   // =========================================================================
@@ -1925,64 +1892,7 @@ export const BESTIARY_DATA = [
     behavior: 'Direkt inspiriert von Ohngesicht (Kaonashi). Eine geheimnisvolle Schattengestalt mit weißer Porzellanmaske und violetten Tränen. Führt zwei ätherische Sternenkatanas.',
     counter: 'Seine Klingenwirbel haben eine rhythmische Pause. Genau nach dem zweiten Schwung öffnet sich seine Schattengestalt für Gegentreffer.',
     lore: 'Sucht in der Leere nach vergessenen Kindheitserinnerungen. Bietet Reisenden schweigend glitzernde Sternsteine auf seiner Handfläche an.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const floatBob = Math.sin(time * 2.2) * 3;
-
-      drawPaperShadow(ctx, cx, cy + 20, 15, 4.5);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Elegantes Kaonashi Schatten-Gewand (Deep Violet-Black Silhouette)
-      ctx.fillStyle = '#09090b';
-      ctx.beginPath();
-      ctx.moveTo(cx - 9, cy - 10 + floatBob);
-      ctx.quadraticCurveTo(cx - 16, cy + 12 + floatBob, cx - 11, cy + 19 + floatBob);
-      ctx.quadraticCurveTo(cx, cy + 16 + floatBob, cx + 11, cy + 19 + floatBob);
-      ctx.quadraticCurveTo(cx + 16, cy + 12 + floatBob, cx + 9, cy - 10 + floatBob);
-      ctx.closePath();
-      ctx.fill();
-
-      // Schwebende Tintenrauch-Fransen am Saum
-      ctx.fillStyle = '#3b0764';
-      for (let i = -2; i <= 2; i++) {
-        const wispY = Math.sin(time * 4 + i) * 2;
-        ctx.beginPath();
-        ctx.arc(cx + i * 4.5, cy + 17 + floatBob + wispY, 2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // Ovale Porzellanmaske mit violetten Kaonashi-Tränen
-      drawPorcelainMask(ctx, cx, cy - 6 + floatBob, 12, 14, 'noh');
-
-      // Ätherische Sternen-Katana-Klingen (Translucent Violet Light)
-      const bladeGlow = isAttacking ? '#c084fc' : '#818cf8';
-      const bladeSwing = isAttacking ? Math.sin(time * 12) * 25 : 0;
-
-      ctx.save();
-      ctx.translate(cx + 12, cy + 2 + floatBob);
-      ctx.rotate((25 + bladeSwing) * Math.PI / 180);
-      ctx.strokeStyle = bladeGlow;
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.quadraticCurveTo(3, -12, 1, -22);
-      ctx.stroke();
-      ctx.restore();
-
-      ctx.save();
-      ctx.translate(cx - 12, cy + 2 + floatBob);
-      ctx.rotate((-25 - bladeSwing) * Math.PI / 180);
-      ctx.strokeStyle = bladeGlow;
-      ctx.lineWidth = 2.2;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.quadraticCurveTo(-3, -12, -1, -22);
-      ctx.stroke();
-      ctx.restore();
-
-      ctx.filter = 'none';
-    }
+    render: monVoidReaper
   },
 
   {
@@ -2001,66 +1911,7 @@ export const BESTIARY_DATA = [
     behavior: 'Eine ätherische Himmels-Mondqualle mit einer gläsernen Sternenglocke. In ihrem Zentrum ruht ein wohlwollendes kosmisches Auge, das Starlight-Strahlen bündelt.',
     counter: 'Vor dem Strahl schließt sich seine Glocke für eine Sekunde. Hinter eine Felsbarriere stellen und danach seine weichen Quallententakel treffen.',
     lore: 'Fiel in einer Neumondnacht aus dem Sternenmeer herab. Summt eine Melodie, die an uralte Spieluhren erinnert.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const pulse = Math.sin(time * 2.5) * 2;
-      const floatY = cy - 2 + Math.sin(time * 2) * 3;
-
-      drawPaperShadow(ctx, cx, cy + 20, 14, 4);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // 5 wallende Seidententakel mit Sternenstaub
-      ctx.strokeStyle = 'rgba(192, 132, 252, 0.7)';
-      ctx.lineWidth = 1.6;
-      for (let i = -2; i <= 2; i++) {
-        const wave = Math.sin(time * 4 - i * 0.8) * 4;
-        ctx.beginPath();
-        ctx.moveTo(cx + i * 4, floatY + 6);
-        ctx.quadraticCurveTo(cx + i * 5 + wave, floatY + 14, cx + i * 3 - wave, floatY + 22);
-        ctx.stroke();
-      }
-
-      // Transparente gläserne Quallenglocke (Glass Dome)
-      ctx.fillStyle = 'rgba(139, 92, 246, 0.35)';
-      ctx.beginPath();
-      ctx.arc(cx, floatY - 2, 14 + pulse * 0.4, Math.PI, 0);
-      ctx.quadraticCurveTo(cx + 12, floatY + 6, cx, floatY + 7);
-      ctx.quadraticCurveTo(cx - 12, floatY + 6, cx - 14 - pulse * 0.4, floatY - 2);
-      ctx.fill();
-
-      // Kosmisches Großauge im Inneren
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.ellipse(cx, floatY - 2, 9, 6.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Galaxie-Iris (Irisierend Violett & Gold)
-      ctx.fillStyle = '#7c3aed';
-      ctx.beginPath();
-      ctx.arc(cx, floatY - 2, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#fde047';
-      ctx.beginPath();
-      ctx.arc(cx, floatY - 2, 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Glanzpunkte
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(cx - 1.5, floatY - 3.5, 1.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Zarter Mondsichel-Anhänger auf dem Scheitel
-      ctx.strokeStyle = '#fef08a';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.arc(cx, floatY - 17, 3, 0.5, Math.PI * 1.5);
-      ctx.stroke();
-
-      ctx.filter = 'none';
-    }
+    render: monGazerOfTheVoid
   },
 
   {
@@ -2079,65 +1930,7 @@ export const BESTIARY_DATA = [
     behavior: 'Bricht aus einem moosbewachsenen Steinbrunnen hervor. An seiner gewundenen Spitze baumelt eine antike bronzene Shinto-Tempelglocke (Suzu), die bei Hieben silbern läutet.',
     counter: 'Wenn sich die Ranke spiralig zusammenzieht, bereitet sie den Peitschenhieb vor. Sofort zurückweichen und nach dem Aufprall die Glocke attackieren.',
     lore: 'Entspringt den Wurzeln eines versunkenen Glockenturms. Ihr Läuten klingt wie Regentropfen auf Tempeldächern.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const coilSpeed = isAttacking ? 8 : 3.5;
-      const coil = Math.sin(time * coilSpeed) * 6;
-
-      // Steinbrunnen / Rissportal am Boden
-      ctx.fillStyle = '#334155';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 16, 14, 5.5, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 15, 11, 4, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Elegante, gewundene Tintenranke
-      ctx.strokeStyle = '#2e1065';
-      ctx.lineWidth = 5.5;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(cx, cy + 15);
-      ctx.quadraticCurveTo(cx - 10 + coil, cy + 3, cx + 4 - coil, cy - 6);
-      ctx.quadraticCurveTo(cx + 12 - coil, cy - 14, cx - 2 + coil * 0.5, cy - 18);
-      ctx.stroke();
-
-      // Zarte lumineszierende Pflaumenblüten-Saugnäpfe (Plum Blossoms)
-      ctx.fillStyle = '#e879f9';
-      ctx.beginPath();
-      ctx.arc(cx - 6 + coil * 0.7, cy + 5, 2.2, 0, Math.PI * 2);
-      ctx.arc(cx + 4 - coil * 0.5, cy - 4, 2, 0, Math.PI * 2);
-      ctx.arc(cx + 8 - coil, cy - 12, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Antike bronzene Tempelglocke (Suzu) an der Spitze
-      const bellX = cx - 2 + coil * 0.5;
-      const bellY = cy - 18;
-
-      ctx.fillStyle = '#f59e0b';
-      ctx.beginPath();
-      ctx.arc(bellX, bellY, 3.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Rotes Seidenband & Schallwellen
-      ctx.fillStyle = '#dc2626';
-      ctx.fillRect(bellX - 1, bellY + 3, 2, 4);
-
-      if (Math.sin(time * 5) > 0.6) {
-        ctx.strokeStyle = 'rgba(253, 224, 71, 0.7)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(bellX, bellY, 7, -0.5, Math.PI * 0.8);
-        ctx.stroke();
-      }
-
-      ctx.filter = 'none';
-    }
+    render: monAbyssTentacle
   },
 
   // =========================================================================
@@ -2157,90 +1950,7 @@ export const BESTIARY_DATA = [
     behavior: 'Ein lebendiges Origami-Kunstwerk aus gefaltetem Washi-Papier. Trägt einen imposanten Kabuto-Helm mit goldener Mondsichel und führt ein federleichtes Odachi-Schwert.',
     counter: 'Seine Iaijutsu-Schläge durchdringen leichte Schilde. Genau im Moment seines Ziehens parieren, um seine Papierrüstung zu destabilisieren.',
     lore: 'Wurde vor Jahrhunderten gefaltet, um den Tempel der Kirschblüten zu bewachen. Jeder seiner Schwerthiebe hinterlässt flüchtige schwarze Tuschezeichen in der Luft.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const breath = Math.sin(time * 3) * 1.2;
-
-      drawPaperShadow(ctx, cx, cy + 19, 16, 5);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Gefaltete Papier-Rüstungsbeine
-      ctx.fillStyle = '#18181b';
-      ctx.fillRect(cx - 6, cy + 9, 4, 9);
-      ctx.fillRect(cx + 2, cy + 9, 4, 9);
-
-      // Karmesinrote Washi-Brustpanzerung mit Goldkante
-      ctx.fillStyle = '#7f1d1d';
-      ctx.beginPath();
-      ctx.moveTo(cx - 9, cy - 2 + breath);
-      ctx.lineTo(cx - 11, cy + 10 + breath);
-      ctx.lineTo(cx + 11, cy + 10 + breath);
-      ctx.lineTo(cx + 9, cy - 2 + breath);
-      ctx.closePath();
-      ctx.fill();
-
-      // Goldene Faltleisten
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.moveTo(cx - 9, cy + 3 + breath);
-      ctx.lineTo(cx + 9, cy + 3 + breath);
-      ctx.moveTo(cx - 10, cy + 7 + breath);
-      ctx.lineTo(cx + 10, cy + 7 + breath);
-      ctx.stroke();
-
-      // Schulterplatten (Sode)
-      ctx.fillStyle = '#991b1b';
-      ctx.beginPath();
-      ctx.roundRect(cx - 14, cy - 1 + breath, 5, 8, 1);
-      ctx.roundRect(cx + 9, cy - 1 + breath, 5, 8, 1);
-      ctx.fill();
-
-      // Kabuto-Helm mit stolzer goldener Mondsichel (Date Masamune Look)
-      ctx.fillStyle = '#18181b';
-      ctx.beginPath();
-      ctx.arc(cx, cy - 6 + breath, 7, Math.PI, 0);
-      ctx.fill();
-
-      // Goldene Mondsichel auf der Stirn
-      ctx.strokeStyle = '#fde047';
-      ctx.lineWidth = 2.4;
-      ctx.beginPath();
-      ctx.arc(cx, cy - 13 + breath, 8, 0.4, Math.PI * 0.8);
-      ctx.stroke();
-
-      // Kitsune-Halbmaske unter dem Helm
-      drawPorcelainMask(ctx, cx, cy - 4 + breath, 9, 7, 'fox');
-
-      // Geschwungenes Odachi-Papierschwert mit Tusche-Schweif
-      const swordSwing = isAttacking ? Math.sin(time * 12) * 45 : 0;
-      ctx.save();
-      ctx.translate(cx + 11, cy + 4 + breath);
-      ctx.rotate((-20 + swordSwing) * Math.PI / 180);
-      // Griff
-      ctx.fillStyle = '#78350f';
-      ctx.fillRect(-1.5, 0, 3, 7);
-      // Klinge
-      ctx.strokeStyle = '#f8fafc';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.quadraticCurveTo(4, -14, 2, -26);
-      ctx.stroke();
-
-      // Schwarzer Kalligraphie-Tuschestreif bei Hieb
-      if (isAttacking) {
-        ctx.strokeStyle = 'rgba(15, 23, 42, 0.8)';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(0, -12, 16, -Math.PI * 0.8, -Math.PI * 0.2);
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      ctx.filter = 'none';
-    }
+    render: monCursedKnight
   },
 
   {
@@ -2259,85 +1969,7 @@ export const BESTIARY_DATA = [
     behavior: 'Eine anmutige Wind-Tengu-Maid mit gefalteten Papierkranich-Flügeln. Schwingt einen heiligen Federfächer (Hauchiwa) und entfesselt wirbelnde Kirschblüten-Stürme.',
     counter: 'Ihre Windwirbel stoßen Helden zurück. Mit dem Schild blocken und sie im Landemoment mit Wirbelattacken zu Boden zwingen.',
     lore: 'Webt den Morgennebel über den Tälern. Wenn sie mit ihrem Federfächer winkt, fallen die ersten Kirschblüten des Frühlings.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const wingFlap = Math.sin(time * 6) * 7;
-      const floatBob = Math.sin(time * 3) * 3;
-
-      drawPaperShadow(ctx, cx, cy + 20, 15, 4);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Majestätische Papierkranich-Flügel (Origami Wing Feathers)
-      ctx.fillStyle = '#e0f2fe';
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1;
-      // Linker Flügel
-      ctx.beginPath();
-      ctx.moveTo(cx - 6, cy + floatBob);
-      ctx.lineTo(cx - 24, cy - 10 + floatBob + wingFlap);
-      ctx.lineTo(cx - 18, cy + 4 + floatBob + wingFlap * 0.5);
-      ctx.lineTo(cx - 12, cy + 8 + floatBob);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Rechter Flügel
-      ctx.beginPath();
-      ctx.moveTo(cx + 6, cy + floatBob);
-      ctx.lineTo(cx + 24, cy - 10 + floatBob + wingFlap);
-      ctx.lineTo(cx + 18, cy + 4 + floatBob + wingFlap * 0.5);
-      ctx.lineTo(cx + 12, cy + 8 + floatBob);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-
-      // Zartes Feder-Kimono-Kleidchen
-      ctx.fillStyle = '#f8fafc';
-      ctx.beginPath();
-      ctx.moveTo(cx - 6, cy - 2 + floatBob);
-      ctx.lineTo(cx - 8, cy + 14 + floatBob);
-      ctx.lineTo(cx + 8, cy + 14 + floatBob);
-      ctx.lineTo(cx + 6, cy - 2 + floatBob);
-      ctx.closePath();
-      ctx.fill();
-
-      // Rosa Kirschblüten-Schärfe
-      ctx.fillStyle = '#f472b6';
-      ctx.fillRect(cx - 6, cy + 3 + floatBob, 12, 2.5);
-
-      // Sanftes Anime-Gesicht mit wehendem schwarzen Haar
-      drawGhibliEyes(ctx, cx - 3.5, cx + 3.5, cy - 6 + floatBob, 2.2, 0, 0, false, true);
-
-      // Zarte Vogelmaske schräg auf der Stirn (Tengu-Mask)
-      ctx.fillStyle = '#fdfbf7';
-      ctx.beginPath();
-      ctx.ellipse(cx + 4, cy - 11 + floatBob, 4, 3, 0.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.moveTo(cx + 7, cy - 11 + floatBob);
-      ctx.lineTo(cx + 11, cy - 10 + floatBob);
-      ctx.lineTo(cx + 7, cy - 9 + floatBob);
-      ctx.fill();
-
-      // Heiliger Federfächer (Hauchiwa)
-      const fanX = cx - 11;
-      const fanY = cy + 2 + floatBob;
-      ctx.fillStyle = '#fbcfe8';
-      ctx.beginPath();
-      ctx.arc(fanX, fanY, 7, Math.PI * 0.8, Math.PI * 1.8);
-      ctx.lineTo(fanX, fanY);
-      ctx.fill();
-
-      // Umherwirbelnde Kirschblüten bei Windangriff
-      if (isAttacking) {
-        drawSakuraPetal(ctx, cx + 14, cy - 6 + floatBob, time * 4, 1);
-        drawSakuraPetal(ctx, cx - 14, cy + 8 + floatBob, -time * 3, 0.8);
-      }
-
-      ctx.filter = 'none';
-    }
+    render: monSkyHarpy
   },
 
   {
@@ -2356,95 +1988,7 @@ export const BESTIARY_DATA = [
     behavior: 'Eine direkte liebevolle Hommage an Calcifer aus Das wandelnde Schloss! Ein warmes, übermütiges Flämmchen mit Kulleraugen, umringt von schwebenden Obsidian-Kieseln.',
     counter: 'Wasser- und Eiszauber kühlen seinen Glutkern sofort ab. Im abgekühlten Zustand kann er 4 Sekunden lang keine Funken spucken.',
     lore: 'Schläft am liebsten auf alten Speckpfannen und beschwert sich lautstark über schlechtes Brennholz. Knistert vor Freude, wenn man ihn lobt.',
-    render(ctx, cx, cy, time, state, hitFlash) {
-      const isAttacking = state === 'attack';
-      const flameDance = Math.sin(time * 9) * 2;
-      const breath = Math.sin(time * 4) * 1.5;
-
-      drawPaperShadow(ctx, cx, cy + 18, 14, 4);
-
-      if (hitFlash > 0) ctx.filter = 'brightness(2.2) saturate(0.3)';
-
-      // Äußere lodernde Flammenkrone (Karmesinrot)
-      ctx.fillStyle = '#dc2626';
-      ctx.beginPath();
-      ctx.arc(cx, cy + 4, 13 + breath, 0, Math.PI);
-      ctx.quadraticCurveTo(cx - 14, cy - 10 + flameDance, cx - 4, cy - 16);
-      ctx.quadraticCurveTo(cx, cy - 10, cx + 4, cy - 18 + flameDance);
-      ctx.quadraticCurveTo(cx + 14, cy - 10, cx + 13 + breath, cy + 4);
-      ctx.fill();
-
-      // Warmer oranger Herzkörper (Calcifer Orange)
-      ctx.fillStyle = '#f97316';
-      ctx.beginPath();
-      ctx.arc(cx, cy + 4, 10 + breath * 0.8, 0, Math.PI);
-      ctx.quadraticCurveTo(cx - 10, cy - 7 + flameDance, cx - 2, cy - 13);
-      ctx.quadraticCurveTo(cx + 10, cy - 7, cx + 10 + breath * 0.8, cy + 4);
-      ctx.fill();
-
-      // Heller sonnengelber Glutkern
-      ctx.fillStyle = '#facc15';
-      ctx.beginPath();
-      ctx.arc(cx, cy + 5, 7, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Expressives, fröhliches Calcifer-Gesicht!
-      // Große Kulleraugen blicken aufgeregt nach oben
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.ellipse(cx - 4.5, cy - 1, 3.2, 4.2, -0.1, 0, Math.PI * 2);
-      ctx.ellipse(cx + 4.5, cy - 1, 3.2, 4.2, 0.1, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(cx - 4.5, cy - 2, 1.8, 0, Math.PI * 2);
-      ctx.arc(cx + 4.5, cy - 2, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(cx - 5.2, cy - 2.8, 0.8, 0, Math.PI * 2);
-      ctx.arc(cx + 3.8, cy - 2.8, 0.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Breites herzliches Grinsen mit zwei winzigen süßen Zähnchen!
-      ctx.fillStyle = '#451a03';
-      ctx.beginPath();
-      ctx.arc(cx, cy + 4, 4.2, 0.1, Math.PI * 0.9);
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(cx - 2, cy + 4, 1.5, 1.5);
-      ctx.fillRect(cx + 0.5, cy + 4, 1.5, 1.5);
-
-      // Kleine gestikulierende Flämmchen-Ärmchen
-      ctx.fillStyle = '#f97316';
-      ctx.beginPath();
-      ctx.arc(cx - 10, cy + 3 + flameDance, 2.5, 0, Math.PI * 2);
-      ctx.arc(cx + 10, cy + 3 - flameDance, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-
-      // 4 schwebende Obsidian-Kieselsteine in 3D-Umlaufbahn
-      const numStones = 4;
-      for (let s = 0; s < numStones; s++) {
-        const stoneAngle = time * 3 + (s / numStones) * Math.PI * 2;
-        const sx = cx + Math.cos(stoneAngle) * (18 + (isAttacking ? 6 : 0));
-        const sy = cy + 4 + Math.sin(stoneAngle) * 7;
-
-        ctx.fillStyle = '#1e293b';
-        ctx.beginPath();
-        ctx.arc(sx, sy, 2.4, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.fillStyle = '#f97316';
-        ctx.beginPath();
-        ctx.arc(sx, sy, 0.8, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      ctx.filter = 'none';
-    }
+    render: monLavaCore
   }
 ];
 

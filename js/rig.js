@@ -14,6 +14,14 @@
  * in einen gemeinsamen Scope bündelt.
  */
 
+// Polyfill für CanvasRenderingContext2D.prototype.roundRect auf älteren Browsern/Mobilgeräten
+// (wurde früher in bestiary.js gesetzt; game.js nutzt roundRect direkt)
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h) {
+    this.rect(x, y, w, h);
+  };
+}
+
 const RIG_TILT = 0.5;      // Wie stark Bodentiefe auf Bildschirm-Y abgebildet wird
 const RIG_CAM_Y = 0.55;    // Kamerablick: Höhenanteil
 const RIG_CAM_Z = 0.84;    // Kamerablick: Tiefenanteil (zum Betrachter)
@@ -60,21 +68,27 @@ function rigToHex(r, g, b) {
 
 /** Mischt zwei Hex-Farben (t = 0 -> a, t = 1 -> b) */
 export function rigMix(a, b, t) {
-  const key = a + b + t.toFixed(2);
-  let out = rigColorCache.get(key);
+  let ma = rigColorCache.get(a);
+  if (!ma) { ma = new Map(); rigColorCache.set(a, ma); }
+  let mb = ma.get(b);
+  if (!mb) { mb = new Map(); ma.set(b, mb); }
+  let out = mb.get(t);
   if (out) return out;
   const A = rigParseHex(a);
   const B = rigParseHex(b);
   out = rigToHex(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t);
-  rigColorCache.set(key, out);
+  mb.set(t, out);
   return out;
 }
+
+const rigShadeCache = new Map();
 
 /** Hellt auf (amt > 0, Richtung warmes Weiß) oder dunkelt ab (amt < 0, Richtung Indigo) */
 export function rigShade(hex, amt) {
   if (!amt) return hex;
-  const key = hex + '~' + amt.toFixed(2);
-  let out = rigColorCache.get(key);
+  let m = rigShadeCache.get(hex);
+  if (!m) { m = new Map(); rigShadeCache.set(hex, m); }
+  let out = m.get(amt);
   if (out) return out;
   const c = rigParseHex(hex);
   if (amt > 0) {
@@ -88,7 +102,19 @@ export function rigShade(hex, amt) {
       c[2] * (1 - t) + RIG_INK_TINT[2] * t
     );
   }
-  rigColorCache.set(key, out);
+  m.set(amt, out);
+  return out;
+}
+
+const rigInkCache = new Map();
+
+/** Konturfarbe einer Grundfarbe (dunkles, leicht violettes Tintenblau) */
+export function rigInk(hex) {
+  let out = rigInkCache.get(hex);
+  if (!out) {
+    out = rigMix(rigShade(hex, -0.62), '#1b1530', 0.25);
+    rigInkCache.set(hex, out);
+  }
   return out;
 }
 
@@ -178,6 +204,7 @@ export class SkelRig {
     this.oy = oy;
     this.s = o.scale || 1;
     this.flash = rigClamp(o.flash || 0, 0, 1);
+    this.flashMix = Math.round(this.flash * 0.85 * 10) / 10;
     this.flashColor = o.flashColor || '#ffffff';
     this.ink = o.ink === undefined ? 0.85 : o.ink;
     this.alpha = o.alpha === undefined ? 1 : o.alpha;
@@ -225,13 +252,13 @@ export class SkelRig {
 
   /** Farbe inkl. Treffer-Aufblitzen und optionaler Helligkeit */
   col(hex, k = 0) {
-    let c = k ? rigShade(hex, k) : hex;
-    if (this.flash > 0) c = rigMix(c, this.flashColor, Math.round(this.flash * 0.85 * 10) / 10);
+    const c = k ? rigShade(hex, k) : hex;
+    if (this.flash > 0) return rigMix(c, this.flashColor, this.flashMix);
     return c;
   }
 
   inkCol(hex) {
-    return this.col(rigMix(rigShade(hex, -0.62), '#1b1530', 0.25));
+    return this.col(rigInk(hex));
   }
 
   add(depth, fn) {
@@ -243,10 +270,12 @@ export class SkelRig {
     const items = this.items;
     items.sort((a, b) => (a.d - b.d) || (a.i - b.i));
     const ctx = this.ctx;
-    const prevAlpha = ctx.globalAlpha;
-    if (this.alpha !== 1) ctx.globalAlpha = prevAlpha * this.alpha;
+    // Ein gemeinsames save/restore für die ganze Figur; Teile setzen ihren Zustand selbst
+    ctx.save();
+    if (this.alpha !== 1) ctx.globalAlpha *= this.alpha;
+    this.baseAlpha = ctx.globalAlpha;
     for (let i = 0; i < items.length; i++) items[i].fn(ctx, this);
-    ctx.globalAlpha = prevAlpha;
+    ctx.restore();
     items.length = 0;
   }
 
@@ -278,8 +307,7 @@ export class SkelRig {
       const rx = r * (o.sx || 1) * s;
       const ry = r * (o.sy || 1) * s;
       const rot = o.rot || 0;
-      ctx.save();
-      if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
+      ctx.globalAlpha = o.alpha !== undefined ? this.baseAlpha * o.alpha : this.baseAlpha;
       // Kontur
       if (o.outline !== false) {
         const ink = this.ink * s;
@@ -307,7 +335,7 @@ export class SkelRig {
           ctx.fill();
         }
       }
-      ctx.restore();
+      ctx.globalAlpha = this.baseAlpha;
       if (o.after) o.after(ctx, P, this);
     });
     return P;
@@ -319,8 +347,7 @@ export class SkelRig {
     const B = this.P(b);
     const depth = (A.d + B.d) * 0.5 + (o.bias || 0);
     this.add(depth, (ctx) => {
-      ctx.save();
-      if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
+      ctx.globalAlpha = o.alpha !== undefined ? this.baseAlpha * o.alpha : this.baseAlpha;
       const s = this.s;
       if (o.outline !== false) {
         ctx.fillStyle = o.inkColor ? this.col(o.inkColor) : this.inkCol(hex);
@@ -338,7 +365,7 @@ export class SkelRig {
         rigCapsulePath(ctx, A.x + ox, A.y + oy, B.x + ox * (rb / ra || 1), B.y + oy * (rb / ra || 1), ra * s * 0.62, rb * s * 0.62);
         ctx.fill();
       }
-      ctx.restore();
+      ctx.globalAlpha = this.baseAlpha;
       if (o.after) o.after(ctx, A, B, this);
     });
   }
@@ -358,8 +385,7 @@ export class SkelRig {
     }
     depth += o.bias || 0;
     this.add(depth, (ctx) => {
-      ctx.save();
-      if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
+      ctx.globalAlpha = o.alpha !== undefined ? this.baseAlpha * o.alpha : this.baseAlpha;
       rigPolyPath(ctx, Ps, o.smooth !== false, o.closed !== false);
       if (o.closed !== false) {
         ctx.fillStyle = this.col(hex, o.shade || 0);
@@ -372,7 +398,7 @@ export class SkelRig {
         ctx.lineCap = 'round';
         ctx.stroke();
       }
-      ctx.restore();
+      ctx.globalAlpha = this.baseAlpha;
       if (o.after) o.after(ctx, Ps, this);
     });
     return Ps;
@@ -389,8 +415,7 @@ export class SkelRig {
     }
     depth += o.bias || 0;
     this.add(depth, (ctx) => {
-      ctx.save();
-      if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
+      ctx.globalAlpha = o.alpha !== undefined ? this.baseAlpha * o.alpha : this.baseAlpha;
       ctx.lineCap = o.cap || 'round';
       ctx.lineJoin = 'round';
       const smooth = o.smooth !== false;
@@ -404,7 +429,7 @@ export class SkelRig {
       ctx.strokeStyle = this.col(hex, o.shade || 0);
       ctx.lineWidth = width * this.s;
       ctx.stroke();
-      ctx.restore();
+      ctx.globalAlpha = this.baseAlpha;
     });
     return Ps;
   }
@@ -465,7 +490,6 @@ export class SkelRig {
     const h = size * (o.tall || 1.25);
     const style = o.style || 'round';
     const blink = o.blink || 0;
-    ctx.save();
     if (style === 'closed' || style === 'happy' || blink > 0.85) {
       ctx.strokeStyle = this.col(o.lid || '#1b1530');
       ctx.lineWidth = Math.max(0.6, 0.55 * s);
@@ -474,7 +498,7 @@ export class SkelRig {
       if (style === 'happy') ctx.arc(P.x, P.y + h * 0.25, w * 0.9, Math.PI * 1.15, Math.PI * 1.85);
       else ctx.arc(P.x, P.y - h * 0.15, w * 0.9, Math.PI * 0.15, Math.PI * 0.85);
       ctx.stroke();
-      ctx.restore();
+      ctx.globalAlpha = this.baseAlpha; ctx.globalCompositeOperation = 'source-over';
       return;
     }
     const hh = h * (1 - blink);
@@ -491,7 +515,7 @@ export class SkelRig {
       ctx.beginPath();
       ctx.ellipse(P.x, P.y, w * 0.85, hh * 0.85, 0, 0, RIG_TAU);
       ctx.fill();
-      ctx.restore();
+      ctx.globalAlpha = this.baseAlpha; ctx.globalCompositeOperation = 'source-over';
       return;
     }
     if (o.white) {
@@ -536,16 +560,17 @@ export class SkelRig {
       ctx.ellipse(P.x, P.y, w * 1.05, hh * 1.0, 0, Math.PI * 1.1, Math.PI * 1.9);
       ctx.stroke();
     }
-    ctx.restore();
+    ctx.globalAlpha = this.baseAlpha; ctx.globalCompositeOperation = 'source-over';
   }
 
   /** Kleines Oberflächen-Detail (Wangenröte, Nase, Mund, Abzeichen) */
   mark(ctx, head, r, az, el, fn, out = 0.98) {
     const P = this.surf(head, r, az, el, out);
     if (P.v < 0.05) return;
-    ctx.save();
     fn(ctx, P, rigClamp(P.v * 1.2, 0.3, 1), this.s);
-    ctx.restore();
+    // Zustand zurücksetzen (statt teurem save/restore)
+    ctx.globalAlpha = this.baseAlpha;
+    ctx.globalCompositeOperation = 'source-over';
   }
 
   /** Rosige Wangen */
@@ -608,7 +633,7 @@ export class SkelRig {
       };
       const rT = ring(rt);
       const rB = ring(rb);
-      const N = 20;
+      const N = 14;
       const ptsTop = [];
       const ptsBot = [];
       for (let i = 0; i < N; i++) {
@@ -697,7 +722,7 @@ export class SkelRig {
   cap(ctx, center, r, edge, hex, o = {}) {
     const C = this.P(center);
     const R = r * (o.grow || 1.05) * this.s;
-    const N = 36;
+    const N = 24;
     const pts = [];
     for (let i = 0; i <= N; i++) {
       const az = -Math.PI + (i / N) * RIG_TAU;
