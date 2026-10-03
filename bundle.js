@@ -394,6 +394,1130 @@ class Noise2D {
 }
 
 
+// --- js/rig.js ---
+/**
+ * Ocarina of Brawls - Pseudo-3D Skelett-Rig
+ *
+ * Gemeinsame Grundlage für Helden, Monster und Verwandlungen:
+ *  - Gelenke liegen im 3D-Modellraum (x = rechts, y = oben, z = vorne/Blickrichtung)
+ *  - Die Blickrichtung (Yaw) dreht das ganze Skelett, die Projektion ist eine
+ *    leicht gekippte Draufsicht (3/4-Perspektive). Dadurch drehen sich Figuren
+ *    stufenlos in alle Richtungen und Teile verdecken sich korrekt.
+ *  - Zwei-Knochen-IK für Arme und Beine (Füße bleiben am Boden, Hände greifen Waffen)
+ *  - Gangzyklen für Zweibeiner, Vierbeiner, Schlangen/Ketten und Schwebende
+ *  - Formen mit Kontur ("Tinte"), Eigenschatten und Glanzlicht im Ghibli-Stil
+ *
+ * Alle Namen sind mit rig/Rig/SkelRig präfixiert, weil build.js alle Dateien
+ * in einen gemeinsamen Scope bündelt.
+ */
+
+const RIG_TILT = 0.5;      // Wie stark Bodentiefe auf Bildschirm-Y abgebildet wird
+const RIG_CAM_Y = 0.55;    // Kamerablick: Höhenanteil
+const RIG_CAM_Z = 0.84;    // Kamerablick: Tiefenanteil (zum Betrachter)
+const RIG_TAU = Math.PI * 2;
+
+const RIG_DIR_ANGLE = {
+  right: 0,
+  'down-right': Math.PI / 4,
+  down: Math.PI / 2,
+  'down-left': (3 * Math.PI) / 4,
+  left: Math.PI,
+  'up-left': (-3 * Math.PI) / 4,
+  up: -Math.PI / 2,
+  'up-right': -Math.PI / 4
+};
+
+/** Wandelt Blickrichtung (String oder Winkel) in einen Bildschirmwinkel um */
+function rigFacingAngle(facing) {
+  if (typeof facing === 'number' && !isNaN(facing)) return facing;
+  const a = RIG_DIR_ANGLE[facing];
+  return a === undefined ? Math.PI / 2 : a;
+}
+
+// -----------------------------------------------------------------------------
+// FARBEN
+// -----------------------------------------------------------------------------
+const rigColorCache = new Map();
+const RIG_INK_TINT = [27, 21, 48]; // tiefes Indigo statt reinem Schwarz
+
+function rigParseHex(hex) {
+  let h = hex.charAt(0) === '#' ? hex.slice(1) : hex;
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  const n = parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function rigToHex(r, g, b) {
+  const c = (v) => {
+    const s = Math.max(0, Math.min(255, Math.round(v))).toString(16);
+    return s.length === 1 ? '0' + s : s;
+  };
+  return '#' + c(r) + c(g) + c(b);
+}
+
+/** Mischt zwei Hex-Farben (t = 0 -> a, t = 1 -> b) */
+function rigMix(a, b, t) {
+  const key = a + b + t.toFixed(2);
+  let out = rigColorCache.get(key);
+  if (out) return out;
+  const A = rigParseHex(a);
+  const B = rigParseHex(b);
+  out = rigToHex(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t);
+  rigColorCache.set(key, out);
+  return out;
+}
+
+/** Hellt auf (amt > 0, Richtung warmes Weiß) oder dunkelt ab (amt < 0, Richtung Indigo) */
+function rigShade(hex, amt) {
+  if (!amt) return hex;
+  const key = hex + '~' + amt.toFixed(2);
+  let out = rigColorCache.get(key);
+  if (out) return out;
+  const c = rigParseHex(hex);
+  if (amt > 0) {
+    out = rigToHex(c[0] + (255 - c[0]) * amt, c[1] + (250 - c[1]) * amt, c[2] + (240 - c[2]) * amt);
+  } else {
+    const t = -amt;
+    // Schatten werden leicht blau-violett (Ghibli-typisch) statt grau
+    out = rigToHex(
+      c[0] * (1 - t) + RIG_INK_TINT[0] * t,
+      c[1] * (1 - t) + RIG_INK_TINT[1] * t,
+      c[2] * (1 - t) + RIG_INK_TINT[2] * t
+    );
+  }
+  rigColorCache.set(key, out);
+  return out;
+}
+
+// -----------------------------------------------------------------------------
+// VEKTOR-HILFEN (Modellraum)
+// -----------------------------------------------------------------------------
+function rigV(x, y, z) { return { x, y, z }; }
+function rigAdd(a, b) { return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }; }
+function rigSub(a, b) { return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }; }
+function rigScale(a, s) { return { x: a.x * s, y: a.y * s, z: a.z * s }; }
+function rigLerp(a, b, t) { return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t }; }
+function rigLen(a) { return Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z); }
+function rigNorm(a) {
+  const l = rigLen(a) || 1;
+  return { x: a.x / l, y: a.y / l, z: a.z / l };
+}
+function rigDot(a, b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+function rigCross(a, b) {
+  return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x };
+}
+/** Dreht einen Punkt um die senkrechte Achse (für Oberkörper-Twist / Schwünge) */
+function rigRotY(p, ang, pivot) {
+  const px = pivot ? pivot.x : 0;
+  const pz = pivot ? pivot.z : 0;
+  const dx = p.x - px;
+  const dz = p.z - pz;
+  const c = Math.cos(ang);
+  const s = Math.sin(ang);
+  return { x: px + dx * c + dz * s, y: p.y, z: pz - dx * s + dz * c };
+}
+function rigClamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function rigEaseOut(t) { return 1 - (1 - t) * (1 - t) * (1 - t); }
+function rigEaseInOut(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+/** Federnder Überschwinger (für Schläge: Ausholen -> Schlag -> Nachschwingen) */
+function rigBackOut(t) {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
+/**
+ * Zwei-Knochen-IK: liefert das Mittelgelenk (Knie/Ellbogen) zwischen Wurzel a und Ziel c.
+ * pole gibt die Richtung an, in die das Gelenk knicken soll.
+ */
+function rigIK(a, c, l1, l2, pole) {
+  let d = rigSub(c, a);
+  let dist = rigLen(d);
+  const maxD = (l1 + l2) * 0.999;
+  if (dist > maxD) {
+    d = rigScale(d, maxD / dist);
+    dist = maxD;
+  }
+  if (dist < 1e-4) dist = 1e-4;
+  const u = rigScale(d, 1 / dist);
+  const along = (l1 * l1 - l2 * l2 + dist * dist) / (2 * dist);
+  const h = Math.sqrt(Math.max(0, l1 * l1 - along * along));
+  let perp = rigSub(pole, rigScale(u, rigDot(pole, u)));
+  const pl = rigLen(perp);
+  perp = pl < 1e-5 ? { x: 0, y: 0, z: 1 } : rigScale(perp, 1 / pl);
+  return rigAdd(a, rigAdd(rigScale(u, along), rigScale(perp, h)));
+}
+
+// -----------------------------------------------------------------------------
+// DER RIG-RENDERER
+// -----------------------------------------------------------------------------
+class SkelRig {
+  constructor() {
+    this.items = [];
+    this.ctx = null;
+    this.ox = 0;
+    this.oy = 0;
+    this.s = 1;
+    this.flash = 0;
+    this.flashColor = '#ffffff';
+    this.ink = 0.85;
+    this.setFacing(Math.PI / 2);
+  }
+
+  /**
+   * Startet ein neues Bild.
+   * o.facing: Richtung (String oder Winkel), o.scale, o.flash (0..1), o.flashColor, o.ink (Konturbreite)
+   */
+  begin(ctx, ox, oy, o = {}) {
+    this.ctx = ctx;
+    this.ox = ox;
+    this.oy = oy;
+    this.s = o.scale || 1;
+    this.flash = rigClamp(o.flash || 0, 0, 1);
+    this.flashColor = o.flashColor || '#ffffff';
+    this.ink = o.ink === undefined ? 0.85 : o.ink;
+    this.alpha = o.alpha === undefined ? 1 : o.alpha;
+    this.items.length = 0;
+    this.setFacing(rigFacingAngle(o.facing));
+    return this;
+  }
+
+  setFacing(angle) {
+    this.angle = angle;
+    this.fx = Math.cos(angle);
+    this.fy = Math.sin(angle);
+    this.rx = -this.fy;
+    this.ry = this.fx;
+  }
+
+  /** Projiziert einen Modellpunkt auf den Bildschirm */
+  P(p) {
+    const gx = p.x * this.rx + p.z * this.fx;
+    const gd = p.x * this.ry + p.z * this.fy;
+    return {
+      x: this.ox + gx * this.s,
+      y: this.oy + (-p.y + gd * RIG_TILT) * this.s,
+      d: gd * RIG_CAM_Z + p.y * RIG_CAM_Y
+    };
+  }
+
+  /** Tiefe eines Modellpunkts (größer = näher an der Kamera) */
+  depth(p) {
+    const gd = p.x * this.ry + p.z * this.fy;
+    return gd * RIG_CAM_Z + p.y * RIG_CAM_Y;
+  }
+
+  /** Wie stark zeigt eine Modellrichtung zur Kamera (-1..1) */
+  toCam(n) {
+    const gd = n.x * this.ry + n.z * this.fy;
+    return gd * RIG_CAM_Z + n.y * RIG_CAM_Y;
+  }
+
+  /** Bildschirm-X-Anteil einer Modellrichtung (für Verkürzungen) */
+  screenX(n) {
+    return n.x * this.rx + n.z * this.fx;
+  }
+
+  /** Farbe inkl. Treffer-Aufblitzen und optionaler Helligkeit */
+  col(hex, k = 0) {
+    let c = k ? rigShade(hex, k) : hex;
+    if (this.flash > 0) c = rigMix(c, this.flashColor, Math.round(this.flash * 0.85 * 10) / 10);
+    return c;
+  }
+
+  inkCol(hex) {
+    return this.col(rigMix(rigShade(hex, -0.62), '#1b1530', 0.25));
+  }
+
+  add(depth, fn) {
+    this.items.push({ d: depth, i: this.items.length, fn });
+  }
+
+  /** Zeichnet alle gesammelten Teile in Tiefenreihenfolge */
+  flush() {
+    const items = this.items;
+    items.sort((a, b) => (a.d - b.d) || (a.i - b.i));
+    const ctx = this.ctx;
+    const prevAlpha = ctx.globalAlpha;
+    if (this.alpha !== 1) ctx.globalAlpha = prevAlpha * this.alpha;
+    for (let i = 0; i < items.length; i++) items[i].fn(ctx, this);
+    ctx.globalAlpha = prevAlpha;
+    items.length = 0;
+  }
+
+  // ---------------------------------------------------------------------------
+  // GRUNDFORMEN
+  // ---------------------------------------------------------------------------
+
+  /** Weicher Bodenschatten (wird sofort gezeichnet) */
+  shadow(rx, ry, alpha = 0.3, offX = 0, offY = 0) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.fillStyle = `rgba(15, 12, 35, ${alpha})`;
+    ctx.beginPath();
+    ctx.ellipse(this.ox + offX * this.s, this.oy + offY * this.s, rx * this.s, ry * this.s, 0, 0, RIG_TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /**
+   * Kugel/Ellipsoid mit Eigenschatten, Glanzlicht und Kontur.
+   * o: sx, sy (Streckung), rot (Bildschirmrotation), bias (Tiefe), shade (bool),
+   *    outline (bool), gloss (0..1), after(ctx, P, rig) für Gesichter etc.
+   */
+  ball(p, r, hex, o = {}) {
+    const P = this.P(p);
+    const depth = P.d + (o.bias || 0);
+    this.add(depth, (ctx) => {
+      const s = this.s;
+      const rx = r * (o.sx || 1) * s;
+      const ry = r * (o.sy || 1) * s;
+      const rot = o.rot || 0;
+      ctx.save();
+      if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
+      // Kontur
+      if (o.outline !== false) {
+        const ink = this.ink * s;
+        ctx.fillStyle = o.inkColor ? this.col(o.inkColor) : this.inkCol(hex);
+        ctx.beginPath();
+        ctx.ellipse(P.x, P.y, rx + ink, ry + ink, rot, 0, RIG_TAU);
+        ctx.fill();
+      }
+      // Eigenschatten-Grundton
+      ctx.fillStyle = this.col(hex, o.shade === false ? 0 : -0.22);
+      ctx.beginPath();
+      ctx.ellipse(P.x, P.y, rx, ry, rot, 0, RIG_TAU);
+      ctx.fill();
+      if (o.shade !== false) {
+        // Lichtseite (Licht von oben links)
+        ctx.fillStyle = this.col(hex);
+        ctx.beginPath();
+        ctx.ellipse(P.x - rx * 0.13, P.y - ry * 0.15, rx * 0.84, ry * 0.82, rot, 0, RIG_TAU);
+        ctx.fill();
+        const gloss = o.gloss === undefined ? 0.35 : o.gloss;
+        if (gloss > 0 && r * s > 1.6) {
+          ctx.fillStyle = this.col(hex, gloss);
+          ctx.beginPath();
+          ctx.ellipse(P.x - rx * 0.38, P.y - ry * 0.42, rx * 0.26, ry * 0.18, -0.6, 0, RIG_TAU);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+      if (o.after) o.after(ctx, P, this);
+    });
+    return P;
+  }
+
+  /** Verjüngte Kapsel zwischen zwei Gelenken (Gliedmaßen, Hälse, Schwänze) */
+  capsule(a, b, ra, rb, hex, o = {}) {
+    const A = this.P(a);
+    const B = this.P(b);
+    const depth = (A.d + B.d) * 0.5 + (o.bias || 0);
+    this.add(depth, (ctx) => {
+      ctx.save();
+      if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
+      const s = this.s;
+      if (o.outline !== false) {
+        ctx.fillStyle = o.inkColor ? this.col(o.inkColor) : this.inkCol(hex);
+        rigCapsulePath(ctx, A.x, A.y, B.x, B.y, ra * s + this.ink * s, rb * s + this.ink * s);
+        ctx.fill();
+      }
+      ctx.fillStyle = this.col(hex, o.shade === false ? 0 : -0.18);
+      rigCapsulePath(ctx, A.x, A.y, B.x, B.y, ra * s, rb * s);
+      ctx.fill();
+      if (o.shade !== false && (ra + rb) * s > 1.4) {
+        // Lichtkante oben links
+        ctx.fillStyle = this.col(hex, o.light === undefined ? 0.04 : o.light);
+        const ox = -0.28 * ra * s;
+        const oy = -0.3 * ra * s;
+        rigCapsulePath(ctx, A.x + ox, A.y + oy, B.x + ox * (rb / ra || 1), B.y + oy * (rb / ra || 1), ra * s * 0.62, rb * s * 0.62);
+        ctx.fill();
+      }
+      ctx.restore();
+      if (o.after) o.after(ctx, A, B, this);
+    });
+  }
+
+  /**
+   * Freie Fläche aus Modellpunkten (Umhänge, Ohren, Hüte, Flügel, Blätter).
+   * o: smooth (Kurven), depth, bias, outline, alpha, gradTo (zweite Farbe nach unten),
+   *    stroke (Linie ohne Füllung), shade (Tönung -1..1)
+   */
+  poly(pts, hex, o = {}) {
+    const Ps = pts.map((p) => this.P(p));
+    let depth = o.depth;
+    if (depth === undefined) {
+      depth = 0;
+      for (let i = 0; i < Ps.length; i++) depth += Ps[i].d;
+      depth /= Ps.length;
+    }
+    depth += o.bias || 0;
+    this.add(depth, (ctx) => {
+      ctx.save();
+      if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
+      rigPolyPath(ctx, Ps, o.smooth !== false, o.closed !== false);
+      if (o.closed !== false) {
+        ctx.fillStyle = this.col(hex, o.shade || 0);
+        ctx.fill();
+      }
+      if (o.outline !== false) {
+        ctx.strokeStyle = o.inkColor ? this.col(o.inkColor) : this.inkCol(hex);
+        ctx.lineWidth = (o.lineWidth || this.ink) * this.s;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (o.after) o.after(ctx, Ps, this);
+    });
+    return Ps;
+  }
+
+  /** Dicke Linie entlang Modellpunkten (Haarsträhnen, Bänder, Peitschen, Schnüre) */
+  line(pts, hex, width, o = {}) {
+    const Ps = pts.map((p) => this.P(p));
+    let depth = o.depth;
+    if (depth === undefined) {
+      depth = 0;
+      for (let i = 0; i < Ps.length; i++) depth += Ps[i].d;
+      depth /= Ps.length;
+    }
+    depth += o.bias || 0;
+    this.add(depth, (ctx) => {
+      ctx.save();
+      if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
+      ctx.lineCap = o.cap || 'round';
+      ctx.lineJoin = 'round';
+      const smooth = o.smooth !== false;
+      if (o.outline !== false) {
+        rigPolyPath(ctx, Ps, smooth, false);
+        ctx.strokeStyle = o.inkColor ? this.col(o.inkColor) : this.inkCol(hex);
+        ctx.lineWidth = (width + this.ink * 2) * this.s;
+        ctx.stroke();
+      }
+      rigPolyPath(ctx, Ps, smooth, false);
+      ctx.strokeStyle = this.col(hex, o.shade || 0);
+      ctx.lineWidth = width * this.s;
+      ctx.stroke();
+      ctx.restore();
+    });
+    return Ps;
+  }
+
+  /** Eigene Zeichenfunktion an einer Tiefe (fn bekommt ctx und rig) */
+  custom(depth, fn) {
+    this.add(depth, fn);
+  }
+
+  /** Leuchtender Punkt (Augen, Funken, Laternen) ohne Kontur, additiv */
+  glow(p, r, color, o = {}) {
+    const P = this.P(p);
+    this.add(P.d + (o.bias || 0), (ctx) => {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const R = r * this.s;
+      const g = ctx.createRadialGradient(P.x, P.y, 0, P.x, P.y, R);
+      g.addColorStop(0, color);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha *= o.alpha === undefined ? 0.8 : o.alpha;
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(P.x, P.y, R, 0, RIG_TAU);
+      ctx.fill();
+      ctx.restore();
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // GESICHTER
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Punkt auf einer Kopfkugel. az = Drehung um die Hochachse (0 = vorne, + = rechts der Figur),
+   * el = Höhe (+ = oben). Liefert Bildschirmposition und Sichtbarkeit v (0..1).
+   */
+  surf(center, r, az, el, out = 1) {
+    const ce = Math.cos(el);
+    const n = { x: Math.sin(az) * ce, y: Math.sin(el), z: Math.cos(az) * ce };
+    const p = { x: center.x + n.x * r * out, y: center.y + n.y * r * out, z: center.z + n.z * r * out };
+    const P = this.P(p);
+    P.v = this.toCam(n);
+    P.sx = this.screenX({ x: Math.cos(az), y: 0, z: -Math.sin(az) });
+    return P;
+  }
+
+  /**
+   * Ghibli-Auge auf der Kopfkugel. style: 'round' | 'glow' | 'slit' | 'closed' | 'dot' | 'happy'
+   * o: color (Iris), white (Sklera zeichnen), size, lid (Oberlid-Farbe), blink (0..1)
+   */
+  eye(ctx, head, r, az, el, o = {}) {
+    const P = this.surf(head, r, az, el, 0.96);
+    if (P.v < 0.08) return;
+    const s = this.s;
+    const size = (o.size || 1) * s;
+    const squash = rigClamp(Math.abs(P.v) * 1.15, 0.35, 1);
+    const w = size * squash;
+    const h = size * (o.tall || 1.25);
+    const style = o.style || 'round';
+    const blink = o.blink || 0;
+    ctx.save();
+    if (style === 'closed' || style === 'happy' || blink > 0.85) {
+      ctx.strokeStyle = this.col(o.lid || '#1b1530');
+      ctx.lineWidth = Math.max(0.6, 0.55 * s);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      if (style === 'happy') ctx.arc(P.x, P.y + h * 0.25, w * 0.9, Math.PI * 1.15, Math.PI * 1.85);
+      else ctx.arc(P.x, P.y - h * 0.15, w * 0.9, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+    const hh = h * (1 - blink);
+    if (style === 'glow') {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = o.color || '#5eead4';
+      ctx.globalAlpha *= 0.45;
+      ctx.beginPath();
+      ctx.ellipse(P.x, P.y, w * 1.9, hh * 1.5, 0, 0, RIG_TAU);
+      ctx.fill();
+      ctx.globalAlpha /= 0.45;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = this.col(o.color || '#5eead4', 0.35);
+      ctx.beginPath();
+      ctx.ellipse(P.x, P.y, w * 0.85, hh * 0.85, 0, 0, RIG_TAU);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+    if (o.white) {
+      ctx.fillStyle = this.col('#fffaf0');
+      ctx.beginPath();
+      ctx.ellipse(P.x, P.y, w * 1.25, hh * 1.05, 0, 0, RIG_TAU);
+      ctx.fill();
+    }
+    // Iris / Pupille
+    ctx.fillStyle = this.col(o.color || '#1b1530');
+    ctx.beginPath();
+    if (style === 'slit') ctx.ellipse(P.x, P.y, w * 0.9, hh, 0, 0, RIG_TAU);
+    else if (style === 'dot') ctx.ellipse(P.x, P.y, w * 0.7, hh * 0.7, 0, 0, RIG_TAU);
+    else ctx.ellipse(P.x, P.y, w * 0.95, hh * 0.95, 0, 0, RIG_TAU);
+    ctx.fill();
+    if (style === 'slit') {
+      ctx.fillStyle = this.col('#0b0716');
+      ctx.beginPath();
+      ctx.ellipse(P.x, P.y, w * 0.25, hh * 0.85, 0, 0, RIG_TAU);
+      ctx.fill();
+    } else if (o.pupil) {
+      ctx.fillStyle = this.col(o.pupil);
+      ctx.beginPath();
+      ctx.ellipse(P.x, P.y + hh * 0.1, w * 0.5, hh * 0.55, 0, 0, RIG_TAU);
+      ctx.fill();
+    }
+    // Glanzpunkte - machen den Blick lebendig
+    if (size > 0.7 && style !== 'dot') {
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.beginPath();
+      ctx.arc(P.x - w * 0.3, P.y - hh * 0.35, Math.max(0.35, size * 0.32), 0, RIG_TAU);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(P.x + w * 0.3, P.y + hh * 0.35, Math.max(0.2, size * 0.15), 0, RIG_TAU);
+      ctx.fill();
+    }
+    // Oberlid / Wimpernstrich
+    if (o.lid) {
+      ctx.strokeStyle = this.col(o.lid);
+      ctx.lineWidth = Math.max(0.5, 0.45 * s);
+      ctx.beginPath();
+      ctx.ellipse(P.x, P.y, w * 1.05, hh * 1.0, 0, Math.PI * 1.1, Math.PI * 1.9);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** Kleines Oberflächen-Detail (Wangenröte, Nase, Mund, Abzeichen) */
+  mark(ctx, head, r, az, el, fn, out = 0.98) {
+    const P = this.surf(head, r, az, el, out);
+    if (P.v < 0.05) return;
+    ctx.save();
+    fn(ctx, P, rigClamp(P.v * 1.2, 0.3, 1), this.s);
+    ctx.restore();
+  }
+
+  /** Rosige Wangen */
+  blush(ctx, head, r, az, el, color = '#fb7185', size = 1) {
+    this.mark(ctx, head, r, az, el, (c, P, sq, s) => {
+      c.globalAlpha *= 0.55;
+      c.fillStyle = this.col(color);
+      c.beginPath();
+      c.ellipse(P.x, P.y, 1.25 * size * s * sq, 0.7 * size * s, 0, 0, RIG_TAU);
+      c.fill();
+    });
+  }
+
+  /** Mund als Strich/Bogen */
+  mouth(ctx, head, r, az, el, o = {}) {
+    this.mark(ctx, head, r, az, el, (c, P, sq, s) => {
+      const w = (o.w || 1) * s * sq;
+      c.strokeStyle = this.col(o.color || '#3b1d2a');
+      c.lineWidth = Math.max(0.45, 0.4 * s);
+      c.lineCap = 'round';
+      c.beginPath();
+      if (o.open) {
+        c.fillStyle = this.col(o.inner || '#7f1d1d');
+        c.ellipse(P.x, P.y, w * 0.8, (o.open || 0.6) * s, 0, 0, RIG_TAU);
+        c.fill();
+        c.stroke();
+      } else if (o.smile === false) {
+        c.moveTo(P.x - w, P.y);
+        c.lineTo(P.x + w, P.y);
+        c.stroke();
+      } else {
+        c.arc(P.x, P.y - w * 0.6, w, Math.PI * 0.2, Math.PI * 0.8);
+        c.stroke();
+      }
+    });
+  }
+  // ---------------------------------------------------------------------------
+  // KÖRPER-VOLUMEN
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Kegelstumpf / Gewand: oberer Ring (Mitte top, Radius rt) zu unterem Ring (Mitte bot, Radius rb).
+   * Ideal für Rümpfe, Kimonos, Röcke, Umhänge, Hüte. o: sx (Breitenfaktor x), sz (Tiefenfaktor),
+   * hem (Saumfarbe), hemW, bias, shade, trim (Mittellinie vorne), after
+   */
+  cone(top, bot, rt, rb, hex, o = {}) {
+    const T = this.P(top);
+    const B = this.P(bot);
+    const depth = (T.d + B.d) * 0.5 + (o.bias || 0);
+    this.add(depth, (ctx) => {
+      const s = this.s;
+      const sx = o.sx || 1;
+      const sz = o.sz || 1;
+      // Ellipsen-Achsen des horizontalen Rings auf dem Bildschirm
+      const ring = (r) => {
+        // Ring-Achsen: Modell-x und Modell-z, projiziert
+        const ax = { x: this.rx * r * sx * s, y: this.ry * r * sx * RIG_TILT * s };
+        const az = { x: this.fx * r * sz * s, y: this.fy * r * sz * RIG_TILT * s };
+        return { ax, az };
+      };
+      const rT = ring(rt);
+      const rB = ring(rb);
+      const N = 20;
+      const ptsTop = [];
+      const ptsBot = [];
+      for (let i = 0; i < N; i++) {
+        const a = (i / N) * RIG_TAU;
+        const c = Math.cos(a);
+        const si = Math.sin(a);
+        ptsTop.push({ x: T.x + rT.ax.x * c + rT.az.x * si, y: T.y + rT.ax.y * c + rT.az.y * si });
+        ptsBot.push({ x: B.x + rB.ax.x * c + rB.az.x * si, y: B.y + rB.ax.y * c + rB.az.y * si });
+      }
+      // Silhouette: konvexe Hülle beider Ringe (einfach, robust für alle Drehungen)
+      const hull = rigHull(ptsTop.concat(ptsBot));
+      ctx.save();
+      if (o.alpha !== undefined) ctx.globalAlpha *= o.alpha;
+      const path = () => {
+        ctx.beginPath();
+        ctx.moveTo(hull[0].x, hull[0].y);
+        for (let i = 1; i < hull.length; i++) ctx.lineTo(hull[i].x, hull[i].y);
+        ctx.closePath();
+      };
+      path();
+      if (o.outline !== false) {
+        ctx.strokeStyle = this.inkCol(hex);
+        ctx.lineWidth = this.ink * 2 * s;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+      // Seitliche Schattierung (Licht von links)
+      let minX = Infinity;
+      let maxX = -Infinity;
+      for (let i = 0; i < hull.length; i++) {
+        if (hull[i].x < minX) minX = hull[i].x;
+        if (hull[i].x > maxX) maxX = hull[i].x;
+      }
+      if (o.shade !== false && maxX - minX > 1) {
+        const g = ctx.createLinearGradient(minX, 0, maxX, 0);
+        g.addColorStop(0, this.col(hex, 0.12));
+        g.addColorStop(0.45, this.col(hex));
+        g.addColorStop(1, this.col(hex, -0.3));
+        ctx.fillStyle = g;
+      } else {
+        ctx.fillStyle = this.col(hex);
+      }
+      ctx.fill();
+      // Saum unten
+      if (o.hem) {
+        ctx.save();
+        path();
+        ctx.clip();
+        ctx.fillStyle = this.col(o.hem);
+        const hw = (o.hemW || 1) * s;
+        ctx.beginPath();
+        for (let i = 0; i <= N; i++) {
+          const p = ptsBot[i % N];
+          if (i === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        }
+        for (let i = N; i >= 0; i--) {
+          const p = ptsBot[i % N];
+          ctx.lineTo(p.x + (T.x - B.x) * 0.02, p.y - hw);
+        }
+        ctx.closePath();
+        ctx.fill();
+        // alles unterhalb des Rings ebenfalls einfärben
+        ctx.fillRect(minX - 2, B.y, maxX - minX + 4, 20 * s);
+        ctx.restore();
+      }
+      ctx.restore();
+      if (o.after) o.after(ctx, T, B, this);
+    });
+  }
+
+  /** Liegt der zur Kamera zeigende Kugelpunkt innerhalb der Kappe? */
+  capCovers(edge, below) {
+    const n = { x: this.ry * RIG_CAM_Z, y: RIG_CAM_Y, z: this.fy * RIG_CAM_Z };
+    const az = Math.atan2(n.x, n.z);
+    const el = Math.asin(rigClamp(n.y, -1, 1));
+    return below ? el < edge(az) : el > edge(az);
+  }
+
+  /**
+   * Füllt auf einer Kugel die Fläche oberhalb (oder unterhalb) einer Grenzlinie el = edge(az).
+   * Für Haare, Kapuzen, Masken, Helme, Fellzeichnungen. Muss innerhalb eines after-Hooks
+   * (oder custom) aufgerufen werden, damit es direkt nach dem Kopf gezeichnet wird.
+   * o: below (unterhalb füllen), grow (Radiusfaktor), shade, outline, gloss
+   */
+  cap(ctx, center, r, edge, hex, o = {}) {
+    const C = this.P(center);
+    const R = r * (o.grow || 1.05) * this.s;
+    const N = 36;
+    const pts = [];
+    for (let i = 0; i <= N; i++) {
+      const az = -Math.PI + (i / N) * RIG_TAU;
+      const el = edge(az);
+      const ce = Math.cos(el);
+      const n = { x: Math.sin(az) * ce, y: Math.sin(el), z: Math.cos(az) * ce };
+      if (this.toCam(n) < -0.18) { pts.push(null); continue; }
+      const P = this.P({ x: center.x + n.x * r * (o.grow || 1.05), y: center.y + n.y * r * (o.grow || 1.05), z: center.z + n.z * r * (o.grow || 1.05) });
+      pts.push(P);
+    }
+    // längstes zusammenhängendes sichtbares Stück finden (Ring kann über -PI/PI laufen)
+    const runs = [];
+    let cur = [];
+    for (let k = 0; k < pts.length * 2; k++) {
+      const p = pts[k % pts.length];
+      if (p) cur.push(p);
+      else {
+        if (cur.length) runs.push(cur);
+        cur = [];
+      }
+      if (k === pts.length - 1 && runs.length === 0 && cur.length === pts.length) break;
+    }
+    if (cur.length) runs.push(cur);
+    let vis = runs.reduce((a, b) => (b.length > a.length ? b : a), []);
+    if (vis.length > pts.length) vis = vis.slice(0, pts.length);
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(C.x, C.y, R, R * (o.sy || 1), 0, 0, RIG_TAU);
+    ctx.clip();
+    ctx.beginPath();
+    const far = o.below ? 4 * R : -4 * R;
+    if (vis.length >= 2) {
+      vis.sort((a, b) => a.x - b.x);
+      ctx.moveTo(vis[0].x - R * 2, vis[0].y);
+      for (let i = 0; i < vis.length; i++) ctx.lineTo(vis[i].x, vis[i].y);
+      ctx.lineTo(vis[vis.length - 1].x + R * 2, vis[vis.length - 1].y);
+      ctx.lineTo(vis[vis.length - 1].x + R * 2, C.y + far);
+      ctx.lineTo(vis[0].x - R * 2, C.y + far);
+      ctx.closePath();
+    } else if (this.capCovers(edge, o.below)) {
+      // Grenze komplett unsichtbar: Kappe bedeckt die ganze sichtbare Seite
+      ctx.rect(C.x - R * 2, C.y - R * 2, R * 4, R * 4);
+    }
+    ctx.fillStyle = this.col(hex);
+    ctx.fill();
+    if (o.shade !== false) {
+      // Schatten rechts unten innerhalb der Kappe
+      ctx.clip();
+      ctx.fillStyle = this.col(hex, -0.25);
+      ctx.beginPath();
+      ctx.ellipse(C.x + R * 0.55, C.y + R * 0.45, R * 0.9, R * 0.9, 0, 0, RIG_TAU);
+      ctx.fill();
+      if (o.gloss !== 0) {
+        ctx.fillStyle = this.col(hex, o.gloss || 0.3);
+        ctx.beginPath();
+        ctx.ellipse(C.x - R * 0.35, C.y - R * 0.55, R * 0.35, R * 0.16, -0.5, 0, RIG_TAU);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+    // Grenzlinie als zarte Kontur
+    if (o.outline !== false && vis.length >= 2) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(C.x, C.y, R + 0.01, R * (o.sy || 1), 0, 0, RIG_TAU);
+      ctx.clip();
+      ctx.strokeStyle = this.inkCol(hex);
+      ctx.lineWidth = this.ink * 0.9 * this.s;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(vis[0].x, vis[0].y);
+      for (let i = 1; i < vis.length; i++) ctx.lineTo(vis[i].x, vis[i].y);
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (o.rim !== false) {
+      // Außenkontur der Kappe (damit Haar über den Kopf hinaus wirkt)
+      ctx.save();
+      ctx.beginPath();
+      if (vis.length >= 2) {
+        ctx.moveTo(vis[0].x - R * 2, vis[0].y);
+        for (let i = 0; i < vis.length; i++) ctx.lineTo(vis[i].x, vis[i].y);
+        ctx.lineTo(vis[vis.length - 1].x + R * 2, vis[vis.length - 1].y);
+        ctx.lineTo(vis[vis.length - 1].x + R * 2, C.y + far);
+        ctx.lineTo(vis[0].x - R * 2, C.y + far);
+        ctx.closePath();
+      } else if (this.capCovers(edge, o.below)) {
+        ctx.rect(C.x - R * 2, C.y - R * 2, R * 4, R * 4);
+      }
+      ctx.clip();
+      ctx.strokeStyle = this.inkCol(hex);
+      ctx.lineWidth = this.ink * this.s;
+      ctx.beginPath();
+      ctx.ellipse(C.x, C.y, R, R * (o.sy || 1), 0, 0, RIG_TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+/** Punkt auf einer Kugeloberfläche im Modellraum (az 0 = vorne, + = rechts; el + = oben) */
+function rigSurfPt(center, r, az, el) {
+  const ce = Math.cos(el);
+  return {
+    x: center.x + Math.sin(az) * ce * r,
+    y: center.y + Math.sin(el) * r,
+    z: center.z + Math.cos(az) * ce * r
+  };
+}
+
+/** Konvexe Hülle (Andrew's Monotone Chain) für Bildschirmpunkte */
+function rigHull(points) {
+  const pts = points.slice().sort((a, b) => (a.x - b.x) || (a.y - b.y));
+  if (pts.length < 3) return pts;
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  upper.pop();
+  lower.pop();
+  return lower.concat(upper);
+}
+
+// -----------------------------------------------------------------------------
+// PFAD-HILFEN (Bildschirmraum)
+// -----------------------------------------------------------------------------
+function rigCapsulePath(ctx, ax, ay, bx, by, ra, rb) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const d = Math.sqrt(dx * dx + dy * dy);
+  ctx.beginPath();
+  if (d < Math.abs(ra - rb) + 0.01) {
+    const r = Math.max(ra, rb);
+    ctx.arc(ra >= rb ? ax : bx, ra >= rb ? ay : by, r, 0, RIG_TAU);
+    return;
+  }
+  const ang = Math.atan2(dy, dx);
+  const off = Math.acos(rigClamp((ra - rb) / d, -1, 1));
+  ctx.arc(ax, ay, ra, ang + off, ang - off + RIG_TAU, false);
+  ctx.arc(bx, by, rb, ang - off, ang + off, false);
+  ctx.closePath();
+}
+
+function rigPolyPath(ctx, Ps, smooth, closed) {
+  ctx.beginPath();
+  const n = Ps.length;
+  if (n === 0) return;
+  if (!smooth || n < 3) {
+    ctx.moveTo(Ps[0].x, Ps[0].y);
+    for (let i = 1; i < n; i++) ctx.lineTo(Ps[i].x, Ps[i].y);
+    if (closed) ctx.closePath();
+    return;
+  }
+  if (closed) {
+    const m0x = (Ps[n - 1].x + Ps[0].x) / 2;
+    const m0y = (Ps[n - 1].y + Ps[0].y) / 2;
+    ctx.moveTo(m0x, m0y);
+    for (let i = 0; i < n; i++) {
+      const p = Ps[i];
+      const q = Ps[(i + 1) % n];
+      ctx.quadraticCurveTo(p.x, p.y, (p.x + q.x) / 2, (p.y + q.y) / 2);
+    }
+    ctx.closePath();
+  } else {
+    ctx.moveTo(Ps[0].x, Ps[0].y);
+    for (let i = 1; i < n - 1; i++) {
+      const p = Ps[i];
+      const q = Ps[i + 1];
+      ctx.quadraticCurveTo(p.x, p.y, (p.x + q.x) / 2, (p.y + q.y) / 2);
+    }
+    ctx.lineTo(Ps[n - 1].x, Ps[n - 1].y);
+  }
+}
+
+// -----------------------------------------------------------------------------
+// GANGZYKLEN & POSEN
+// -----------------------------------------------------------------------------
+
+/**
+ * Zweibeiner-Skelett mit IK-Beinen und pendelnden Armen.
+ * o: moving, freq, stride, lift, thigh, shin, hipW, hipY, torso, shoulderW, upperArm, foreArm,
+ *    lean, bob, breathe, handR/handL (Ziel-Überschreibungen), twist (Oberkörperdrehung),
+ *    crouch (0..1), armSwing, idleArms (Abstand der Hände vom Körper), phase
+ */
+function rigBiped(t, o = {}) {
+  const moving = Boolean(o.moving);
+  const thigh = o.thigh || 3;
+  const shin = o.shin || 3;
+  const legLen = thigh + shin;
+  const hipW = o.hipW || 2;
+  const crouch = o.crouch || 0;
+  const freq = o.freq || 13;
+  const phase = t * freq + (o.phase || 0);
+  const stride = moving ? (o.stride === undefined ? legLen * 0.62 : o.stride) : 0;
+  const lift = moving ? (o.lift === undefined ? legLen * 0.38 : o.lift) : 0;
+  const breathe = Math.sin(t * (o.breatheRate || 2.6)) * (o.breathe === undefined ? 0.35 : o.breathe);
+
+  const bob = moving ? Math.cos(phase * 2) * (o.bob === undefined ? 0.55 : o.bob) : breathe * 0.4;
+  const hipY = (o.hipY || legLen * 0.94) - crouch * legLen * 0.35 + bob;
+  const sway = moving ? Math.sin(phase) * 0.35 : Math.sin(t * 1.3) * 0.15;
+  const pelvis = rigV(sway, hipY, 0);
+
+  // Becken dreht sich leicht mit dem Schritt
+  const hipTwist = moving ? Math.sin(phase) * 0.18 : 0;
+  // Modell-x zeigt zur rechten Hand der Figur
+  const hipR = rigRotY(rigV(pelvis.x + hipW, hipY, 0), hipTwist, pelvis);
+  const hipL = rigRotY(rigV(pelvis.x - hipW, hipY, 0), hipTwist, pelvis);
+
+  // Fußziele: Schwungphase hebt den Fuß in einem weichen Bogen
+  const footFor = (side, ph) => {
+    const s = Math.sin(ph);
+    const c = Math.cos(ph);
+    const x = side * (hipW * 0.95) + sway * 0.4;
+    const z = s * stride * 0.5 + (o.footZ || 0);
+    const y = Math.max(0, c) * lift;
+    return rigV(x, y + (o.footY || 0), z);
+  };
+  const footR = o.footR || footFor(1, phase);
+  const footL = o.footL || footFor(-1, phase + Math.PI);
+  const kneePole = rigV(0, 0.2, 1);
+  const kneeR = rigIK(hipR, rigAdd(footR, rigV(0, 0.6, 0)), thigh, shin, rigAdd(kneePole, rigV(0.15, 0, 0)));
+  const kneeL = rigIK(hipL, rigAdd(footL, rigV(0, 0.6, 0)), thigh, shin, rigAdd(kneePole, rigV(-0.15, 0, 0)));
+  const ankleR = rigAdd(footR, rigV(0, 0.6, 0));
+  const ankleL = rigAdd(footL, rigV(0, 0.6, 0));
+
+  // Wirbelsäule
+  const torso = o.torso || 6;
+  const lean = (moving ? (o.lean === undefined ? 0.16 : o.lean) : 0) + (o.extraLean || 0);
+  const twist = (o.twist || 0) - hipTwist * 0.8;
+  const chest = rigV(pelvis.x * 0.6, hipY + torso * 0.62 + breathe * 0.25, Math.sin(lean) * torso * 0.62);
+  const neck = rigV(pelvis.x * 0.4, hipY + torso + breathe * 0.35, Math.sin(lean) * torso);
+  const shoulderW = o.shoulderW || 3;
+  const shoulderY = hipY + torso * 0.86 + breathe * 0.3;
+  const shoulderZ = Math.sin(lean) * torso * 0.86;
+  const shR = rigRotY(rigV(chest.x + shoulderW, shoulderY, shoulderZ), twist, chest);
+  const shL = rigRotY(rigV(chest.x - shoulderW, shoulderY, shoulderZ), twist, chest);
+
+  // Arme pendeln gegengleich zu den Beinen
+  const upperArm = o.upperArm || 2.6;
+  const foreArm = o.foreArm || 2.6;
+  const armLen = upperArm + foreArm;
+  const armSwing = moving ? (o.armSwing === undefined ? armLen * 0.55 : o.armSwing) : 0;
+  const idleOut = o.idleArms === undefined ? 0.9 : o.idleArms;
+  const idleSway = Math.sin(t * 2.6) * 0.25;
+  const handFor = (sh, side, ph) => rigV(
+    sh.x + side * idleOut,
+    sh.y - armLen * 0.86 + Math.max(0, Math.sin(ph)) * armSwing * 0.3 + idleSway * 0.3,
+    sh.z + Math.sin(ph) * armSwing + 0.6
+  );
+  const handR = o.handR || handFor(shR, 1, phase + Math.PI);
+  const handL = o.handL || handFor(shL, -1, phase);
+  const elbowR = rigIK(shR, handR, upperArm, foreArm, o.elbowPoleR || rigV(0.5, -0.2, -1));
+  const elbowL = rigIK(shL, handL, upperArm, foreArm, o.elbowPoleL || rigV(-0.5, -0.2, -1));
+
+  const headY = neck.y + (o.neck || 1.2);
+  const nod = moving ? Math.cos(phase * 2) * 0.15 : Math.sin(t * 2.6 + 1) * 0.12;
+  const head = rigV(neck.x, headY + nod, neck.z + (o.headZ || 0));
+
+  return {
+    phase, moving, bob, breathe, lean, twist, legLen, hipY,
+    pelvis, hipR, hipL, kneeR, kneeL, ankleR, ankleL, footR, footL,
+    chest, neck, head, shR, shL, elbowR, elbowL, handR, handL
+  };
+}
+
+/**
+ * Vierbeiner-Skelett (Trab: diagonale Beinpaare). Kopf vorne (+z), Schwanz hinten.
+ * o: moving, freq, len (Rumpflänge), width, legH (Hüfthöhe), upper, lower, stride, lift,
+ *    gait ('trot' | 'walk' | 'gallop'), crouch, headH, neckLen
+ */
+function rigQuad(t, o = {}) {
+  const moving = Boolean(o.moving);
+  const freq = o.freq || 11;
+  const phase = t * freq + (o.phase || 0);
+  const len = o.len || 8;
+  const width = o.width || 2.5;
+  const upper = o.upper || 2.4;
+  const lower = o.lower || 2.4;
+  const legH = (o.legH || (upper + lower) * 0.92) - (o.crouch || 0) * (upper + lower) * 0.4;
+  const stride = moving ? (o.stride === undefined ? (upper + lower) * 0.7 : o.stride) : 0;
+  const lift = moving ? (o.lift === undefined ? (upper + lower) * 0.35 : o.lift) : 0;
+  const breathe = Math.sin(t * 2.4) * 0.3;
+  const bob = moving ? Math.cos(phase * 2) * (o.bob === undefined ? 0.5 : o.bob) : breathe * 0.4;
+  const gait = o.gait || 'trot';
+  const offs = gait === 'walk'
+    ? { RF: 0, LH: Math.PI * 0.5, LF: Math.PI, RH: Math.PI * 1.5 }
+    : gait === 'gallop'
+      ? { RF: 0, LF: 0.5, RH: Math.PI, LH: Math.PI + 0.5 }
+      : { RF: 0, LH: 0, LF: Math.PI, RH: Math.PI };
+  const pitch = gait === 'gallop' && moving ? Math.sin(phase) * 0.6 : 0;
+
+  const front = rigV(0, legH + bob + breathe * 0.2 + pitch, len * 0.5);
+  const back = rigV(0, legH + bob - pitch * 0.6, -len * 0.5);
+  const legs = {};
+  const mk = (key, root, side, isFront) => {
+    const ph = phase + offs[key];
+    const hip = rigV(root.x + side * width, root.y - 0.5, root.z);
+    const foot = rigV(
+      side * width * 1.05,
+      Math.max(0, Math.cos(ph)) * lift,
+      root.z + Math.sin(ph) * stride * 0.5
+    );
+    const pole = isFront ? rigV(0, 0, -1) : rigV(0, 0, 1);
+    const knee = rigIK(hip, rigAdd(foot, rigV(0, 0.5, 0)), upper, lower, pole);
+    legs[key] = { hip, knee, foot, ankle: rigAdd(foot, rigV(0, 0.5, 0)) };
+  };
+  mk('RF', front, 1, true);
+  mk('LF', front, -1, true);
+  mk('RH', back, 1, false);
+  mk('LH', back, -1, false);
+
+  const neckLen = o.neckLen || 2.5;
+  const headH = o.headH === undefined ? 2.2 : o.headH;
+  const nod = moving ? Math.cos(phase * 2) * 0.35 : Math.sin(t * 1.8) * 0.25;
+  const neckBase = rigV(0, front.y + 0.6, front.z + 0.6);
+  const head = rigV(0, neckBase.y + headH + nod, neckBase.z + neckLen);
+  const tailBase = rigV(0, back.y + 0.6, back.z - 0.6);
+  return { phase, moving, bob, breathe, front, back, legs, neckBase, head, tailBase, legH };
+}
+
+/**
+ * Punktkette (Schwanz, Schlangenkörper, Tentakel, Haar, Umhang-Kante).
+ * Startet bei base, läuft in Richtung dir, wellt seitlich (x) und/oder vertikal.
+ * o: n, seg, amp, freq, k (Wellenzahl), ampY, grow (Amplitude wächst zur Spitze), droop
+ */
+function rigChain(t, base, dir, o = {}) {
+  const n = o.n || 6;
+  const seg = o.seg || 1.5;
+  const amp = o.amp || 0;
+  const ampY = o.ampY || 0;
+  const freq = o.freq || 4;
+  const k = o.k || 0.8;
+  const droop = o.droop || 0;
+  const d = rigNorm(dir);
+  // Seitenvektor senkrecht zur Richtung (bevorzugt horizontal)
+  let side = rigCross(d, rigV(0, 1, 0));
+  if (rigLen(side) < 0.1) side = rigV(1, 0, 0);
+  side = rigNorm(side);
+  const up = rigNorm(rigCross(side, d));
+  const pts = [base];
+  for (let i = 1; i <= n; i++) {
+    const f = i / n;
+    const g = o.grow === false ? 1 : f;
+    const w = Math.sin(t * freq - i * k) * amp * g;
+    const wy = Math.cos(t * freq * 0.8 - i * k) * ampY * g;
+    pts.push(rigV(
+      base.x + d.x * seg * i + side.x * w + up.x * wy,
+      base.y + d.y * seg * i + side.y * w + up.y * wy - droop * f * f,
+      base.z + d.z * seg * i + side.z * w + up.z * wy
+    ));
+  }
+  return pts;
+}
+
+/**
+ * Bodenkette für Schlangen/Würmer: Körper schlängelt sich am Boden entlang (S-Kurven).
+ * Liefert Punkte von Kopf (Index 0) bis Schwanzspitze.
+ */
+function rigSerpent(t, o = {}) {
+  const n = o.n || 10;
+  const seg = o.seg || 2;
+  const moving = Boolean(o.moving);
+  const speed = moving ? (o.freq || 7) : (o.idleFreq || 2);
+  const amp = (moving ? o.amp || 2.6 : o.idleAmp || 1.2);
+  const k = o.k || 0.75;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const z = (o.headZ || 4) - i * seg;
+    const env = 0.35 + 0.65 * (i / n);
+    const x = Math.sin(t * speed - i * k) * amp * env;
+    const y = (o.rise && i < o.rise.length) ? o.rise[i] : (o.height || 0);
+    pts.push(rigV(x, y, z));
+  }
+  return pts;
+}
+
+/**
+ * Zustand für Angriffe: gibt die Phase 'idle' | 'windup' | 'strike' plus Fortschritt zurück.
+ * opts.attackT (0..1 Ausholen) und opts.strikeT (0..1 Nachschwingen) kommen aus enemies.js;
+ * im Showroom (ohne Timer) wird ein Schleifen-Zyklus aus der Zeit erzeugt.
+ */
+function rigAttackPhase(state, time, opts = {}) {
+  if (opts.strikeT !== undefined && opts.strikeT > 0) {
+    return { phase: 'strike', p: rigClamp(1 - opts.strikeT, 0, 1), windup: 0, strike: rigClamp(1 - opts.strikeT, 0, 1) };
+  }
+  if (state !== 'attack') return { phase: 'idle', p: 0, windup: 0, strike: 0 };
+  if (opts.attackT !== undefined) {
+    return { phase: 'windup', p: rigClamp(opts.attackT, 0, 1), windup: rigClamp(opts.attackT, 0, 1), strike: 0 };
+  }
+  // Showroom-Schleife: 0.0-0.6 ausholen, 0.6-1.0 zuschlagen
+  const cyc = (time * 0.9) % 1;
+  if (cyc < 0.6) {
+    const p = cyc / 0.6;
+    return { phase: 'windup', p, windup: p, strike: 0 };
+  }
+  const p = (cyc - 0.6) / 0.4;
+  return { phase: 'strike', p, windup: 0, strike: p };
+}
+
+/**
+ * Einheitlicher "Schlag-Wert": -1 = voll ausgeholt, 0 = Ruhe, +1 = voll durchgeschlagen.
+ * Praktisch, um Gliedmaßen zwischen drei Posen zu blenden.
+ */
+function rigSwingValue(ap) {
+  if (ap.phase === 'windup') return -rigEaseInOut(ap.p);
+  if (ap.phase === 'strike') {
+    const p = ap.p;
+    if (p < 0.25) return -1 + rigEaseOut(p / 0.25) * 2;      // schneller Schlag
+    return 1 - rigEaseInOut((p - 0.25) / 0.75);             // langsames Zurückfedern
+  }
+  return 0;
+}
+
+/** Wiederverwendbare Rig-Instanz (Zeichnen ist synchron, daher reicht eine) */
+const RIG = new SkelRig();
+
+
 // --- js/characters.js ---
 /**
  * Ocarina of Brawls - 15 Spielbare Helden-Skins
@@ -475,1254 +1599,1359 @@ function setSelectedPlayerName(name) {
   }
 }
 
+
 // -----------------------------------------------------------------------------
-// HELPER DRAWING FUNCTIONS (Papercraft Ghibli Aesthetics)
+// GEMEINSAMES HELDEN-SKELETT
+// Chibi-Proportionen (großer Kopf, kleiner Körper, ca. 24px hoch). Alle Helden teilen
+// Gangzyklus, Kampfposen und Waffenhaltung; nur Aussehen und Sekundäranimation sind individuell.
 // -----------------------------------------------------------------------------
-function getFacingOffsets(direction) {
-  let dx = 0, dy = 0;
-  if (direction === 'up') dy = -1;
-  else if (direction === 'down') dy = 1;
-  else if (direction === 'left') dx = -1;
-  else if (direction === 'right') dx = 1;
-  else if (direction === 'up-left') { dx = -0.7; dy = -0.7; }
-  else if (direction === 'up-right') { dx = 0.7; dy = -0.7; }
-  else if (direction === 'down-left') { dx = -0.7; dy = 0.7; }
-  else if (direction === 'down-right') { dx = 0.7; dy = 0.7; }
-  return { dx, dy };
+const HERO_BUILD = {
+  thigh: 2.3, shin: 2.2, hipW: 1.3, torso: 5.4, shoulderW: 2.5,
+  upperArm: 2.2, foreArm: 2.1, headR: 4.3, headUp: 3.7,
+  freq: 14, stride: 3.4, lift: 1.7, idleArms: 0.7
+};
+
+const HERO_PI = Math.PI;
+
+function heroLerp(a, b, t) { return a + (b - a) * t; }
+
+/** Blinzeln alle paar Sekunden (pro Held leicht versetzt) */
+function heroBlink(t, offset = 0) {
+  const c = (t + offset) % 3.9;
+  return c < 0.13 ? 1 : 0;
 }
 
-function drawPaperDropShadow(ctx, px, py, rx = 8, ry = 3.5, alpha = 0.3) {
+/**
+ * Pose-Überschreibungen für Kampfaktionen.
+ * action: { type: 'slash' | 'slash2' | 'thrust' | 'spin' | 'bow', progress (0..1), angle, pull, aimed }
+ */
+function heroActionPose(action, t, B) {
+  if (!action || !action.type) return null;
+  const p = rigClamp(action.progress || 0, 0, 1);
+  const hipY = (B.thigh + B.shin) * 0.94;
+  const shY = hipY + B.torso * 0.86;
+  const chestY = hipY + B.torso * 0.62;
+  const reach = (B.upperArm + B.foreArm) * 0.95;
+  const out = { facing: action.angle, weapons: [], twist: 0, lean: 0, crouch: 0 };
+
+  if (action.type === 'slash' || action.type === 'slash2') {
+    const dirS = action.type === 'slash2' ? -1 : 1;
+    const sw = heroSlashTheta(p, action.type);
+    const th = sw.th;
+    const rise = sw.rise;
+    out.twist = th * 0.42;
+    out.lean = p > 0.16 && p < 0.6 ? 0.18 : 0.06;
+    out.crouch = p > 0.16 && p < 0.7 ? 0.18 : 0.05;
+    const sh = rigRotY(rigV(B.shoulderW, shY, 0), out.twist, rigV(0, 0, 0));
+    const armDir = rigNorm(rigV(Math.sin(th * 0.85), -0.3 + rise * 0.4, Math.cos(th * 0.85)));
+    out.handR = rigAdd(sh, rigScale(armDir, reach));
+    out.handL = rigV(-1.4, chestY - 0.6, 1.6);
+    out.weapons.push({ hand: out.handR, dir: rigNorm(rigV(Math.sin(th), rise, Math.cos(th))) });
+    out.trail = { th, dirS, p };
+  } else if (action.type === 'thrust') {
+    let z;
+    if (p < 0.2) z = heroLerp(0.6, -1.4, rigEaseOut(p / 0.2));
+    else if (p < 0.42) z = heroLerp(-1.4, 4.4, rigEaseOut((p - 0.2) / 0.22));
+    else z = heroLerp(4.4, 1.2, rigEaseInOut((p - 0.42) / 0.58));
+    const ext = rigClamp(z / 4.4, 0, 1);
+    out.twist = -0.45 * ext;
+    out.lean = 0.3 * ext;
+    out.crouch = 0.25 * ext;
+    out.handR = rigV(0.7, chestY + 0.4, z);
+    out.handL = rigV(-2.4, chestY - 0.8, -1.2 * ext);
+    out.weapons.push({ hand: out.handR, dir: rigV(0, 0.04, 1) });
+  } else if (action.type === 'spin') {
+    out.facing = (action.angle || 0) + t * 30;
+    out.crouch = 0.22;
+    out.handR = rigV(4.6, shY - 0.4, 0.9);
+    out.handL = rigV(-4.6, shY - 0.4, -0.9);
+    out.weapons.push({ hand: out.handR, dir: rigNorm(rigV(1, 0.06, 0.35)) });
+    out.weapons.push({ hand: out.handL, dir: rigNorm(rigV(-1, 0.06, -0.35)) });
+  } else if (action.type === 'bow') {
+    const pull = rigClamp(action.pull === undefined ? 1 : action.pull, 0, 1);
+    out.twist = 0.42;
+    out.handL = rigV(-0.5, shY - 0.1, 4.2);
+    out.handR = rigV(-0.2, shY + 0.1, 4.0 - 3.4 * pull);
+    out.bow = { hand: out.handL, string: out.handR, aimed: Boolean(action.aimed), pull };
+    out.elbowPoleR = rigV(1, 0.4, -1);
+  }
+  return out;
+}
+
+/**
+ * Schwungkurve eines Hiebs: Winkel th in der Bodenebene relativ zur Blickrichtung
+ * (+ = rechte Körperseite) und Klingenneigung rise. Ausholen -> schneller Schlag -> Nachschwingen.
+ */
+function heroSlashTheta(p, type) {
+  const dirS = type === 'slash2' ? -1 : 1;
+  let th;
+  let rise;
+  if (p < 0.16) {
+    const k = rigEaseOut(p / 0.16);
+    th = heroLerp(0.9, 1.8, k);
+    rise = heroLerp(0.2, 0.55, k);
+  } else if (p < 0.5) {
+    const k = rigEaseOut((p - 0.16) / 0.34);
+    th = heroLerp(1.8, -1.5, k);
+    rise = heroLerp(0.55, -0.35, k);
+  } else {
+    const k = rigEaseInOut((p - 0.5) / 0.5);
+    th = heroLerp(-1.5, -1.1, k);
+    rise = heroLerp(-0.35, -0.2, k);
+  }
+  return { th: th * dirS, rise };
+}
+
+/**
+ * Leuchtende Schwungspur (Smear) passend zur Klinge in der Hand des Helden.
+ * action wie bei den Render-Funktionen; opts.color / opts.edge als 'r,g,b', opts.radius
+ */
+function renderHeroSwingTrail(ctx, px, py, action, opts = {}) {
+  if (!action || !action.type) return;
+  const cx = px;
+  const cy = py - 8;
+  const A = action.angle || 0;
+  const col = opts.color || '226,240,255';
+  const edge = opts.edge || '255,255,255';
+  const p = rigClamp(action.progress || 0, 0, 1);
   ctx.save();
-  ctx.fillStyle = `rgba(15, 23, 42, ${alpha})`;
-  ctx.beginPath();
-  ctx.ellipse(px, py, rx, ry, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  if (action.type === 'slash' || action.type === 'slash2') {
+    if (p < 0.15 || p > 0.72) { ctx.restore(); return; }
+    const fade = p > 0.5 ? 1 - (p - 0.5) / 0.22 : 1;
+    const head = heroSlashTheta(p, action.type).th;
+    const tail = heroSlashTheta(Math.max(0.16, p - 0.24), action.type).th;
+    const Rout = opts.radius || 14.5;
+    const N = 16;
+    const outer = [];
+    const inner = [];
+    for (let i = 0; i <= N; i++) {
+      const f = i / N;
+      const phi = A + tail + (head - tail) * f;
+      const ro = Rout * (0.82 + 0.18 * f);
+      const ri = ro - (1 + 5.5 * f);
+      outer.push([cx + Math.cos(phi) * ro, cy + Math.sin(phi) * ro * 0.55]);
+      inner.push([cx + Math.cos(phi) * ri, cy + Math.sin(phi) * ri * 0.55]);
+    }
+    const g = ctx.createLinearGradient(outer[0][0], outer[0][1], outer[N][0], outer[N][1]);
+    g.addColorStop(0, `rgba(${col},0)`);
+    g.addColorStop(1, `rgba(${col},${0.7 * fade})`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(outer[0][0], outer[0][1]);
+    for (let i = 1; i <= N; i++) ctx.lineTo(outer[i][0], outer[i][1]);
+    for (let i = N; i >= 0; i--) ctx.lineTo(inner[i][0], inner[i][1]);
+    ctx.closePath();
+    ctx.fill();
+    const ge = ctx.createLinearGradient(outer[0][0], outer[0][1], outer[N][0], outer[N][1]);
+    ge.addColorStop(0, `rgba(${edge},0)`);
+    ge.addColorStop(1, `rgba(${edge},${0.95 * fade})`);
+    ctx.strokeStyle = ge;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(outer[0][0], outer[0][1]);
+    for (let i = 1; i <= N; i++) ctx.lineTo(outer[i][0], outer[i][1]);
+    ctx.stroke();
+  } else if (action.type === 'thrust') {
+    if (p < 0.22 || p > 0.62) { ctx.restore(); return; }
+    const ext = rigClamp((p - 0.22) / 0.2, 0, 1);
+    const fade = p > 0.42 ? 1 - (p - 0.42) / 0.2 : 1;
+    const ca = Math.cos(A);
+    const sa = Math.sin(A) * 0.55;
+    const nx = -Math.sin(A);
+    const ny = Math.cos(A) * 0.55;
+    const len = 6 + ext * 15;
+    for (let k = -1; k <= 1; k++) {
+      const off = k * 2.6;
+      const sx = cx + nx * off + ca * 4;
+      const sy = cy + ny * off + sa * 4;
+      const ex = sx + ca * len * (k === 0 ? 1 : 0.7);
+      const ey = sy + sa * len * (k === 0 ? 1 : 0.7);
+      const g = ctx.createLinearGradient(sx, sy, ex, ey);
+      g.addColorStop(0, `rgba(${col},0)`);
+      g.addColorStop(1, `rgba(${k === 0 ? edge : col},${(k === 0 ? 0.9 : 0.55) * fade})`);
+      ctx.strokeStyle = g;
+      ctx.lineWidth = k === 0 ? 1.6 : 0.8;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = `rgba(${col},${0.5 * fade})`;
+    ctx.beginPath();
+    ctx.arc(cx + ca * (len + 4), cy + sa * (len + 4), 2.6, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (action.type === 'spin') {
+    const t = action.time || 0;
+    const head = (action.angle || 0) + t * 30 + 1.38;
+    const R = opts.radius || 15;
+    const segs = 10;
+    for (let i = 0; i < segs; i++) {
+      const a0 = head - (i + 1) * 0.28;
+      const a1 = head - i * 0.28;
+      const alpha = (1 - i / segs) * 0.75;
+      ctx.strokeStyle = `rgba(${opts.spinColor || '56,189,248'},${alpha})`;
+      ctx.lineWidth = 3.2 * (1 - i / segs) + 0.6;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, R, R * 0.55, 0, a0, a1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, R, R * 0.55, 0, a0 + Math.PI, a1 + Math.PI);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = `rgba(${edge},0.35)`;
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, R + 1.5, (R + 1.5) * 0.55, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
-function applyHitFlashTint(ctx, hitFlash, drawPath) {
-  if (hitFlash > 0) {
-    ctx.save();
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.65)';
-    drawPath();
-    ctx.fill();
-    ctx.restore();
+/** Schwert/Katana in der Hand */
+function heroDrawBlade(r, hand, dir, W) {
+  const len = W.len || 8.6;
+  const grip0 = rigSub(hand, rigScale(dir, 1.1));
+  const guard = rigAdd(hand, rigScale(dir, 0.85));
+  const base = rigAdd(hand, rigScale(dir, 1.05));
+  let tip = rigAdd(hand, rigScale(dir, len));
+  if (W.curve) {
+    // Leichte Katana-Krümmung: Spitze etwas nach oben
+    tip = rigAdd(tip, rigV(0, W.curve, 0));
   }
+  r.capsule(grip0, guard, 0.42, 0.42, W.grip || '#7f1d1d', { bias: 0.02 });
+  r.capsule(base, tip, W.bladeW || 0.55, 0.16, W.blade || '#e2e8f0', { light: 0.55, bias: 0.04, inkColor: W.bladeInk || '#475569' });
+  r.ball(guard, 0.72, W.guard || '#fbbf24', { sy: 0.65, gloss: 0.45, bias: 0.05 });
+  r.ball(grip0, 0.42, W.guard || '#fbbf24', { bias: 0.05, gloss: 0 });
+  if (W.glow) r.glow(rigLerp(base, tip, 0.55), 3.4, W.glow, { alpha: 0.55 });
+}
+
+/** Bogen mit Sehne und Pfeil */
+function heroDrawBow(r, bow, W) {
+  const h = bow.hand;
+  const top = rigAdd(h, rigV(0, 4.6, -1.0));
+  const bot = rigAdd(h, rigV(0, -4.6, -1.0));
+  const midT = rigAdd(h, rigV(0, 2.6, 0.35));
+  const midB = rigAdd(h, rigV(0, -2.6, 0.35));
+  const wood = bow.aimed ? '#38bdf8' : (W.bow || '#a16207');
+  r.line([top, midT, h, midB, bot], wood, 0.75, { bias: 0.1 });
+  r.line([top, bow.string, bot], bow.aimed ? '#e0f2fe' : '#f8fafc', 0.22, { smooth: false, outline: false, bias: 0.08 });
+  const tip = rigAdd(h, rigV(0, 0, 2.6));
+  r.line([bow.string, tip], bow.aimed ? '#7dd3fc' : '#e2e8f0', 0.32, { smooth: false, bias: 0.12 });
+  r.poly([rigAdd(tip, rigV(0, 0, 1.1)), rigAdd(tip, rigV(0.55, 0, -0.2)), rigAdd(tip, rigV(-0.55, 0, -0.2))], bow.aimed ? '#38bdf8' : '#fef08a', { smooth: false, bias: 0.13 });
+  if (bow.aimed) r.glow(tip, 3.5, 'rgba(56,189,248,0.9)', { alpha: 0.7 });
+}
+
+/**
+ * Rahmen für jeden Helden: Pose berechnen, Skelett lösen, Design zeichnen, Waffen ergänzen.
+ * D: { build, weapon, draw(r, sk, ctx, t, info) }
+ */
+function heroRender(D, ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  const B = D.B || (D.B = Object.assign({}, HERO_BUILD, D.build || {}));
+  const pose = heroActionPose(action, animTime, B);
+  const facing = pose && pose.facing !== undefined ? pose.facing : direction;
+  const r = RIG.begin(ctx, px, py, {
+    facing,
+    flash: hitFlash > 0 ? 0.6 : 0,
+    flashColor: '#f87171'
+  });
+  if (!D.noShadow) r.shadow(D.shadowW || 7, 2.8, 0.3, 0, 0.4);
+
+  const moving = Boolean(isMoving) && !(pose && (pose.bow || action.type === 'spin'));
+  const hover = D.hover ? Math.sin(animTime * 3) * 0.8 + D.hover : 0;
+  const sk = rigBiped(animTime, Object.assign({}, B, {
+    moving,
+    handR: pose && pose.handR,
+    handL: pose && pose.handL,
+    twist: pose ? pose.twist : 0,
+    extraLean: pose ? pose.lean : 0,
+    crouch: pose ? pose.crouch : 0,
+    elbowPoleR: pose && pose.elbowPoleR
+  }));
+  if (hover) {
+    // Schwebende Geister: ganzes Skelett anheben
+    for (const k of Object.keys(sk)) {
+      const v = sk[k];
+      if (v && typeof v === 'object' && 'y' in v) v.y += hover;
+    }
+  }
+  sk.H = rigV(sk.head.x, sk.neck.y + B.headUp, sk.head.z + 0.25);
+  sk.R = B.headR;
+  sk.shY = (sk.shR.y + sk.shL.y) / 2;
+  const info = { t: animTime, moving, pose, action, blink: heroBlink(animTime, D.blinkOffset || 0), B };
+  D.draw(r, sk, ctx, animTime, info);
+
+  if (pose) {
+    const W = D.weapon || {};
+    for (const w of pose.weapons) heroDrawBlade(r, w.hand, w.dir, W);
+    if (pose.bow) heroDrawBow(r, pose.bow, W);
+  }
+  r.flush();
 }
 
 // -----------------------------------------------------------------------------
-// 15 PROCEDURAL CHARACTER RENDERERS
+// KÖRPERTEIL-BAUSTEINE
 // -----------------------------------------------------------------------------
 
-// 1. REN (Schattengänger) - Original Main
-function renderRenTwilight(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 8, 3.5, 0.32);
-
-  // Paper Cloak
-  ctx.fillStyle = '#1e2636';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 20 + bob);
-  ctx.lineTo(px + 7.5, py - 4 + bob);
-  ctx.lineTo(px - 7.5, py - 4 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Central Paper Fold Crease
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(px, py - 20 + bob);
-  ctx.lineTo(px, py - 4 + bob);
-  ctx.stroke();
-
-  // Red Obi Sash
-  ctx.fillStyle = '#dc2626';
-  ctx.fillRect(px - 5, py - 11 + bob, 10, 2.5);
-
-  // Fluttering Ribbon
-  const ribbon = Math.sin(animTime * 6) * 3;
-  ctx.strokeStyle = '#ef4444';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(px - 2, py - 10 + bob);
-  ctx.lineTo(px - 6 + ribbon, py - 6 + bob);
-  ctx.stroke();
-
-  // Paper Cutout Mask / Face
-  const faceX = px + dx * 1.2;
-  const faceY = py - 18 + bob + dy * 0.8;
-  ctx.fillStyle = '#f8fafc';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY, 4.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Cyan Spirit Eyes
-  if (direction !== 'up') {
-    ctx.fillStyle = '#2dd4bf';
-    const eyeBaseX = faceX + dx * 1.2;
-    const eyeBaseY = faceY + dy * 0.4;
-    if (direction === 'down') {
-      ctx.fillRect(eyeBaseX - 2.2, eyeBaseY - 1, 1.5, 2);
-      ctx.fillRect(eyeBaseX + 0.7, eyeBaseY - 1, 1.5, 2);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(eyeBaseX - 2.2, eyeBaseY - 1, 1.5, 2);
-    } else if (direction.includes('right')) {
-      ctx.fillRect(eyeBaseX + 0.8, eyeBaseY - 1, 1.5, 2);
+/** Beine mit Hose und Schuhen. o: shin (Unterschenkel-Farbe, z.B. Wickelgamaschen), toe (Fußlänge) */
+function heroLegs(r, sk, pants, shoes, o = {}) {
+  const sides = ['R', 'L'];
+  for (const S of sides) {
+    const hip = sk['hip' + S];
+    const knee = sk['knee' + S];
+    const ankle = sk['ankle' + S];
+    const foot = sk['foot' + S];
+    r.capsule(hip, knee, o.thighR || 1.05, o.kneeR || 0.92, pants);
+    r.capsule(knee, ankle, o.kneeR || 0.92, o.ankleR || 0.78, o.shin || pants);
+    if (o.wrap) {
+      // Wickelbänder um den Unterschenkel
+      const m1 = rigLerp(knee, ankle, 0.35);
+      const m2 = rigLerp(knee, ankle, 0.7);
+      r.line([rigAdd(m1, rigV(-0.9, 0.2, 0.3)), rigAdd(m1, rigV(0.9, -0.2, 0.4))], o.wrap, 0.3, { outline: false, bias: 0.05 });
+      r.line([rigAdd(m2, rigV(-0.8, 0.2, 0.3)), rigAdd(m2, rigV(0.8, -0.2, 0.4))], o.wrap, 0.3, { outline: false, bias: 0.05 });
+    }
+    if (shoes) {
+      const heel = rigAdd(foot, rigV(0, 0.55, -0.35));
+      const toe = rigAdd(foot, rigV(0, 0.45, o.toe || 0.8));
+      r.capsule(heel, toe, 0.78, 0.7, shoes);
     }
   }
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.moveTo(px, py - 21 + bob);
-    ctx.lineTo(px + 8, py - 3 + bob);
-    ctx.lineTo(px - 8, py - 3 + bob);
-    ctx.closePath();
-  });
 }
 
-// 2. KAITO (Windläufer)
-function renderKaitoWind(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 8, 3.5, 0.32);
-
-  // Poncho body (Forest & moss green paper)
-  ctx.fillStyle = '#15803d';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 21 + bob);
-  ctx.lineTo(px + 8, py - 4 + bob);
-  ctx.lineTo(px - 8, py - 4 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Asymmetric Poncho Fold
-  ctx.fillStyle = '#166534';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 21 + bob);
-  ctx.lineTo(px + 8, py - 4 + bob);
-  ctx.lineTo(px, py - 4 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Leather scout sash
-  ctx.strokeStyle = '#78350f';
-  ctx.lineWidth = 1.8;
-  ctx.beginPath();
-  ctx.moveTo(px - 6, py - 18 + bob);
-  ctx.lineTo(px + 6, py - 7 + bob);
-  ctx.stroke();
-
-  // Ponytail & Falcon Feather
-  const hairSway = Math.sin(animTime * 7) * 2.5;
-  ctx.fillStyle = '#451a03';
-  ctx.beginPath();
-  ctx.ellipse(px - 2 + hairSway * 0.5, py - 19 + bob, 3, 4, 0.4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Falcon feather
-  ctx.fillStyle = '#f59e0b';
-  ctx.beginPath();
-  ctx.moveTo(px - 3 + hairSway, py - 22 + bob);
-  ctx.lineTo(px - 1 + hairSway, py - 27 + bob);
-  ctx.lineTo(px - 5 + hairSway, py - 25 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Head & Headband
-  const faceX = px + dx * 1.2;
-  const faceY = py - 18 + bob + dy * 0.8;
-  ctx.fillStyle = '#fed7aa';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY, 4.4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // White Headband
-  ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(faceX - 4.5, faceY - 3.5, 9, 2);
-
-  // Emerald Eyes
-  if (direction !== 'up') {
-    ctx.fillStyle = '#10b981';
-    const ex = faceX + dx * 1.2;
-    const ey = faceY + dy * 0.3;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2.2, ey - 0.5, 1.4, 1.8);
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.8);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2.2, ey - 0.5, 1.4, 1.8);
-    } else {
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.8);
+/** Arme mit Ärmeln und Händen. o: wide (weiter Kimono-Ärmel-Farbe), cuff, handR, glove */
+function heroArms(r, sk, sleeve, skin, o = {}) {
+  for (const S of ['R', 'L']) {
+    const sh = sk['sh' + S];
+    const el = sk['elbow' + S];
+    const hand = sk['hand' + S];
+    r.capsule(sh, el, o.upperR || 0.95, 0.8, sleeve);
+    r.capsule(el, hand, 0.8, 0.68, o.fore || sleeve);
+    if (o.wide) {
+      // Weiter Ärmel hängt vom Unterarm herab und schwingt nach
+      const sag = rigV(0, -1.9, -0.4);
+      r.poly([
+        rigAdd(sh, rigV(0, -0.3, 0)),
+        el,
+        rigLerp(el, hand, 0.75),
+        rigAdd(rigLerp(el, hand, 0.7), sag),
+        rigAdd(el, rigAdd(sag, rigV(0, 0.4, -0.2)))
+      ], o.wide, { bias: 0.03 });
     }
+    if (o.cuff) r.ball(rigLerp(el, hand, 0.82), 0.72, o.cuff, { sy: 0.8, gloss: 0, bias: 0.02 });
+    r.ball(hand, o.handR || 0.78, o.glove || skin, { gloss: 0.2, bias: 0.06 });
   }
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.moveTo(px, py - 22 + bob);
-    ctx.lineTo(px + 8.5, py - 3 + bob);
-    ctx.lineTo(px - 8.5, py - 3 + bob);
-    ctx.closePath();
-  });
 }
 
-// 3. JIRO (Papier-Ronin)
-function renderJiroRonin(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
+/** Oberkörper als Kegelstumpf (Schultern -> Becken). o: rt, rb, sz, hem, trim */
+function heroTorso(r, sk, color, o = {}) {
+  const top = rigLerp(sk.shR, sk.shL, 0.5);
+  top.y += o.topUp === undefined ? 0.25 : o.topUp;
+  const bot = rigAdd(sk.pelvis, rigV(0, o.botY === undefined ? -0.2 : o.botY, 0));
+  r.cone(top, bot, o.rt || 2.3, o.rb || 2.0, color, { sz: o.sz || 0.78, hem: o.hem, hemW: o.hemW, bias: o.bias || 0, after: o.after });
+}
 
-  drawPaperDropShadow(ctx, px, py + 1, 9, 3.8, 0.35);
+/**
+ * Gewand/Rock/Umhang ab Taille, Saum schwingt beim Laufen nach.
+ * o: topY (über Becken), hemY (Höhe des Saums), rt, rb, trail, hem, hemW, sz
+ */
+function heroRobe(r, sk, color, t, moving, o = {}) {
+  const ph = Math.sin(t * 14);
+  const trail = moving ? (o.trail === undefined ? 0.9 : o.trail) : 0;
+  const top = rigAdd(sk.pelvis, rigV(0, o.topY === undefined ? 1.0 : o.topY, 0));
+  const bot = rigV(sk.pelvis.x * 0.5 + (moving ? ph * 0.35 : Math.sin(t * 1.6) * 0.12), o.hemY === undefined ? 1.0 : o.hemY, -trail + (o.botZ || 0));
+  r.cone(top, bot, o.rt || 2.0, o.rb || 3.0, color, { sz: o.sz || 0.85, hem: o.hem, hemW: o.hemW || 0.8, bias: o.bias || 0.01, after: o.after });
+}
 
-  // Dark Kimono / Hakama Robe
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 19 + bob);
-  ctx.lineTo(px + 7.5, py - 3 + bob);
-  ctx.lineTo(px - 7.5, py - 3 + bob);
-  ctx.closePath();
-  ctx.fill();
+/** Gürtel/Obi als schmaler Ring */
+function heroSash(r, sk, color, o = {}) {
+  const top = rigAdd(sk.pelvis, rigV(0, o.y1 === undefined ? 1.7 : o.y1, 0));
+  const bot = rigAdd(sk.pelvis, rigV(0, o.y0 === undefined ? 0.7 : o.y0, 0));
+  r.cone(top, bot, o.r || 2.1, o.r2 || (o.r || 2.1) * 1.03, color, { sz: o.sz || 0.82, bias: o.bias === undefined ? 0.08 : o.bias, shade: true, after: o.after });
+}
 
-  // Purple Lapel Fold
-  ctx.fillStyle = '#581c87';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 16 + bob);
-  ctx.lineTo(px + 3, py - 6 + bob);
-  ctx.lineTo(px - 4, py - 6 + bob);
-  ctx.closePath();
-  ctx.fill();
+/** Flatternde Bänder / Schärpen-Enden hinter der Figur */
+function heroRibbon(r, base, t, moving, color, o = {}) {
+  const dir = rigV(o.dx || 0, moving ? -0.6 : -0.9, moving ? -1 : -0.3);
+  const pts = rigChain(t, base, dir, {
+    n: o.n || 4, seg: o.seg || 1.25, amp: o.amp || (moving ? 0.9 : 0.4), ampY: o.ampY || 0.35,
+    freq: o.freq || (moving ? 11 : 4), k: 0.9
+  });
+  r.line(pts, color, o.w || 0.7, { bias: o.bias || 0 });
+  return pts;
+}
 
-  // White Collar Wrap
-  ctx.fillStyle = '#e2e8f0';
-  ctx.fillRect(px - 3, py - 15 + bob, 6, 2);
-
-  // Wide Kasa Conical Straw Hat
-  const hatY = py - 20 + bob + dy * 0.5;
-  ctx.fillStyle = '#b45309';
-  ctx.beginPath();
-  ctx.moveTo(px + dx * 1.5, hatY - 7);
-  ctx.lineTo(px + 12, hatY + 1);
-  ctx.lineTo(px - 12, hatY + 1);
-  ctx.closePath();
-  ctx.fill();
-
-  // Hat Weave Ribs
-  ctx.strokeStyle = '#78350f';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(px + dx * 1.5, hatY - 7);
-  ctx.lineTo(px, hatY + 1);
-  ctx.moveTo(px + dx * 1.5, hatY - 7);
-  ctx.lineTo(px + 7, hatY + 1);
-  ctx.moveTo(px + dx * 1.5, hatY - 7);
-  ctx.lineTo(px - 7, hatY + 1);
-  ctx.stroke();
-
-  // Hat Cord hanging
-  ctx.strokeStyle = '#dc2626';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(px - 6, hatY + 1);
-  ctx.lineTo(px - 4, hatY + 7);
-  ctx.stroke();
-
-  // Keen Golden Eyes peeking beneath hat
-  if (direction !== 'up') {
-    ctx.fillStyle = '#fbbf24';
-    const ey = hatY + 3;
-    const ex = px + dx * 2;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2.5, ey, 2, 1.2);
-      ctx.fillRect(ex + 0.8, ey, 2, 1.2);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2.5, ey, 2, 1.2);
-    } else {
-      ctx.fillRect(ex + 0.8, ey, 2, 1.2);
+/** Kopf mit Gesicht und Haaren; face/hair werden direkt nach der Kopfkugel gezeichnet */
+function heroHead(r, sk, skin, face, hair, o = {}) {
+  const H = sk.H;
+  const R = sk.R * (o.scale || 1);
+  r.ball(H, R, skin, {
+    sy: o.sy || 0.95,
+    sx: o.sx || 1,
+    gloss: o.gloss === undefined ? 0.18 : o.gloss,
+    bias: o.bias || 0,
+    after: (ctx) => {
+      if (face) face(ctx, H, R);
+      if (hair) hair(ctx, H, R);
     }
-  }
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.arc(px, py - 12 + bob, 11, 0, Math.PI * 2);
   });
+  return { H, R };
 }
 
-// 4. TARO (Lampion-Schmied)
-function renderTaroLantern(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
+/** Standard-Ghibli-Gesicht: Augen, Wangenröte, kleiner Mund */
+function heroFace(r, ctx, H, R, info, o = {}) {
+  const eyeEl = o.eyeEl === undefined ? -0.12 : o.eyeEl;
+  const eyeAz = o.eyeAz || 0.4;
+  const eo = {
+    style: o.style || 'round', color: o.eye || '#2b1d3a', size: o.size || 0.95,
+    white: o.white, lid: o.lid, blink: info.blink, pupil: o.pupil, tall: o.tall
+  };
+  r.eye(ctx, H, R, eyeAz, eyeEl, eo);
+  r.eye(ctx, H, R, -eyeAz, eyeEl, eo);
+  if (o.blush !== false) {
+    r.blush(ctx, H, R, 0.62, -0.38, o.blushColor || '#fb7185', 0.9);
+    r.blush(ctx, H, R, -0.62, -0.38, o.blushColor || '#fb7185', 0.9);
+  }
+  if (o.mouth !== false) r.mouth(ctx, H, R, 0, -0.45, o.mouth || {});
+}
 
-  drawPaperDropShadow(ctx, px, py + 1, 8.5, 3.5, 0.32);
-
-  // Charcoal base shirt
-  ctx.fillStyle = '#334155';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 20 + bob);
-  ctx.lineTo(px + 7, py - 4 + bob);
-  ctx.lineTo(px - 7, py - 4 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Leather blacksmith apron
-  ctx.fillStyle = '#7c2d12';
-  ctx.beginPath();
-  ctx.moveTo(px - 4, py - 14 + bob);
-  ctx.lineTo(px + 4, py - 14 + bob);
-  ctx.lineTo(px + 5.5, py - 3 + bob);
-  ctx.lineTo(px - 5.5, py - 3 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Apron strap
-  ctx.strokeStyle = '#451a03';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(px - 3, py - 16 + bob);
-  ctx.lineTo(px + 3, py - 16 + bob);
-  ctx.stroke();
-
-  // Face & Beard
-  const faceX = px + dx * 1.2;
-  const faceY = py - 18 + bob + dy * 0.8;
-  ctx.fillStyle = '#fed7aa';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY, 4.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Brown short beard / stubble
-  ctx.fillStyle = '#78350f';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY + 1.8, 3.2, 0, Math.PI);
-  ctx.fill();
-
-  // Copper Goggles on Forehead
-  ctx.fillStyle = '#d97706';
-  ctx.fillRect(faceX - 4.5, faceY - 4.5, 9, 2.5);
-  ctx.fillStyle = '#fef08a';
-  ctx.fillRect(faceX - 3.5, faceY - 4, 2.5, 1.8);
-  ctx.fillRect(faceX + 1, faceY - 4, 2.5, 1.8);
-
-  // Fiery Amber Eyes
-  if (direction !== 'up') {
-    ctx.fillStyle = '#f97316';
-    const ex = faceX + dx * 1.2;
-    const ey = faceY + dy * 0.3;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2.2, ey - 0.5, 1.4, 1.6);
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.6);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2.2, ey - 0.5, 1.4, 1.6);
-    } else {
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.6);
+/** Haarkante: Stirnfransen vorne, tiefer an den Seiten, ganz unten hinten */
+function heroHairEdge(front = 0.3, side = -0.25, back = -0.95, spikes = 0.14, count = 7) {
+  return (az) => {
+    const a = Math.abs(az);
+    let base;
+    if (a < 1.3) base = heroLerp(front, side, a / 1.3);
+    else base = heroLerp(side, back, (a - 1.3) / (HERO_PI - 1.3));
+    if (spikes && a < 1.5) {
+      const saw = Math.abs(((az * count) / HERO_PI) % 1);
+      base -= (saw < 0.5 ? saw : 1 - saw) * 2 * spikes;
     }
-  }
-
-  // Tiny ember spark
-  const sparkX = px + Math.sin(animTime * 6) * 7;
-  const sparkY = py - 8 + bob - ((animTime * 15) % 12);
-  ctx.fillStyle = '#f97316';
-  ctx.fillRect(sparkX, sparkY, 1.5, 1.5);
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.moveTo(px, py - 21 + bob);
-    ctx.lineTo(px + 8, py - 3 + bob);
-    ctx.lineTo(px - 8, py - 3 + bob);
-    ctx.closePath();
-  });
+    return base;
+  };
 }
 
-// 5. SORA (Kirschblüten-Miko)
-function renderSoraMiko(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
+/** Spitzes Ohr / Horn als Kegel auf der Kopfkugel (wirkt aus jeder Richtung räumlich) */
+function heroEar(r, H, R, az, el, color, o = {}) {
+  const w = o.w || 0.32;
+  const len = o.len || 3.2;
+  const base = rigSurfPt(H, R * 0.92, az, el);
+  const n = rigNorm(rigSub(rigSurfPt(H, R, az, el), H));
+  const tilt = o.tilt || rigV(0, 0.6, 0);
+  const tip = rigAdd(base, rigScale(rigNorm(rigAdd(n, tilt)), len));
+  const rb = w * R;
+  r.cone(tip, base, 0.08, rb, color, { sz: o.flat || 0.55, bias: o.bias || 0 });
+  if (o.inner && r.toCam(rigNorm(rigAdd(n, rigV(0, 0, 0.4)))) > 0.05) {
+    const side = rigNorm(rigCross(rigNorm(rigSub(tip, base)), rigV(0, 0, 1)));
+    const fwd = rigScale(rigNorm(rigAdd(rigV(n.x, 0, n.z), rigV(0, 0, 0.6))), 0.35);
+    const a = rigAdd(rigAdd(base, rigScale(side, rb * 0.5)), fwd);
+    const b = rigAdd(rigAdd(base, rigScale(side, -rb * 0.5)), fwd);
+    r.poly([a, rigAdd(rigLerp(base, tip, 0.72), fwd), b], o.inner, { smooth: false, outline: false, bias: (o.bias || 0) + 0.3 });
+  }
+  if (o.tipColor) r.cone(tip, rigLerp(base, tip, 0.62), 0.08, rb * 0.42, o.tipColor, { sz: o.flat || 0.55, bias: (o.bias || 0) + 0.02 });
+  return tip;
+}
 
-  drawPaperDropShadow(ctx, px, py + 1, 8, 3.5, 0.3);
+/** Punkte (Sterne, Sommersprossen, Muster) auf einer Zylinder-/Kegelfläche, nur auf der sichtbaren Seite */
+function heroSpeckles(r, center, radius, yFrom, yTo, list, color, o = {}) {
+  for (const sp of list) {
+    const az = sp[0];
+    const y = yFrom + (yTo - yFrom) * sp[1];
+    const n = rigV(Math.sin(az), 0, Math.cos(az));
+    if (r.toCam(n) < 0.1) continue;
+    const rad = radius(sp[1]);
+    const p = rigV(center.x + n.x * rad, y, center.z + n.z * rad);
+    const P = r.P(p);
+    const size = (sp[2] || 1) * (o.size || 0.45);
+    r.custom(P.d + (o.bias || 0.3), (ctx, rr) => {
+      ctx.save();
+      ctx.fillStyle = rr.col(color);
+      if (o.star) {
+        const s = size * rr.s;
+        ctx.beginPath();
+        ctx.moveTo(P.x, P.y - s * 1.6);
+        ctx.lineTo(P.x + s * 0.45, P.y - s * 0.45);
+        ctx.lineTo(P.x + s * 1.6, P.y);
+        ctx.lineTo(P.x + s * 0.45, P.y + s * 0.45);
+        ctx.lineTo(P.x, P.y + s * 1.6);
+        ctx.lineTo(P.x - s * 0.45, P.y + s * 0.45);
+        ctx.lineTo(P.x - s * 1.6, P.y);
+        ctx.lineTo(P.x - s * 0.45, P.y - s * 0.45);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(P.x, P.y, size * rr.s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    });
+  }
+}
 
-  // Red Pleated Hakama Skirt
-  ctx.fillStyle = '#be123c';
+/** Buschiger Schwanz aus überlappenden Kugeln entlang einer Kette */
+function heroTail(r, base, t, moving, color, tipColor, o = {}) {
+  const dir = o.dir || rigV(0, moving ? 0.25 : 0.6, -1);
+  const pts = rigChain(t + (o.phase || 0), base, dir, {
+    n: o.n || 5, seg: o.seg || 1.1, amp: o.amp || (moving ? 1.1 : 0.7), ampY: o.ampY || 0.4,
+    freq: o.freq || (moving ? 9 : 3.2), k: 0.7
+  });
+  const r0 = o.r0 || 0.9;
+  const r1 = o.r1 || 1.6;
+  for (let i = 1; i < pts.length; i++) {
+    const f = i / (pts.length - 1);
+    const rad = o.taper ? heroLerp(r0, r1 * 0.4, f) : heroLerp(r0, r1, Math.sin(f * HERO_PI * 0.85));
+    const col = tipColor && f > (o.tipFrom || 0.7) ? tipColor : color;
+    r.ball(pts[i], rad, col, { gloss: 0.15, bias: o.bias || 0 });
+  }
+  return pts;
+}
+
+/** Band um den Kopf (Stirnband, Tiara, Hutband) - nur der sichtbare Bogen wird gezeichnet */
+function heroBand(r, ctx, H, R, el, color, width, o = {}) {
+  const pts = [];
+  for (let i = 0; i <= 24; i++) {
+    const az = -HERO_PI + (i / 24) * HERO_PI * 2;
+    const P = r.surf(H, R, az, el + (o.dip ? Math.cos(az) * o.dip : 0), 1);
+    if (P.v > -0.05) pts.push(P);
+  }
+  if (pts.length < 2) return;
+  pts.sort((a, b) => a.x - b.x);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
   ctx.beginPath();
-  ctx.moveTo(px - 4.5, py - 11 + bob);
-  ctx.lineTo(px + 4.5, py - 11 + bob);
-  ctx.lineTo(px + 7.5, py - 3 + bob);
-  ctx.lineTo(px - 7.5, py - 3 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // White Shrine Robe (Haori)
-  ctx.fillStyle = '#fdfbf7';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 20 + bob);
-  ctx.lineTo(px + 6, py - 10 + bob);
-  ctx.lineTo(px - 6, py - 10 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Red Ribbon Trim on collar
-  ctx.strokeStyle = '#e11d48';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(px - 3, py - 17 + bob);
-  ctx.lineTo(px, py - 12 + bob);
-  ctx.lineTo(px + 3, py - 17 + bob);
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.strokeStyle = r.inkCol(color);
+  ctx.lineWidth = (width + r.ink * 1.6) * r.s;
   ctx.stroke();
-
-  // Long dark hair
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.ellipse(px, py - 17 + bob, 4.8, 5.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Twin hair ribbons
-  ctx.fillStyle = '#ef4444';
-  ctx.fillRect(px - 5.5, py - 18 + bob, 2, 4);
-  ctx.fillRect(px + 3.5, py - 18 + bob, 2, 4);
-
-  // Miko Face
-  const faceX = px + dx * 1.2;
-  const faceY = py - 18 + bob + dy * 0.8;
-  ctx.fillStyle = '#fff1f2';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY, 4.2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Cheerful Blush
-  ctx.fillStyle = 'rgba(251, 113, 133, 0.45)';
-  ctx.beginPath();
-  ctx.arc(faceX - 2.2, faceY + 1.5, 1.2, 0, Math.PI * 2);
-  ctx.arc(faceX + 2.2, faceY + 1.5, 1.2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Ruby Eyes
-  if (direction !== 'up') {
-    ctx.fillStyle = '#e11d48';
-    const ex = faceX + dx * 1.2;
-    const ey = faceY + dy * 0.3;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2, ey - 0.5, 1.4, 1.8);
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.8);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2, ey - 0.5, 1.4, 1.8);
-    } else {
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.8);
-    }
-  }
-
-  // O-Mikuji Prayer Strips on shoulder
-  const omikujiWave = Math.sin(animTime * 5) * 1.8;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(px - 5 + omikujiWave, py - 13 + bob, 2, 5);
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.moveTo(px, py - 21 + bob);
-    ctx.lineTo(px + 8, py - 3 + bob);
-    ctx.lineTo(px - 8, py - 3 + bob);
-    ctx.closePath();
-  });
-}
-
-// 6. KANNA (Wolfsprinzessin)
-function renderKannaWolf(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 8, 3.5, 0.3);
-
-  // Hunter leather tunic
-  ctx.fillStyle = '#1e293b';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 19 + bob);
-  ctx.lineTo(px + 7, py - 4 + bob);
-  ctx.lineTo(px - 7, py - 4 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Bone Claw necklace
-  ctx.fillStyle = '#f8fafc';
-  ctx.beginPath();
-  ctx.arc(px, py - 13 + bob, 1.2, 0, Math.PI * 2);
-  ctx.arc(px - 2.5, py - 14 + bob, 1, 0, Math.PI * 2);
-  ctx.arc(px + 2.5, py - 14 + bob, 1, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Wolf Pelt Hood with Ears
-  ctx.fillStyle = '#cbd5e1';
-  ctx.beginPath();
-  ctx.arc(px, py - 18 + bob, 5.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Pointed Wolf Ears on Hood
-  ctx.fillStyle = '#94a3b8';
-  ctx.beginPath();
-  ctx.moveTo(px - 4, py - 22 + bob);
-  ctx.lineTo(px - 6, py - 27 + bob);
-  ctx.lineTo(px - 1, py - 23 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(px + 4, py - 22 + bob);
-  ctx.lineTo(px + 6, py - 27 + bob);
-  ctx.lineTo(px + 1, py - 23 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Face
-  const faceX = px + dx * 1.2;
-  const faceY = py - 18 + bob + dy * 0.8;
-  ctx.fillStyle = '#fed7aa';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY, 4.2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Red War Paint Stripes (Mononoke Style)
-  ctx.fillStyle = '#e11d48';
-  ctx.fillRect(faceX - 3.5, faceY + 1.2, 2.5, 1);
-  ctx.fillRect(faceX + 1.2, faceY + 1.2, 2.5, 1);
-
-  // Fierce Ice-Blue Eyes
-  if (direction !== 'up') {
-    ctx.fillStyle = '#38bdf8';
-    const ex = faceX + dx * 1.2;
-    const ey = faceY + dy * 0.3;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2.2, ey - 0.5, 1.4, 1.8);
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.8);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2.2, ey - 0.5, 1.4, 1.8);
-    } else {
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.8);
-    }
-  }
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.arc(px, py - 13 + bob, 10, 0, Math.PI * 2);
-  });
-}
-
-// 7. AOI (Sternen-Weise)
-function renderAoiCelestial(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 8.5, 3.5, 0.3);
-
-  // Midnight Astral Cloak
-  ctx.fillStyle = '#1e1b4b';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 20 + bob);
-  ctx.lineTo(px + 8, py - 3 + bob);
-  ctx.lineTo(px - 8, py - 3 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Golden Constellation Dots on Cloak
-  ctx.fillStyle = '#fde047';
-  ctx.fillRect(px - 4, py - 9 + bob, 1.5, 1.5);
-  ctx.fillRect(px + 3, py - 12 + bob, 1.2, 1.2);
-  ctx.fillRect(px - 2, py - 5 + bob, 1.5, 1.5);
-  ctx.fillRect(px + 4, py - 6 + bob, 1.2, 1.2);
-
-  // Face & Sheer Veil
-  const faceX = px + dx * 1.2;
-  const faceY = py - 18 + bob + dy * 0.8;
-  ctx.fillStyle = '#f5f3ff';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY, 4.4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Golden Crescent Moon Diadem
-  ctx.fillStyle = '#fde047';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY - 3.8, 2.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#1e1b4b';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY - 4.5, 1.8, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Sheer Translucent Veil
-  ctx.fillStyle = 'rgba(224, 231, 255, 0.6)';
-  ctx.beginPath();
-  ctx.moveTo(faceX - 4, faceY - 1);
-  ctx.lineTo(faceX + 4, faceY - 1);
-  ctx.lineTo(faceX + 3.5, faceY + 5.5);
-  ctx.lineTo(faceX - 3.5, faceY + 5.5);
-  ctx.closePath();
-  ctx.fill();
-
-  // Lavender Astral Eyes
-  if (direction !== 'up') {
-    ctx.fillStyle = '#c084fc';
-    const ex = faceX + dx * 1.2;
-    const ey = faceY + dy * 0.3;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2, ey - 0.5, 1.4, 1.6);
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.6);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2, ey - 0.5, 1.4, 1.6);
-    } else {
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.6);
-    }
-  }
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.moveTo(px, py - 21 + bob);
-    ctx.lineTo(px + 8.5, py - 3 + bob);
-    ctx.lineTo(px - 8.5, py - 3 + bob);
-    ctx.closePath();
-  });
-}
-
-// 8. MEI (Kräuter-Nomadin)
-function renderMeiHerbalist(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 8, 3.5, 0.3);
-
-  // Wicker Basket on back
-  ctx.fillStyle = '#92400e';
-  ctx.fillRect(px - 5, py - 18 + bob, 10, 8);
-  ctx.fillStyle = '#4ade80'; // Fresh herbs in basket
-  ctx.beginPath();
-  ctx.arc(px - 2, py - 18 + bob, 2.5, 0, Math.PI * 2);
-  ctx.arc(px + 2, py - 19 + bob, 2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Sage Green Traveler Dress
-  ctx.fillStyle = '#047857';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 18 + bob);
-  ctx.lineTo(px + 7.5, py - 3 + bob);
-  ctx.lineTo(px - 7.5, py - 3 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // White apron
-  ctx.fillStyle = '#f0fdf4';
-  ctx.fillRect(px - 4, py - 11 + bob, 8, 7);
-
-  // Twin Braids with wild buttercups
-  ctx.fillStyle = '#78350f';
-  ctx.beginPath();
-  ctx.arc(px - 4.5, py - 14 + bob, 2, 0, Math.PI * 2);
-  ctx.arc(px + 4.5, py - 14 + bob, 2, 0, Math.PI * 2);
-  ctx.fill();
-  // Flowers in hair
-  ctx.fillStyle = '#fde047';
-  ctx.fillRect(px - 5, py - 15 + bob, 1.8, 1.8);
-  ctx.fillRect(px + 3.5, py - 15 + bob, 1.8, 1.8);
-
-  // Cute Face
-  const faceX = px + dx * 1.2;
-  const faceY = py - 18 + bob + dy * 0.8;
-  ctx.fillStyle = '#fef3c7';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY, 4.3, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Warm Peach Blush
-  ctx.fillStyle = 'rgba(251, 146, 60, 0.45)';
-  ctx.beginPath();
-  ctx.arc(faceX - 2.2, faceY + 1.2, 1.2, 0, Math.PI * 2);
-  ctx.arc(faceX + 2.2, faceY + 1.2, 1.2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Warm Chestnut Eyes
-  if (direction !== 'up') {
-    ctx.fillStyle = '#78350f';
-    const ex = faceX + dx * 1.2;
-    const ey = faceY + dy * 0.3;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2, ey - 0.5, 1.4, 1.8);
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.8);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2, ey - 0.5, 1.4, 1.8);
-    } else {
-      ctx.fillRect(ex + 0.8, ey - 0.5, 1.4, 1.8);
-    }
-  }
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.moveTo(px, py - 20 + bob);
-    ctx.lineTo(px + 8, py - 3 + bob);
-    ctx.lineTo(px - 8, py - 3 + bob);
-    ctx.closePath();
-  });
-}
-
-// 9. YUTO (Kitsune Fuchskrieger)
-function renderYutoKitsune(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 9, 3.8, 0.32);
-
-  // Big Fluffy Fox Tail (Wagging)
-  const tailSway = Math.sin(animTime * 6) * 4;
-  ctx.fillStyle = '#ea580c';
-  ctx.beginPath();
-  ctx.ellipse(px + 7 + tailSway * 0.4, py - 7 + bob, 5, 8, 0.45, 0, Math.PI * 2);
-  ctx.fill();
-  // White Tail Tip
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.ellipse(px + 8 + tailSway * 0.6, py - 12 + bob, 2.8, 3.5, 0.45, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Orange Robe Body
-  ctx.fillStyle = '#ea580c';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 19 + bob);
-  ctx.lineTo(px + 7, py - 3 + bob);
-  ctx.lineTo(px - 7, py - 3 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // White Chest Fur
-  ctx.fillStyle = '#ffedd5';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 16 + bob);
-  ctx.lineTo(px + 3, py - 8 + bob);
-  ctx.lineTo(px - 3, py - 8 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Head
-  const faceX = px + dx * 1.2;
-  const faceY = py - 18 + bob + dy * 0.8;
-  ctx.fillStyle = '#f97316';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY, 4.8, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Pointed Fox Ears
-  ctx.fillStyle = '#c2410c';
-  ctx.beginPath();
-  ctx.moveTo(faceX - 5, faceY - 3);
-  ctx.lineTo(faceX - 7, faceY - 9);
-  ctx.lineTo(faceX - 2, faceY - 4);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(faceX + 5, faceY - 3);
-  ctx.lineTo(faceX + 7, faceY - 9);
-  ctx.lineTo(faceX + 2, faceY - 4);
-  ctx.closePath();
-  ctx.fill();
-
-  // White inner ears
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(faceX - 5.5, faceY - 6.5, 1.8, 2.5);
-  ctx.fillRect(faceX + 3.8, faceY - 6.5, 1.8, 2.5);
-
-  // White muzzle
-  ctx.fillStyle = '#ffedd5';
-  ctx.beginPath();
-  ctx.arc(faceX + dx * 1.2, faceY + 1.2 + dy * 0.5, 2.4, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Fox Nose
-  ctx.fillStyle = '#0f172a';
-  ctx.fillRect(faceX + dx * 1.8 - 0.7, faceY + 1.8 + dy * 0.5, 1.4, 1.2);
-
-  // Clever Amber Eyes
-  if (direction !== 'up') {
-    ctx.fillStyle = '#f59e0b';
-    const ex = faceX + dx * 1.2;
-    const ey = faceY + dy * 0.2;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2.4, ey - 1, 1.6, 1.8);
-      ctx.fillRect(ex + 0.8, ey - 1, 1.6, 1.8);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2.4, ey - 1, 1.6, 1.8);
-    } else {
-      ctx.fillRect(ex + 0.8, ey - 1, 1.6, 1.8);
-    }
-  }
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.arc(px, py - 12 + bob, 10, 0, Math.PI * 2);
-  });
-}
-
-// 10. POKO (Tanuki Marderhund)
-function renderPokoTanuki(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 9.5, 4, 0.35);
-
-  // Round Plump Tanuki Body
-  ctx.fillStyle = '#78350f';
-  ctx.beginPath();
-  ctx.arc(px, py - 12 + bob, 8.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Creamy Tanuki Belly
-  ctx.fillStyle = '#fde68a';
-  ctx.beginPath();
-  ctx.ellipse(px + dx * 1.2, py - 10 + bob + dy * 0.5, 5.5, 6, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Round Tanuki Ears
-  ctx.fillStyle = '#451a03';
-  ctx.beginPath();
-  ctx.arc(px - 5.5, py - 20 + bob, 2.5, 0, Math.PI * 2);
-  ctx.arc(px + 5.5, py - 20 + bob, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Dark Bandit Eye Mask
-  ctx.fillStyle = '#451a03';
-  const faceX = px + dx * 1.2;
-  const faceY = py - 16 + bob + dy * 0.8;
-  ctx.beginPath();
-  ctx.ellipse(faceX - 2.5, faceY, 2.8, 2, 0.2, 0, Math.PI * 2);
-  ctx.ellipse(faceX + 2.5, faceY, 2.8, 2, -0.2, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Magical Transformation Leaf atop head
-  const leafTilt = Math.sin(animTime * 4) * 0.3;
-  ctx.fillStyle = '#22c55e';
-  ctx.beginPath();
-  ctx.ellipse(px + 1, py - 22 + bob, 3.2, 1.8, leafTilt, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#15803d';
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  ctx.moveTo(px - 1, py - 22 + bob);
-  ctx.lineTo(px + 3, py - 22 + bob);
+  ctx.strokeStyle = r.col(color);
+  ctx.lineWidth = width * r.s;
   ctx.stroke();
-
-  // Curious Button Eyes
-  if (direction !== 'up') {
-    ctx.fillStyle = '#ffffff';
-    const ex = faceX + dx * 1.2;
-    const ey = faceY + dy * 0.3;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2.8, ey - 0.5, 1.8, 1.8);
-      ctx.fillRect(ex + 1, ey - 0.5, 1.8, 1.8);
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(ex - 2.2, ey, 1, 1);
-      ctx.fillRect(ex + 1.2, ey, 1, 1);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2.8, ey - 0.5, 1.8, 1.8);
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(ex - 2.4, ey, 1, 1);
-    } else {
-      ctx.fillRect(ex + 1, ey - 0.5, 1.8, 1.8);
-      ctx.fillStyle = '#0f172a';
-      ctx.fillRect(ex + 1.4, ey, 1, 1);
-    }
-  }
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.arc(px, py - 12 + bob, 9, 0, Math.PI * 2);
-  });
-}
-
-// 11. KURO (Neko Schattenkater)
-function renderKuroNeko(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 8, 3.5, 0.35);
-
-  // Curling Cat Tail behind
-  const tailWave = Math.sin(animTime * 7) * 3;
-  ctx.strokeStyle = '#0f172a';
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(px - 4, py - 6 + bob);
-  ctx.quadraticCurveTo(px - 10 + tailWave, py - 12 + bob, px - 7 + tailWave, py - 16 + bob);
-  ctx.stroke();
-
-  // Jet Black Paper Body
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 19 + bob);
-  ctx.lineTo(px + 6.5, py - 3 + bob);
-  ctx.lineTo(px - 6.5, py - 3 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Flowing Red Shinobi Scarf
-  const scarfWave = Math.sin(animTime * 8) * 3.5;
-  ctx.strokeStyle = '#ef4444';
-  ctx.lineWidth = 2.5;
-  ctx.beginPath();
-  ctx.moveTo(px - 2, py - 13 + bob);
-  ctx.lineTo(px - 8 + scarfWave, py - 10 + bob);
-  ctx.lineTo(px - 12 + scarfWave * 1.2, py - 12 + bob);
-  ctx.stroke();
-
-  // Scarf collar knot
-  ctx.fillStyle = '#dc2626';
-  ctx.fillRect(px - 4.5, py - 14 + bob, 9, 2.5);
-
-  // Cat Head
-  const faceX = px + dx * 1.2;
-  const faceY = py - 18 + bob + dy * 0.8;
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY, 4.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Pointed Cat Ears
-  ctx.fillStyle = '#020617';
-  ctx.beginPath();
-  ctx.moveTo(faceX - 4, faceY - 2);
-  ctx.lineTo(faceX - 6, faceY - 8);
-  ctx.lineTo(faceX - 1, faceY - 4);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(faceX + 4, faceY - 2);
-  ctx.lineTo(faceX + 6, faceY - 8);
-  ctx.lineTo(faceX + 1, faceY - 4);
-  ctx.closePath();
-  ctx.fill();
-
-  // Pink inner ears
-  ctx.fillStyle = '#f472b6';
-  ctx.fillRect(faceX - 4.8, faceY - 6, 1.5, 2);
-  ctx.fillRect(faceX + 3.3, faceY - 6, 1.5, 2);
-
-  // Glowing Neon Green Cat Eyes with Slit Pupil
-  if (direction !== 'up') {
-    ctx.fillStyle = '#4ade80';
-    const ex = faceX + dx * 1.2;
-    const ey = faceY + dy * 0.2;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2.2, ey - 0.8, 1.5, 2.2);
-      ctx.fillRect(ex + 0.8, ey - 0.8, 1.5, 2.2);
-      ctx.fillStyle = '#020617';
-      ctx.fillRect(ex - 1.6, ey - 0.4, 0.6, 1.5);
-      ctx.fillRect(ex + 1.3, ey - 0.4, 0.6, 1.5);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2.2, ey - 0.8, 1.5, 2.2);
-      ctx.fillStyle = '#020617';
-      ctx.fillRect(ex - 1.6, ey - 0.4, 0.6, 1.5);
-    } else {
-      ctx.fillRect(ex + 0.8, ey - 0.8, 1.5, 2.2);
-      ctx.fillStyle = '#020617';
-      ctx.fillRect(ex + 1.3, ey - 0.4, 0.6, 1.5);
-    }
-  }
-
-  // Whisker lines
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  ctx.moveTo(faceX - 3, faceY + 1);
-  ctx.lineTo(faceX - 7, faceY + 0.5);
-  ctx.moveTo(faceX + 3, faceY + 1);
-  ctx.lineTo(faceX + 7, faceY + 0.5);
-  ctx.stroke();
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.arc(px, py - 12 + bob, 9, 0, Math.PI * 2);
-  });
-}
-
-// 12. TORU (Totoro Waldwächter)
-function renderToruTotoro(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 10, 4.2, 0.38);
-
-  // Pear-shaped gray body
-  ctx.fillStyle = '#475569';
-  ctx.beginPath();
-  ctx.ellipse(px, py - 11 + bob, 8.8, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // White Fluffy Belly
-  ctx.fillStyle = '#f8fafc';
-  ctx.beginPath();
-  ctx.ellipse(px + dx * 1.2, py - 9 + bob + dy * 0.5, 6, 7, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Characteristic dark chevron chest markings (^ ^ ^)
-  ctx.strokeStyle = '#334155';
-  ctx.lineWidth = 1.2;
-  const cx = px + dx * 1.2;
-  const cy = py - 10 + bob + dy * 0.5;
-  // Mark 1
-  ctx.beginPath();
-  ctx.moveTo(cx - 3.5, cy - 2);
-  ctx.lineTo(cx - 2.5, cy - 3.5);
-  ctx.lineTo(cx - 1.5, cy - 2);
-  ctx.stroke();
-  // Mark 2
-  ctx.beginPath();
-  ctx.moveTo(cx - 1, cy - 2.5);
-  ctx.lineTo(cx, cy - 4);
-  ctx.lineTo(cx + 1, cy - 2.5);
-  ctx.stroke();
-  // Mark 3
-  ctx.beginPath();
-  ctx.moveTo(cx + 1.5, cy - 2);
-  ctx.lineTo(cx + 2.5, cy - 3.5);
-  ctx.lineTo(cx + 3.5, cy - 2);
-  ctx.stroke();
-
-  // Long Rabbit / Totoro Ears
-  ctx.fillStyle = '#334155';
-  ctx.beginPath();
-  ctx.ellipse(px - 4, py - 23 + bob, 1.8, 5, -0.15, 0, Math.PI * 2);
-  ctx.ellipse(px + 4, py - 23 + bob, 1.8, 5, 0.15, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Wide Anime Eyes
-  if (direction !== 'up') {
-    const faceX = px + dx * 1.2;
-    const faceY = py - 17 + bob + dy * 0.8;
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(faceX - 2.5, faceY, 2, 0, Math.PI * 2);
-    ctx.arc(faceX + 2.5, faceY, 2, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#0f172a';
-    ctx.beginPath();
-    ctx.arc(faceX - 2.5 + dx * 0.5, faceY + dy * 0.3, 1.1, 0, Math.PI * 2);
-    ctx.arc(faceX + 2.5 + dx * 0.5, faceY + dy * 0.3, 1.1, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.ellipse(px, py - 11 + bob, 9.5, 10.5, 0, 0, Math.PI * 2);
-  });
-}
-
-// 13. HAYATE (Tengu Rabenkrieger)
-function renderHayateTengu(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 8.5, 3.5, 0.35);
-
-  // Midnight Feathered Cloak
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 20 + bob);
-  ctx.lineTo(px + 8, py - 3 + bob);
-  ctx.lineTo(px - 8, py - 3 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Folded Wing Feathers at sides
-  ctx.fillStyle = '#1e3a8a';
-  ctx.beginPath();
-  ctx.moveTo(px - 6, py - 16 + bob);
-  ctx.lineTo(px - 10, py - 8 + bob);
-  ctx.lineTo(px - 5, py - 6 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(px + 6, py - 16 + bob);
-  ctx.lineTo(px + 10, py - 8 + bob);
-  ctx.lineTo(px + 5, py - 6 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Red Tokin Pillbox Cap atop head
-  const faceX = px + dx * 1.2;
-  const faceY = py - 18 + bob + dy * 0.8;
-  ctx.fillStyle = '#dc2626';
-  ctx.fillRect(faceX - 2.5, faceY - 6.5, 5, 2.5);
-  ctx.fillStyle = '#fef08a';
-  ctx.fillRect(faceX - 1, faceY - 7.5, 2, 1.2);
-
-  // Raven Head
-  ctx.fillStyle = '#0f172a';
-  ctx.beginPath();
-  ctx.arc(faceX, faceY, 4.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Golden Raven Beak
-  ctx.fillStyle = '#f59e0b';
-  ctx.beginPath();
-  if (direction.includes('left')) {
-    ctx.moveTo(faceX - 2, faceY - 1);
-    ctx.lineTo(faceX - 7, faceY + 1);
-    ctx.lineTo(faceX - 2, faceY + 2);
-  } else if (direction.includes('right')) {
-    ctx.moveTo(faceX + 2, faceY - 1);
-    ctx.lineTo(faceX + 7, faceY + 1);
-    ctx.lineTo(faceX + 2, faceY + 2);
-  } else {
-    ctx.moveTo(faceX - 2, faceY);
-    ctx.lineTo(faceX, faceY + 4);
-    ctx.lineTo(faceX + 2, faceY);
-  }
-  ctx.closePath();
-  ctx.fill();
-
-  // Piercing Ruby Eyes
-  if (direction !== 'up') {
-    ctx.fillStyle = '#ef4444';
-    const ex = faceX + dx * 1.2;
-    const ey = faceY + dy * 0.2;
-    if (direction === 'down') {
-      ctx.fillRect(ex - 2.4, ey - 1.5, 1.5, 1.5);
-      ctx.fillRect(ex + 1, ey - 1.5, 1.5, 1.5);
-    } else if (direction.includes('left')) {
-      ctx.fillRect(ex - 2.4, ey - 1.5, 1.5, 1.5);
-    } else {
-      ctx.fillRect(ex + 1, ey - 1.5, 1.5, 1.5);
-    }
-  }
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.moveTo(px, py - 21 + bob);
-    ctx.lineTo(px + 8.5, py - 3 + bob);
-    ctx.lineTo(px - 8.5, py - 3 + bob);
-    ctx.closePath();
-  });
-}
-
-// 14. SHIRATAMA (Yurei Tempelgeist)
-function renderShiratamaSpirit(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  // Shiratama floats without feet! Smooth sinusoidal levitation
-  const hover = Math.sin(animTime * 3.5) * 3;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  // Soft translucent aura shadow
-  drawPaperDropShadow(ctx, px, py + 1, 7, 3, 0.2);
-
-  // Orbiting Will-o'-the-wisps (Hitodama)
-  const orbAngle1 = animTime * 3;
-  const orbAngle2 = orbAngle1 + Math.PI;
-  const orb1X = px + Math.cos(orbAngle1) * 11;
-  const orb1Y = py - 14 + hover + Math.sin(orbAngle1) * 4;
-  const orb2X = px + Math.cos(orbAngle2) * 11;
-  const orb2Y = py - 14 + hover + Math.sin(orbAngle2) * 4;
-
-  ctx.fillStyle = 'rgba(56, 189, 248, 0.85)';
-  ctx.beginPath();
-  ctx.arc(orb1X, orb1Y, 2, 0, Math.PI * 2);
-  ctx.arc(orb2X, orb2Y, 1.8, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Floating Ghost Body (Tapering wisp)
-  const tailRipple = Math.sin(animTime * 6) * 2;
-  ctx.fillStyle = '#f8fafc';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 23 + hover);
-  ctx.quadraticCurveTo(px + 8, py - 16 + hover, px + 4, py - 6 + hover);
-  ctx.quadraticCurveTo(px + tailRipple, py - 2 + hover, px - 3, py - 6 + hover);
-  ctx.quadraticCurveTo(px - 8, py - 16 + hover, px, py - 23 + hover);
-  ctx.closePath();
-  ctx.fill();
-
-  // Cyan translucent rim
-  ctx.strokeStyle = 'rgba(165, 243, 252, 0.6)';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // Head & Kodama Expression
-  const faceX = px + dx * 1.5;
-  const faceY = py - 17 + hover + dy * 0.8;
-
-  // Hollow dark curious eyes
-  ctx.fillStyle = '#1e293b';
-  ctx.beginPath();
-  ctx.ellipse(faceX - 2.5, faceY - 1, 1.4, 2, 0.1, 0, Math.PI * 2);
-  ctx.ellipse(faceX + 2.5, faceY - 1, 1.4, 2, -0.1, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Little open mouth
-  ctx.beginPath();
-  ctx.ellipse(faceX, faceY + 2.5, 1.1, 1.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.arc(px, py - 14 + hover, 8.5, 0, Math.PI * 2);
-  });
-}
-
-// 15. MUKURO (Leeren-Schatten / Kaonashi)
-function renderMukuroShadow(ctx, px, py, animTime, direction, isMoving, hitFlash) {
-  const bob = isMoving ? Math.sin(animTime * 14) * 1.5 : Math.sin(animTime * 2.5) * 0.5;
-  const { dx, dy } = getFacingOffsets(direction);
-
-  drawPaperDropShadow(ctx, px, py + 1, 8.5, 3.5, 0.4);
-
-  // Purple void luminescence aura
-  ctx.fillStyle = 'rgba(168, 85, 247, 0.2)';
-  ctx.beginPath();
-  ctx.ellipse(px, py - 12 + bob, 9, 11, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Dark flowing shadow cloak
-  ctx.fillStyle = '#09090b';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 22 + bob);
-  ctx.lineTo(px + 7.5, py - 3 + bob);
-  ctx.lineTo(px - 7.5, py - 3 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // Inner deep purple fold
-  ctx.fillStyle = '#18181b';
-  ctx.beginPath();
-  ctx.moveTo(px, py - 20 + bob);
-  ctx.lineTo(px + 4, py - 4 + bob);
-  ctx.lineTo(px - 4, py - 4 + bob);
-  ctx.closePath();
-  ctx.fill();
-
-  // White Noh Porcelain Mask
-  const faceX = px + dx * 1.2;
-  const faceY = py - 17 + bob + dy * 0.8;
-  ctx.fillStyle = '#f4f4f5';
-  ctx.beginPath();
-  ctx.ellipse(faceX, faceY, 4.4, 5.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Purple Teardrop Markings under eyes
-  ctx.fillStyle = '#7c3aed';
-  ctx.beginPath();
-  ctx.ellipse(faceX - 2.2, faceY + 2.5, 0.8, 1.8, -0.1, 0, Math.PI * 2);
-  ctx.ellipse(faceX + 2.2, faceY + 2.5, 0.8, 1.8, 0.1, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Dark Narrow Mask Eyes & Mouth
-  ctx.fillStyle = '#09090b';
-  ctx.fillRect(faceX - 3, faceY - 1.5, 2, 1.2);
-  ctx.fillRect(faceX + 1, faceY - 1.5, 2, 1.2);
-  ctx.fillRect(faceX - 1, faceY + 3.2, 2, 1);
-
-  applyHitFlashTint(ctx, hitFlash, () => {
-    ctx.beginPath();
-    ctx.moveTo(px, py - 23 + bob);
-    ctx.lineTo(px + 8.5, py - 2 + bob);
-    ctx.lineTo(px - 8.5, py - 2 + bob);
-    ctx.closePath();
-  });
+  ctx.restore();
 }
 
 // -----------------------------------------------------------------------------
-// 15 CHARACTERS ROSTER DATA & METADATA
+// 15 HELDEN-DESIGNS
 // -----------------------------------------------------------------------------
+
+// 1. REN (Schattengänger) - Kapuzenumhang aus Indigo-Papier, Porzellanmaske, Geisteraugen
+const HERO_REN = {
+  weapon: { blade: '#e2e8f0', grip: '#b91c1c', guard: '#94a3b8', glow: 'rgba(45,212,191,0.8)' },
+  draw(r, sk, ctx, t, info) {
+    const cloak = '#26335a';
+    const cloakDark = '#1a2340';
+    heroLegs(r, sk, '#2a3142', '#3b2a1e', { wrap: '#cbd5e1' });
+    // Umhang: weiter Kegel vom Hals bis knapp über die Knöchel
+    const neck = rigAdd(rigLerp(sk.shR, sk.shL, 0.5), rigV(0, 0.6, -0.2));
+    const hem = rigV(sk.pelvis.x * 0.4 + (info.moving ? Math.sin(t * 14) * 0.4 : 0), 1.5, info.moving ? -1.3 : -0.2);
+    r.cone(neck, hem, 1.7, 3.9, cloak, { sz: 0.85, hem: '#3b4c80', hemW: 0.7, bias: 0 });
+    // Papierfalz-Linie vorne
+    r.line([rigAdd(neck, rigV(0, -0.4, 1.3)), rigAdd(rigLerp(neck, hem, 0.85), rigV(0, 0, 3.0))], '#3b4c80', 0.25, { outline: false, bias: 0.04, smooth: false });
+    // Roter Obi + zwei lange Bänder
+    heroSash(r, sk, '#dc2626', { y1: 2.0, y0: 0.9, r: 2.75, sz: 0.88, bias: 0.06 });
+    const knot = rigAdd(sk.pelvis, rigV(0, 1.4, -2.4));
+    heroRibbon(r, knot, t, info.moving, '#ef4444', { n: 3, seg: 1.2, w: 0.85, dx: 0.5 });
+    heroRibbon(r, rigAdd(knot, rigV(-0.5, 0, 0)), t + 0.4, info.moving, '#b91c1c', { n: 3, seg: 1.0, w: 0.75, dx: -0.5 });
+    heroArms(r, sk, cloakDark, '#f1f5f9', { cuff: '#cbd5e1', glove: '#e2e8f0' });
+    // Kopf: weiße Porzellanmaske mit Geisteraugen, Kapuze darüber
+    heroHead(r, sk, '#eef2f7', (c, H, R) => {
+      r.eye(c, H, R, 0.38, -0.08, { style: 'glow', color: '#2dd4bf', size: 0.95, blink: info.blink });
+      r.eye(c, H, R, -0.38, -0.08, { style: 'glow', color: '#2dd4bf', size: 0.95, blink: info.blink });
+      // Zinnoberrote Maskenstriche
+      r.mark(c, H, R, 0.62, -0.42, (cc, P, sq, s) => {
+        cc.strokeStyle = r.col('#dc2626'); cc.lineWidth = 0.45 * s;
+        cc.beginPath(); cc.moveTo(P.x - 0.6 * s * sq, P.y - 0.5 * s); cc.lineTo(P.x + 0.4 * s * sq, P.y + 0.6 * s); cc.stroke();
+      });
+      r.mark(c, H, R, -0.62, -0.42, (cc, P, sq, s) => {
+        cc.strokeStyle = r.col('#dc2626'); cc.lineWidth = 0.45 * s;
+        cc.beginPath(); cc.moveTo(P.x + 0.6 * s * sq, P.y - 0.5 * s); cc.lineTo(P.x - 0.4 * s * sq, P.y + 0.6 * s); cc.stroke();
+      });
+    }, (c, H, R) => {
+      r.cap(c, H, R, heroHairEdge(0.62, -0.2, -1.45, 0.05, 3), cloak, { grow: 1.12 });
+    });
+    // Kapuzenzipfel weht nach hinten
+    const sway = Math.sin(t * (info.moving ? 10 : 2.5)) * 0.5;
+    const base1 = rigSurfPt(sk.H, sk.R * 1.05, HERO_PI - 0.5, 0.55);
+    const base2 = rigSurfPt(sk.H, sk.R * 1.05, HERO_PI + 0.5, 0.55);
+    const tip = rigAdd(sk.H, rigV(sway, sk.R * 0.9, -sk.R * 1.9 - (info.moving ? 0.8 : 0)));
+    r.poly([base1, rigAdd(rigLerp(base1, tip, 0.5), rigV(0, 0.8, 0)), tip, base2], cloak, { bias: -0.2 });
+  }
+};
+
+// 2. KAITO (Windläufer) - asymmetrischer Moos-Poncho, Lederriemen, Windzopf mit Falkenfeder
+const HERO_KAITO = {
+  blinkOffset: 0.7,
+  weapon: { blade: '#e7e5e4', grip: '#78350f', guard: '#15803d' },
+  draw(r, sk, ctx, t, info) {
+    const skin = '#f2c49b';
+    heroLegs(r, sk, '#8a6a45', '#4a3222', { shin: '#a58660', wrap: '#5b4330' });
+    heroTorso(r, sk, '#e7dcc3', { rt: 2.2, rb: 1.9 });
+    heroArms(r, sk, '#e7dcc3', skin, { fore: '#d6c7a6', cuff: '#78350f' });
+    // Asymmetrischer Poncho: rechts kurz, links lang, schwingt im Wind
+    const neck = rigAdd(rigLerp(sk.shR, sk.shL, 0.5), rigV(0, 0.7, 0));
+    const wind = info.moving ? -1.0 : Math.sin(t * 1.7) * 0.2;
+    const hem = rigV(sk.pelvis.x * 0.4 - 0.7, sk.pelvis.y + 0.2, wind);
+    r.cone(neck, hem, 1.5, 3.4, '#2f7d43', { sz: 0.82, hem: '#1f5a30', hemW: 0.6, bias: 0.05,
+      after: (c, T, Bt, rr) => {
+        // Moos-Muster: kleine hellgrüne Flecken
+        c.save(); c.fillStyle = rr.col('#4ade80'); c.globalAlpha *= 0.55;
+        c.beginPath(); c.arc(Bt.x - 1.2 * rr.s, Bt.y - 2.2 * rr.s, 0.5 * rr.s, 0, 6.29); c.arc(Bt.x + 0.8 * rr.s, Bt.y - 3.3 * rr.s, 0.4 * rr.s, 0, 6.29); c.fill();
+        c.restore();
+      } });
+    // Lederriemen quer über die Brust mit Messingschnalle
+    const s1 = rigAdd(sk.shR, rigV(0, 0.4, 0.9));
+    const s2 = rigAdd(sk.pelvis, rigV(-1.9, 0.9, 1.9));
+    r.line([s1, rigLerp(s1, s2, 0.5), s2], '#7c4a24', 0.55, { bias: 0.4, smooth: false });
+    r.ball(rigLerp(s1, s2, 0.45), 0.42, '#f59e0b', { bias: 0.45, gloss: 0.5 });
+    heroHead(r, sk, skin, (c, H, R) => {
+      heroFace(r, c, H, R, info, { eye: '#166534', white: true, size: 0.85, lid: '#3f2a1d', mouth: { w: 0.7 } });
+    }, (c, H, R) => {
+      r.cap(c, H, R, heroHairEdge(0.32, -0.15, -1.0, 0.18, 6), '#4a2f1d', { grow: 1.08 });
+    });
+    // Windzopf: hoher Pferdeschwanz, der stark im Wind flattert
+    const root = rigSurfPt(sk.H, sk.R, HERO_PI, 0.75);
+    r.ball(root, 0.85, '#4a2f1d', { bias: -0.05 });
+    heroTail(r, root, t, info.moving, '#4a2f1d', '#6b4429', { taper: true, r0: 0.85, r1: 1.0, n: 5, seg: 0.9, tipFrom: 0.8,
+      dir: rigV(0.2, info.moving ? -0.15 : -0.8, -1), amp: info.moving ? 0.9 : 0.35, freq: info.moving ? 12 : 3 });
+    // Falkenfeder hinter dem rechten Ohr
+    const fBase = rigSurfPt(sk.H, sk.R, 1.7, 0.25);
+    const fTip = rigAdd(fBase, rigV(1.1, 2.6 + Math.sin(t * 5) * 0.2, -1.4));
+    r.poly([fBase, rigAdd(rigLerp(fBase, fTip, 0.5), rigV(0.5, 0, 0.2)), fTip, rigAdd(rigLerp(fBase, fTip, 0.5), rigV(-0.4, 0, -0.2))], '#f5e6c8', { bias: 0.1 });
+    r.line([rigLerp(fBase, fTip, 0.55), fTip], '#b45309', 0.5, { outline: false, bias: 0.15, smooth: false });
+  }
+};
+
+// 3. JIRO (Papier-Ronin) - breiter Kasa-Strohhut, schwarzer Kimono, violetter Hakama, Katana an der Hüfte
+const HERO_JIRO = {
+  blinkOffset: 1.9,
+  weapon: { blade: '#f8fafc', grip: '#1f2937', guard: '#fbbf24', curve: 0.9, len: 9.6, bladeW: 0.5 },
+  draw(r, sk, ctx, t, info) {
+    const skin = '#eec39a';
+    heroLegs(r, sk, '#2d1b4e', '#3b2416', { toe: 0.9 });
+    heroRobe(r, sk, '#3b1d5c', t, info.moving, { topY: 1.5, hemY: 1.1, rt: 2.1, rb: 3.2, hem: '#2a1245', trail: 0.6 });
+    heroTorso(r, sk, '#1c2333', { rt: 2.4, rb: 2.1,
+      after: (c, T, Bt, rr) => {
+        // Kimono-Kragen (V-Ausschnitt)
+        const v = rr.toCam(rigV(0, 0, 1));
+        if (v < 0.1) return;
+        c.save(); c.strokeStyle = rr.col('#f1f5f9'); c.lineWidth = 0.5 * rr.s;
+        c.beginPath(); c.moveTo(T.x - 1.3 * rr.s * v, T.y + 0.2 * rr.s); c.lineTo(T.x, T.y + 3.2 * rr.s); c.lineTo(T.x + 1.3 * rr.s * v, T.y + 0.2 * rr.s); c.stroke();
+        c.restore();
+      } });
+    heroSash(r, sk, '#e5e7eb', { y1: 1.9, y0: 1.1, r: 2.25 });
+    heroArms(r, sk, '#1c2333', skin, { wide: '#1c2333' });
+    // Katana in der Scheide (nur sichtbar, wenn nicht gekämpft wird)
+    if (!info.pose || !info.pose.weapons.length) {
+      const sA = rigAdd(sk.pelvis, rigV(-2.3, 1.5, 2.2));
+      const sB = rigAdd(sk.pelvis, rigV(-2.6, 0.4, -4.4));
+      r.line([sA, sB], '#111827', 0.7, { smooth: false, bias: 0.1 });
+      r.line([rigAdd(sA, rigV(0, 0.3, 1.8)), sA], '#7c2d12', 0.55, { smooth: false, bias: 0.12 });
+      r.ball(sA, 0.6, '#fbbf24', { sy: 0.6, bias: 0.13, gloss: 0.4 });
+    }
+    heroHead(r, sk, skin, (c, H, R) => {
+      heroFace(r, c, H, R, info, { eye: '#fbbf24', style: 'slit', size: 0.8, lid: '#111827', blush: false, mouth: { smile: false, w: 0.6 } });
+      // kleine Narbe über dem linken Auge
+      r.mark(c, H, R, -0.42, 0.12, (cc, P, sq, s) => {
+        cc.strokeStyle = r.col('#b45309'); cc.lineWidth = 0.3 * s;
+        cc.beginPath(); cc.moveTo(P.x - 0.4 * s * sq, P.y - 0.6 * s); cc.lineTo(P.x + 0.3 * s * sq, P.y + 0.6 * s); cc.stroke();
+      });
+    }, (c, H, R) => {
+      r.cap(c, H, R, heroHairEdge(0.38, -0.3, -1.1, 0.1, 5), '#111827', { grow: 1.05 });
+    });
+    // Kasa-Hut: flacher Kegel mit Flechtringen und Kinnband
+    const tilt = info.moving ? Math.sin(t * 14) * 0.15 : 0;
+    const hatTop = rigAdd(sk.H, rigV(tilt, sk.R * 1.35, -0.6));
+    const hatBot = rigAdd(sk.H, rigV(0, sk.R * 0.72, -sk.R * 0.4));
+    r.cone(hatTop, hatBot, 0.25, sk.R * 1.5, '#c8913f', { sz: 1, bias: 0.6,
+      after: (c, T, Bt, rr) => {
+        c.save(); c.strokeStyle = rr.col('#8a5a24'); c.lineWidth = 0.28 * rr.s; c.globalAlpha *= 0.8;
+        for (let i = 1; i <= 3; i++) {
+          const f = i / 4;
+          c.beginPath();
+          c.ellipse(T.x + (Bt.x - T.x) * f, T.y + (Bt.y - T.y) * f, sk.R * 1.5 * f * rr.s, sk.R * 1.5 * f * rr.s * 0.5, 0, 0, Math.PI * 2);
+          c.stroke();
+        }
+        c.restore();
+      } });
+    r.line([rigSurfPt(sk.H, sk.R, 1.3, -0.2), rigAdd(sk.H, rigV(0, -sk.R * 0.85, 0.9)), rigSurfPt(sk.H, sk.R, -1.3, -0.2)], '#7c2d12', 0.25, { outline: false, bias: 0.2 });
+  }
+};
+
+// 4. TARO (Lampion-Schmied) - kräftig, Lederschürze, Kupferbrille, Glutaugen, Laterne am Gürtel
+const HERO_TARO = {
+  build: { shoulderW: 2.85, hipW: 1.5, torso: 5.2, upperArm: 2.3, foreArm: 2.2 },
+  blinkOffset: 2.6,
+  weapon: { blade: '#fdba74', grip: '#451a03', guard: '#d97706', glow: 'rgba(249,115,22,0.9)', len: 8.2, bladeW: 0.75 },
+  draw(r, sk, ctx, t, info) {
+    const skin = '#c98b5e';
+    heroLegs(r, sk, '#3f3f46', '#292524', { thighR: 1.2, kneeR: 1.05, toe: 0.95 });
+    heroTorso(r, sk, '#64748b', { rt: 2.8, rb: 2.3 });
+    // Lederschürze vorne
+    const a1 = rigAdd(sk.chest, rigV(1.7, 0.9, 1.9));
+    const a2 = rigAdd(sk.chest, rigV(-1.7, 0.9, 1.9));
+    const k1 = rigV(sk.kneeR.x + 0.4, sk.kneeR.y - 0.4, Math.max(sk.kneeR.z, sk.kneeL.z) + 1.4);
+    const k2 = rigV(sk.kneeL.x - 0.4, sk.kneeL.y - 0.4, Math.max(sk.kneeR.z, sk.kneeL.z) + 1.4);
+    r.poly([a1, rigAdd(sk.pelvis, rigV(2.4, 0.6, 2.2)), k1, rigLerp(k1, k2, 0.5), k2, rigAdd(sk.pelvis, rigV(-2.4, 0.6, 2.2)), a2], '#7c2d12', { bias: 0.35, smooth: false,
+      after: (c, Ps, rr) => {
+        c.save(); c.strokeStyle = rr.col('#fbbf24'); c.lineWidth = 0.25 * rr.s; c.setLineDash && c.setLineDash([0.6 * rr.s, 0.5 * rr.s]);
+        c.beginPath(); c.moveTo(Ps[1].x, Ps[1].y); c.lineTo(Ps[2].x, Ps[2].y); c.moveTo(Ps[5].x, Ps[5].y); c.lineTo(Ps[4].x, Ps[4].y); c.stroke();
+        c.setLineDash && c.setLineDash([]); c.restore();
+      } });
+    heroSash(r, sk, '#451a03', { y1: 1.4, y0: 0.7, r: 2.45 });
+    // Kleine Papierlaterne am Gürtel (glüht)
+    const lan = rigAdd(sk.pelvis, rigV(2.8, 0.2 + Math.sin(t * 6) * 0.15, 0.4));
+    r.ball(lan, 0.95, '#ea580c', { sy: 1.15, gloss: 0.5, bias: 0.2 });
+    r.glow(lan, 3.2, 'rgba(251,146,60,0.9)', { alpha: 0.5 + Math.sin(t * 9) * 0.1 });
+    heroArms(r, sk, '#64748b', skin, { upperR: 1.1, fore: skin, cuff: '#7c2d12', glove: '#57351f' });
+    heroHead(r, sk, skin, (c, H, R) => {
+      heroFace(r, c, H, R, info, { eye: '#ea580c', pupil: '#7c2d12', white: true, size: 0.78, lid: '#3f2a1d', blush: false, mouth: { w: 0.8, smile: true } });
+      // Bart-Stoppeln
+      r.mark(c, H, R, 0, -0.62, (cc, P, sq, s) => {
+        cc.fillStyle = r.col('#3f2a1d'); cc.globalAlpha *= 0.7;
+        cc.beginPath(); cc.ellipse(P.x, P.y, 2.0 * s * sq, 0.8 * s, 0, 0, 6.29); cc.fill();
+      }, 0.97);
+    }, (c, H, R) => {
+      r.cap(c, H, R, heroHairEdge(0.45, -0.1, -0.9, 0.22, 5), '#3f2a1d', { grow: 1.1 });
+      heroBand(r, c, H, R * 1.1, 0.4, '#b91c1c', 0.75);
+    });
+    // Kupfer-Schweißerbrille auf der Stirn
+    for (const az of [0.38, -0.38]) {
+      const g = rigSurfPt(sk.H, sk.R * 1.12, az, 0.42);
+      r.ball(g, 0.9, '#b45309', { gloss: 0.6, bias: 0.4, after: (c, P, rr) => {
+        c.save(); c.fillStyle = rr.col('#164e63'); c.globalAlpha *= 0.9;
+        c.beginPath(); c.arc(P.x, P.y, 0.55 * rr.s, 0, 6.29); c.fill(); c.restore();
+      } });
+    }
+  }
+};
+
+// 5. SORA (Kirschblüten-Miko) - weißes Haori mit weiten Ärmeln, roter Hakama, langes Haar, Sakura-Blätter
+const HERO_SORA = {
+  blinkOffset: 0.3,
+  weapon: { blade: '#fff1f2', grip: '#be123c', guard: '#fbbf24', glow: 'rgba(251,113,133,0.75)' },
+  draw(r, sk, ctx, t, info) {
+    const skin = '#fbe3d0';
+    const hair = '#231a2e';
+    heroLegs(r, sk, '#be123c', '#f8fafc', { toe: 0.7 });
+    heroRobe(r, sk, '#c2183f', t, info.moving, { topY: 1.9, hemY: 0.9, rt: 2.0, rb: 3.35, hem: '#9f1239', hemW: 0.6, trail: 0.7 });
+    heroTorso(r, sk, '#fdfbf7', { rt: 2.3, rb: 2.0,
+      after: (c, T, Bt, rr) => {
+        const v = rr.toCam(rigV(0, 0, 1));
+        if (v < 0.1) return;
+        c.save(); c.strokeStyle = rr.col('#e11d48'); c.lineWidth = 0.45 * rr.s;
+        c.beginPath(); c.moveTo(T.x - 1.2 * rr.s * v, T.y + 0.2 * rr.s); c.lineTo(T.x, T.y + 2.8 * rr.s); c.lineTo(T.x + 1.2 * rr.s * v, T.y + 0.2 * rr.s); c.stroke();
+        c.restore();
+      } });
+    heroSash(r, sk, '#e11d48', { y1: 2.1, y0: 1.5, r: 2.15 });
+    // Lange Haare fallen über den Rücken bis zur Taille (unter dem Kopf gezeichnet)
+    const hb = rigSurfPt(sk.H, sk.R * 0.9, HERO_PI, -0.1);
+    const sway = info.moving ? -0.9 : Math.sin(t * 1.5) * 0.15;
+    const hairBack = [
+      rigAdd(hb, rigV(-2.6, 1.2, 0.8)), rigAdd(hb, rigV(2.6, 1.2, 0.8)),
+      rigAdd(hb, rigV(2.9, -4.2, -0.4 + sway)), rigAdd(hb, rigV(1.2, -6.2, -0.9 + sway)),
+      rigAdd(hb, rigV(-1.2, -6.2, -0.9 + sway)), rigAdd(hb, rigV(-2.9, -4.2, -0.4 + sway))
+    ];
+    r.poly(hairBack, hair, { bias: -0.6 });
+    // Weiße Haarschleife (Mizuhiki)
+    r.ball(rigAdd(hb, rigV(0, -2.4, -0.6 + sway * 0.4)), 0.8, '#f8fafc', { sx: 1.6, sy: 0.7, bias: -0.3 });
+    heroArms(r, sk, '#fdfbf7', skin, { wide: '#fdfbf7' });
+    // Rote Zierschnüre an den Ärmeln
+    for (const S of ['R', 'L']) {
+      r.ball(rigLerp(sk['elbow' + S], sk['hand' + S], 0.55), 0.38, '#e11d48', { bias: 0.1, gloss: 0 });
+    }
+    heroHead(r, sk, skin, (c, H, R) => {
+      heroFace(r, c, H, R, info, { eye: '#4a1d2e', white: true, size: 0.95, lid: '#231a2e', tall: 1.35, mouth: { w: 0.55 } });
+    }, (c, H, R) => {
+      // Hime-Schnitt: gerade Stirnfransen und Seitensträhnen
+      r.cap(c, H, R, (az) => {
+        const a = Math.abs(az);
+        if (a < 0.9) return 0.22;
+        if (a < 1.5) return -0.75;
+        return heroLerp(-0.75, -1.2, (a - 1.5) / (HERO_PI - 1.5));
+      }, hair, { grow: 1.07, gloss: 0.45 });
+    });
+    // Kirschblüten-Haarschmuck
+    const flower = rigSurfPt(sk.H, sk.R * 1.08, -1.15, 0.45);
+    r.ball(flower, 0.85, '#fb7185', { bias: 0.3, gloss: 0.3, after: (c, P, rr) => {
+      c.save(); c.fillStyle = rr.col('#fde047'); c.beginPath(); c.arc(P.x, P.y, 0.32 * rr.s, 0, 6.29); c.fill(); c.restore();
+    } });
+    // Schwebende Sakura-Blätter
+    for (let i = 0; i < 2; i++) {
+      const a = t * 1.4 + i * HERO_PI;
+      const pp = rigV(Math.cos(a) * 5.5, 9 + Math.sin(t * 2 + i) * 2.5, Math.sin(a) * 4);
+      const P = r.P(pp);
+      r.custom(P.d, (c, rr) => {
+        c.save(); c.translate(P.x, P.y); c.rotate(t * 2 + i);
+        c.fillStyle = rr.col('#fda4af'); c.beginPath(); c.ellipse(0, 0, 0.9 * rr.s, 0.45 * rr.s, 0, 0, 6.29); c.fill();
+        c.restore();
+      });
+    }
+  }
+};
+
+// 6. KANNA (Wolfsprinzessin) - Wolfsfell-Kapuze mit Ohren, Pelzkragen, rote Kriegsbemalung, Eisaugen
+const HERO_KANNA = {
+  blinkOffset: 1.2,
+  weapon: { blade: '#f5f5f4', grip: '#7c2d12', guard: '#e11d48', len: 7.6, bladeW: 0.65 },
+  draw(r, sk, ctx, t, info) {
+    const skin = '#f3d2b8';
+    const pelt = '#dfe5ec';
+    heroLegs(r, sk, '#334155', '#57534e', { wrap: '#a8a29e', shin: '#e7d8c9' });
+    heroRobe(r, sk, '#1e293b', t, info.moving, { topY: 1.0, hemY: 2.6, rt: 2.0, rb: 2.8, hem: '#e11d48', hemW: 0.45, trail: 0.4 });
+    heroTorso(r, sk, '#1e293b', { rt: 2.2, rb: 1.95 });
+    heroArms(r, sk, '#1e293b', skin, { fore: skin, cuff: '#e11d48' });
+    // Pelz-Schulterumhang mit gezackter Kante
+    const neck = rigAdd(rigLerp(sk.shR, sk.shL, 0.5), rigV(0, 0.8, -0.2));
+    r.cone(neck, rigAdd(sk.chest, rigV(0, -0.5, -0.4)), 2.0, 3.3, pelt, { sz: 0.85, bias: 0.15 });
+    // Fellschwanz der Wolfsfell-Kapuze hängt hinten herab
+    heroTail(r, rigAdd(sk.chest, rigV(0, 0.6, -2.6)), t, info.moving, pelt, '#94a3b8', { dir: rigV(0, -1, -0.45), n: 4, seg: 1.1, r0: 1.0, r1: 1.35, amp: 0.35, ampY: 0.1 });
+    heroHead(r, sk, skin, (c, H, R) => {
+      heroFace(r, c, H, R, info, { eye: '#38bdf8', pupil: '#0c4a6e', white: true, size: 0.9, lid: '#1e293b', blush: false, mouth: { w: 0.55, smile: false } });
+      // Rote Kriegsbemalung: Dreiecke auf den Wangen
+      for (const az of [0.62, -0.62]) {
+        r.mark(c, H, R, az, -0.35, (cc, P, sq, s) => {
+          cc.fillStyle = r.col('#e11d48');
+          cc.beginPath(); cc.moveTo(P.x - 0.9 * s * sq, P.y - 0.4 * s); cc.lineTo(P.x + 0.9 * s * sq, P.y - 0.4 * s); cc.lineTo(P.x, P.y + 1.0 * s); cc.closePath(); cc.fill();
+        });
+      }
+      r.mark(c, H, R, 0, 0.32, (cc, P, sq, s) => {
+        cc.fillStyle = r.col('#e11d48');
+        cc.beginPath(); cc.ellipse(P.x, P.y, 0.45 * s * sq, 0.75 * s, 0, 0, 6.29); cc.fill();
+      });
+    }, (c, H, R) => {
+      r.cap(c, H, R, heroHairEdge(0.32, -0.3, -1.0, 0.16, 6), '#2a1f1a', { grow: 1.05 });
+      r.cap(c, H, R, heroHairEdge(0.62, -0.05, -1.3, 0.06, 4), pelt, { grow: 1.16 });
+    });
+    // Wolfsohren und Schnauze der Fellkapuze
+    heroEar(r, sk.H, sk.R * 1.12, 0.62, 0.72, pelt, { len: 2.6, w: 0.3, inner: '#475569', tilt: rigV(0, 0.3, -0.2) });
+    heroEar(r, sk.H, sk.R * 1.12, -0.62, 0.72, pelt, { len: 2.6, w: 0.3, inner: '#475569', tilt: rigV(0, 0.3, -0.2) });
+  }
+};
+
+// 7. AOI (Sternen-Weise) - Mitternachtsmantel mit Sternen, Mondsichel-Tiara, Schleier, Lichtfunken
+const HERO_AOI = {
+  blinkOffset: 2.2,
+  weapon: { blade: '#fef9c3', grip: '#4c1d95', guard: '#fde047', glow: 'rgba(253,224,71,0.85)' },
+  draw(r, sk, ctx, t, info) {
+    const skin = '#f8e5dc';
+    const robe = '#232062';
+    heroLegs(r, sk, '#1e1b4b', '#c4b5fd', { toe: 0.7 });
+    // Sternenmantel bis zum Boden
+    heroRobe(r, sk, robe, t, info.moving, { topY: 1.2, hemY: 0.8, rt: 2.0, rb: 3.6, hem: '#fde047', hemW: 0.35, trail: 1.0 });
+    heroSpeckles(r, sk.pelvis, (f) => heroLerp(2.2, 3.5, f), sk.pelvis.y + 0.6, 1.3,
+      [[0.3, 0.3, 1.1], [-0.6, 0.5, 0.8], [1.2, 0.7, 0.9], [-1.4, 0.2, 1.0], [0.0, 0.8, 0.7], [2.2, 0.4, 0.9], [-2.4, 0.6, 0.8]],
+      '#fde68a', { star: true, size: 0.42 });
+    heroTorso(r, sk, robe, { rt: 2.2, rb: 2.0 });
+    heroSash(r, sk, '#c084fc', { y1: 1.8, y0: 1.2, r: 2.1 });
+    heroArms(r, sk, robe, skin, { wide: '#2e2a7a', cuff: '#fde047' });
+    // Langes silber-lavendel Haar hinten
+    const hb = rigSurfPt(sk.H, sk.R * 0.9, HERO_PI, 0);
+    const sway = info.moving ? -1 : Math.sin(t * 1.3) * 0.2;
+    r.poly([
+      rigAdd(hb, rigV(-2.5, 1.0, 0.8)), rigAdd(hb, rigV(2.5, 1.0, 0.8)),
+      rigAdd(hb, rigV(2.7, -4.6, -0.5 + sway)), rigAdd(hb, rigV(0, -5.6, -1 + sway)), rigAdd(hb, rigV(-2.7, -4.6, -0.5 + sway))
+    ], '#d8dcf5', { bias: -0.6 });
+    // Durchscheinender Schleier
+    r.poly([
+      rigSurfPt(sk.H, sk.R * 1.15, 1.6, 0.5), rigSurfPt(sk.H, sk.R * 1.15, HERO_PI, 0.75), rigSurfPt(sk.H, sk.R * 1.15, -1.6, 0.5),
+      rigAdd(hb, rigV(-3.0, -5.5, -1.4 + sway)), rigAdd(hb, rigV(3.0, -5.5, -1.4 + sway))
+    ], '#c084fc', { alpha: 0.45, bias: -0.4 });
+    heroHead(r, sk, skin, (c, H, R) => {
+      heroFace(r, c, H, R, info, { eye: '#7c3aed', pupil: '#2e1065', white: true, size: 0.95, lid: '#312e81', tall: 1.3, blushColor: '#c084fc', mouth: { w: 0.5 } });
+    }, (c, H, R) => {
+      r.cap(c, H, R, heroHairEdge(0.36, -0.55, -1.2, 0.08, 4), '#d8dcf5', { grow: 1.07, gloss: 0.5 });
+      heroBand(r, c, H, R * 1.08, 0.42, '#fbbf24', 0.45, { dip: 0.08 });
+    });
+    // Goldene Mondsichel auf der Stirn
+    const moon = rigSurfPt(sk.H, sk.R * 1.12, 0, 0.52);
+    const MP = r.P(moon);
+    r.custom(MP.d + 0.5, (c, rr) => {
+      if (rr.toCam(rigV(0, 0.3, 1)) < 0.05) return;
+      c.save(); c.fillStyle = rr.col('#fde047'); c.strokeStyle = rr.col('#a16207'); c.lineWidth = 0.25 * rr.s;
+      c.beginPath(); c.arc(MP.x, MP.y, 1.1 * rr.s, 0.6, Math.PI * 2 - 0.6, false); c.arc(MP.x + 0.55 * rr.s, MP.y - 0.15 * rr.s, 0.85 * rr.s, Math.PI * 2 - 0.9, 0.9, true);
+      c.closePath(); c.fill(); c.stroke(); c.restore();
+    });
+    // Schwebende Sternenfunken
+    for (let i = 0; i < 3; i++) {
+      const a = t * 0.9 + i * 2.1;
+      r.glow(rigV(Math.cos(a) * 6, 8 + Math.sin(t * 1.7 + i * 2) * 3, Math.sin(a) * 5), 1.4, 'rgba(253,230,138,0.95)', { alpha: 0.6 + Math.sin(t * 5 + i) * 0.3 });
+    }
+  }
+};
+
+// 8. MEI (Kräuter-Nomadin) - salbeigrünes Kleid, Weidenkorb auf dem Rücken, Zöpfe mit Wiesenblüten
+const HERO_MEI = {
+  blinkOffset: 3.1,
+  weapon: { blade: '#ecfccb', grip: '#78350f', guard: '#65a30d' },
+  draw(r, sk, ctx, t, info) {
+    const skin = '#f6d5b5';
+    const hair = '#7a4220';
+    heroLegs(r, sk, '#f3e8d0', '#92400e', { toe: 0.75, shin: '#f3e8d0' });
+    heroRobe(r, sk, '#5f8f67', t, info.moving, { topY: 1.4, hemY: 2.0, rt: 2.0, rb: 3.1, hem: '#3f6b4a', trail: 0.7 });
+    heroTorso(r, sk, '#5f8f67', { rt: 2.15, rb: 1.95 });
+    // Cremefarbene Schürze vorne
+    r.poly([
+      rigAdd(sk.pelvis, rigV(1.6, 1.6, 2.0)), rigAdd(sk.pelvis, rigV(-1.6, 1.6, 2.0)),
+      rigV(-1.9, 2.4, 2.9 + (info.moving ? Math.sin(t * 14) * 0.3 : 0)), rigV(1.9, 2.4, 2.9 + (info.moving ? Math.sin(t * 14) * 0.3 : 0))
+    ], '#fdf6e3', { bias: 0.5 });
+    heroSash(r, sk, '#92400e', { y1: 1.9, y0: 1.4, r: 2.05 });
+    heroArms(r, sk, '#5f8f67', skin, { cuff: '#fdf6e3' });
+    // Weidenkorb mit Kräutern auf dem Rücken
+    const basket = rigAdd(sk.chest, rigV(0, 0.4, -3.0));
+    r.cone(rigAdd(basket, rigV(0, 2.2, 0)), rigAdd(basket, rigV(0, -2.0, 0.3)), 2.2, 1.7, '#a16207', { sz: 0.75, bias: -0.2,
+      after: (c, T, Bt, rr) => {
+        c.save(); c.strokeStyle = rr.col('#713f12'); c.lineWidth = 0.25 * rr.s;
+        for (let i = 1; i < 4; i++) {
+          const y = T.y + (Bt.y - T.y) * (i / 4);
+          c.beginPath(); c.moveTo(T.x - 2.2 * rr.s, y); c.lineTo(T.x + 2.2 * rr.s, y); c.stroke();
+        }
+        c.restore();
+      } });
+    for (let i = 0; i < 3; i++) {
+      const lb = rigAdd(basket, rigV(-1 + i, 2.0, 0));
+      const lt = rigAdd(lb, rigV((i - 1) * 0.8 + Math.sin(t * 3 + i) * 0.2, 2.2 + i * 0.3, -0.4));
+      r.poly([lb, rigAdd(rigLerp(lb, lt, 0.5), rigV(0.6, 0, 0)), lt, rigAdd(rigLerp(lb, lt, 0.5), rigV(-0.6, 0, 0))], i === 1 ? '#84cc16' : '#22c55e', { bias: -0.25 });
+    }
+    r.ball(rigAdd(basket, rigV(0.8, 2.6, 0.2)), 0.55, '#c4b5fd', { bias: -0.15 });
+    // Riemen über den Schultern
+    r.line([rigAdd(sk.shR, rigV(0, 0.3, 0.3)), rigAdd(sk.chest, rigV(1.4, -1.2, 1.9))], '#78350f', 0.4, { bias: 0.4, smooth: false });
+    r.line([rigAdd(sk.shL, rigV(0, 0.3, 0.3)), rigAdd(sk.chest, rigV(-1.4, -1.2, 1.9))], '#78350f', 0.4, { bias: 0.4, smooth: false });
+    heroHead(r, sk, skin, (c, H, R) => {
+      heroFace(r, c, H, R, info, { eye: '#713f12', white: true, size: 0.92, lid: '#422006', mouth: { w: 0.65 } });
+      // Sommersprossen
+      for (const az of [0.55, -0.55]) {
+        r.mark(c, H, R, az, -0.22, (cc, P, sq, s) => {
+          cc.fillStyle = r.col('#c2410c'); cc.globalAlpha *= 0.6;
+          cc.beginPath(); cc.arc(P.x - 0.4 * s, P.y, 0.18 * s, 0, 6.29); cc.arc(P.x + 0.3 * s, P.y + 0.2 * s, 0.16 * s, 0, 6.29); cc.arc(P.x, P.y - 0.3 * s, 0.15 * s, 0, 6.29); cc.fill();
+        });
+      }
+    }, (c, H, R) => {
+      r.cap(c, H, R, heroHairEdge(0.36, -0.35, -1.1, 0.1, 5), hair, { grow: 1.07, gloss: 0.35 });
+    });
+    // Zwei Zöpfe mit Blüten
+    for (const side of [1, -1]) {
+      const root = rigSurfPt(sk.H, sk.R, side * 1.9, -0.45);
+      const braid = rigChain(t + side, root, rigV(side * 0.2, -1, -0.15), { n: 4, seg: 0.95, amp: info.moving ? 0.35 : 0.12, freq: info.moving ? 12 : 3, k: 0.6 });
+      for (let i = 1; i < braid.length; i++) r.ball(braid[i], 0.62 - i * 0.05, hair, { bias: -0.02, gloss: 0.2 });
+      r.ball(rigAdd(braid[braid.length - 1], rigV(0, -0.5, 0)), 0.38, '#fde047', { bias: 0.02 });
+      r.ball(rigAdd(root, rigV(side * 0.4, 0.2, 0)), 0.7, '#fde047', { bias: 0.1, after: (c, P, rr) => {
+        c.save(); c.fillStyle = rr.col('#f97316'); c.beginPath(); c.arc(P.x, P.y, 0.28 * rr.s, 0, 6.29); c.fill(); c.restore();
+      } });
+    }
+  }
+};
+
+// 9. KITSUNE YUTO (Fuchskrieger) - Fuchskopf, hohe Ohren, drei flammende Schwänze, Haori & Hakama
+const HERO_YUTO = {
+  blinkOffset: 0.9,
+  weapon: { blade: '#ffedd5', grip: '#9a3412', guard: '#f59e0b', glow: 'rgba(251,146,60,0.85)' },
+  draw(r, sk, ctx, t, info) {
+    const fur = '#e8732a';
+    const cream = '#fff1dc';
+    heroLegs(r, sk, fur, '#3b2416', { shin: fur, toe: 0.9 });
+    // Drei Fuchsschwänze mit Fuchsfeuer-Spitzen
+    const tb = rigAdd(sk.pelvis, rigV(0, 0.7, -1.6));
+    const dirs = [rigV(0.6, 0.45, -1), rigV(0, 0.75, -1), rigV(-0.6, 0.45, -1)];
+    dirs.forEach((d, i) => {
+      const pts = heroTail(r, tb, t, info.moving, fur, cream, { dir: d, n: 6, seg: 0.78, r0: 0.95, r1: 1.75, phase: i * 0.9, tipFrom: 0.97, amp: info.moving ? 0.8 : 0.45 });
+      r.glow(pts[pts.length - 1], 2.6, 'rgba(251,146,60,0.9)', { alpha: 0.45 + Math.sin(t * 8 + i) * 0.15 });
+    });
+    heroRobe(r, sk, '#9a3412', t, info.moving, { topY: 1.5, hemY: 2.4, rt: 2.0, rb: 2.9, hem: '#7c2d12', trail: 0.5 });
+    heroTorso(r, sk, cream, { rt: 2.2, rb: 1.95,
+      after: (c, T, Bt, rr) => {
+        const v = rr.toCam(rigV(0, 0, 1));
+        if (v < 0.1) return;
+        c.save(); c.strokeStyle = rr.col('#ea580c'); c.lineWidth = 0.5 * rr.s;
+        c.beginPath(); c.moveTo(T.x - 1.2 * rr.s * v, T.y + 0.2 * rr.s); c.lineTo(T.x, T.y + 2.8 * rr.s); c.lineTo(T.x + 1.2 * rr.s * v, T.y + 0.2 * rr.s); c.stroke();
+        c.restore();
+      } });
+    heroSash(r, sk, '#f59e0b', { y1: 1.9, y0: 1.4, r: 2.1 });
+    heroArms(r, sk, cream, fur, { wide: cream, glove: fur });
+    heroHead(r, sk, fur, (c, H, R) => {
+      // Helle Wangen und Kehle
+      r.cap(c, H, R, (az) => { const a = Math.abs(az); return a < 1.7 ? -0.12 - a * 0.22 : -1.6; }, cream, { below: true, grow: 1.0, gloss: 0, rim: false });
+      heroFace(r, c, H, R, info, { eye: '#f59e0b', style: 'slit', size: 0.95, lid: '#431407', blush: false, mouth: false, eyeAz: 0.45 });
+      // Rote Kitsune-Lidstriche
+      for (const az of [0.45, -0.45]) {
+        r.mark(c, H, R, az * 1.05, 0.18, (cc, P, sq, s) => {
+          cc.strokeStyle = r.col('#dc2626'); cc.lineWidth = 0.4 * s; cc.lineCap = 'round';
+          cc.beginPath(); cc.moveTo(P.x - 0.7 * s * sq * Math.sign(az), P.y + 0.3 * s); cc.lineTo(P.x + 0.9 * s * sq * Math.sign(az), P.y - 0.4 * s); cc.stroke();
+        });
+      }
+    }, null);
+    // Spitze Schnauze mit schwarzer Nase
+    const snoutBase = rigSurfPt(sk.H, sk.R * 0.75, 0, -0.32);
+    r.capsule(snoutBase, rigAdd(snoutBase, rigV(0, -0.2, 2.2)), 1.5, 0.75, cream, { bias: 0.3 });
+    r.ball(rigAdd(snoutBase, rigV(0, 0.05, 2.75)), 0.5, '#1c1917', { bias: 0.45, gloss: 0.6 });
+    // Große Fuchsohren mit dunklen Spitzen
+    for (const az of [0.6, -0.6]) {
+      heroEar(r, sk.H, sk.R, az, 0.7, fur, { len: 3.4, w: 0.34, inner: cream, tipColor: '#3b2416', tilt: rigV(0, 0.6, -0.15) });
+    }
+  }
+};
+
+// 10. TANUKI POKO (Marderhund-Mönch) - Kugelbauch, Strohhut mit Zauberblatt, Maske, Ringelschwanz, Sake-Kürbis
+const HERO_POKO = {
+  build: { thigh: 1.9, shin: 1.7, hipW: 1.55, torso: 5.0, shoulderW: 2.65, headR: 4.4, freq: 15 },
+  blinkOffset: 1.6,
+  weapon: { blade: '#d9f99d', grip: '#78350f', guard: '#22c55e', len: 7.8 },
+  draw(r, sk, ctx, t, info) {
+    const fur = '#8b5a2b';
+    const dark = '#3b2412';
+    heroLegs(r, sk, fur, dark, { thighR: 1.25, kneeR: 1.1, toe: 0.8 });
+    // Geringelter Schwanz
+    const tail = rigChain(t, rigAdd(sk.pelvis, rigV(0, 0.6, -2.2)), rigV(0, 0.15, -1), { n: 4, seg: 1.0, amp: info.moving ? 0.8 : 0.4, freq: info.moving ? 12 : 3, k: 0.8 });
+    for (let i = 1; i < tail.length; i++) r.ball(tail[i], 1.25 - i * 0.08, i % 2 ? fur : dark, { bias: -0.1 });
+    heroTorso(r, sk, fur, { rt: 2.4, rb: 3.0, botY: -0.6 });
+    // Kugelrunder Bauch
+    const belly = rigAdd(sk.pelvis, rigV(0, 1.9 + sk.breathe * 0.3, 1.5));
+    r.ball(belly, 2.55, '#fde68a', { sy: 1.05, bias: 0.25, gloss: 0.3 });
+    // Sake-Kürbis an der Hüfte
+    const gourd = rigAdd(sk.pelvis, rigV(-2.9, 0.4 + Math.sin(t * 7) * 0.12, 0.3));
+    r.ball(gourd, 1.0, '#f59e0b', { bias: 0.1 });
+    r.ball(rigAdd(gourd, rigV(0, 1.2, 0)), 0.65, '#f59e0b', { bias: 0.12 });
+    r.ball(rigAdd(gourd, rigV(0, 0.62, 0)), 0.35, '#dc2626', { bias: 0.14, gloss: 0 });
+    heroArms(r, sk, fur, dark, { upperR: 1.05 });
+    heroHead(r, sk, fur, (c, H, R) => {
+      r.cap(c, H, R, (az) => { const a = Math.abs(az); return a < 1.7 ? -0.2 - a * 0.2 : -1.6; }, '#f4e1b5', { below: true, grow: 1.0, gloss: 0, rim: false });
+      // Dunkle Waschbär-Augenmaske
+      for (const az of [0.42, -0.42]) {
+        r.mark(c, H, R, az, -0.1, (cc, P, sq, s) => {
+          cc.fillStyle = r.col(dark);
+          cc.beginPath(); cc.ellipse(P.x, P.y + 0.15 * s, 1.55 * s * sq, 1.2 * s, Math.sign(az) * -0.35, 0, 6.29); cc.fill();
+        });
+      }
+      heroFace(r, c, H, R, info, { eye: '#fde68a', pupil: '#1c1917', size: 0.8, blush: false, mouth: false });
+      r.mark(c, H, R, 0, -0.42, (cc, P, sq, s) => {
+        cc.fillStyle = r.col('#1c1917'); cc.beginPath(); cc.ellipse(P.x, P.y - 0.3 * s, 0.75 * s * sq, 0.5 * s, 0, 0, 6.29); cc.fill();
+        cc.strokeStyle = r.col('#3b1d1d'); cc.lineWidth = 0.35 * s; cc.lineCap = 'round';
+        cc.beginPath(); cc.arc(P.x, P.y - 0.2 * s, 1.3 * s * sq, Math.PI * 0.2, Math.PI * 0.8); cc.stroke();
+      }, 1.0);
+    }, null);
+    // Runde Ohren
+    for (const az of [0.95, -0.95]) r.ball(rigSurfPt(sk.H, sk.R * 0.95, az, 0.72), 1.15, dark, { sy: 0.9, bias: -0.05 });
+    // Kleiner Strohhut mit Zauberblatt
+    const hatBot = rigAdd(sk.H, rigV(0.4, sk.R * 0.88, -0.9));
+    r.cone(rigAdd(hatBot, rigV(0, 1.4, 0)), hatBot, 0.3, sk.R * 0.72, '#d4a24c', { sz: 1, bias: 0.5 });
+    const leafB = rigAdd(hatBot, rigV(0, 1.3, 0));
+    const wob = Math.sin(t * 3) * 0.3;
+    const leafT = rigAdd(leafB, rigV(1.2 + wob, 2.4, 0.4));
+    r.poly([leafB, rigAdd(rigLerp(leafB, leafT, 0.5), rigV(0.9, -0.2, 0.3)), leafT, rigAdd(rigLerp(leafB, leafT, 0.5), rigV(-0.9, 0.3, -0.3))], '#22c55e', { bias: 0.7,
+      after: (c, Ps, rr) => { c.save(); c.strokeStyle = rr.col('#15803d'); c.lineWidth = 0.25 * rr.s; c.beginPath(); c.moveTo(Ps[0].x, Ps[0].y); c.lineTo(Ps[2].x, Ps[2].y); c.stroke(); c.restore(); } });
+  }
+};
+
+// 11. NEKO KURO (Schattenkater) - schwarzer Kater, Neon-Schlitzaugen, wehender roter Schal, Ringelschwanz
+const HERO_KURO = {
+  build: { shoulderW: 2.3, hipW: 1.2, torso: 5.2 },
+  blinkOffset: 2.8,
+  weapon: { blade: '#d1fae5', grip: '#111827', guard: '#ef4444', glow: 'rgba(74,222,128,0.6)', len: 8.0, bladeW: 0.45 },
+  draw(r, sk, ctx, t, info) {
+    const fur = '#2a2d44';
+    heroLegs(r, sk, fur, '#1a1c2c', { shin: '#3a3f5c', toe: 0.85, wrap: '#64748b' });
+    // Langer, geschwungener Katzenschwanz
+    const tail = rigChain(t, rigAdd(sk.pelvis, rigV(0, 0.5, -1.4)), rigV(0, 0.85, -0.7), { n: 7, seg: 1.0, amp: 1.0, ampY: 0.3, freq: info.moving ? 9 : 2.8, k: 0.7 });
+    r.line(tail, fur, 0.85, { bias: -0.1 });
+    heroTorso(r, sk, '#1f2233', { rt: 2.05, rb: 1.85 });
+    heroSash(r, sk, '#475569', { y1: 1.6, y0: 1.0, r: 1.95 });
+    heroArms(r, sk, '#1f2233', fur, { fore: '#3a3f5c', glove: fur });
+    // Roter Schal mit zwei langen Enden
+    const neck = rigAdd(rigLerp(sk.shR, sk.shL, 0.5), rigV(0, 0.4, 0));
+    r.cone(rigAdd(neck, rigV(0, 0.9, 0)), rigAdd(neck, rigV(0, -0.4, 0)), 1.9, 2.3, '#ef4444', { sz: 0.9, bias: 0.3 });
+    heroRibbon(r, rigAdd(neck, rigV(0.6, 0.2, -1.8)), t, info.moving, '#ef4444', { n: 5, seg: 1.3, w: 1.1, dx: 0.4 });
+    heroRibbon(r, rigAdd(neck, rigV(-0.6, 0.2, -1.8)), t + 0.5, info.moving, '#dc2626', { n: 4, seg: 1.2, w: 1.0, dx: -0.3 });
+    heroHead(r, sk, fur, (c, H, R) => {
+      r.cap(c, H, R, (az) => { const a = Math.abs(az); return a < 1.2 ? -0.38 - a * 0.25 : -1.6; }, '#3a3f5c', { below: true, grow: 1.0, gloss: 0, rim: false });
+      heroFace(r, c, H, R, info, { eye: '#4ade80', style: 'slit', size: 1.15, tall: 1.2, blush: false, mouth: false, eyeAz: 0.44 });
+      for (const az of [0.44, -0.44]) {
+        r.mark(c, H, R, az, -0.12, (cc, P, sq, s) => {
+          cc.globalCompositeOperation = 'lighter'; cc.fillStyle = 'rgba(74,222,128,0.35)';
+          cc.beginPath(); cc.ellipse(P.x, P.y, 1.8 * s * sq, 1.8 * s, 0, 0, 6.29); cc.fill();
+        });
+      }
+      // Rosa Nase, Mäulchen und Schnurrhaare
+      r.mark(c, H, R, 0, -0.38, (cc, P, sq, s) => {
+        cc.fillStyle = r.col('#f472b6');
+        cc.beginPath(); cc.moveTo(P.x - 0.5 * s * sq, P.y - 0.3 * s); cc.lineTo(P.x + 0.5 * s * sq, P.y - 0.3 * s); cc.lineTo(P.x, P.y + 0.25 * s); cc.closePath(); cc.fill();
+        cc.strokeStyle = r.col('#cbd5e1'); cc.lineWidth = 0.2 * s; cc.globalAlpha *= 0.8;
+        cc.beginPath();
+        for (const sd of [-1, 1]) {
+          cc.moveTo(P.x + sd * 1.0 * s * sq, P.y + 0.1 * s); cc.lineTo(P.x + sd * 3.2 * s * sq, P.y - 0.3 * s);
+          cc.moveTo(P.x + sd * 1.0 * s * sq, P.y + 0.4 * s); cc.lineTo(P.x + sd * 3.1 * s * sq, P.y + 0.6 * s);
+        }
+        cc.stroke();
+      }, 1.0);
+    }, null);
+    for (const az of [0.62, -0.62]) {
+      heroEar(r, sk.H, sk.R, az, 0.66, fur, { len: 2.7, w: 0.42, inner: '#f472b6', tilt: rigV(Math.sign(az) * 0.2, 0.5, 0) });
+    }
+  }
+};
+
+// 12. TOTORO TORU (Waldwächter) - birnenförmiger Riesenkörper, Pfeilmuster, Hasenohren, breites Grinsen
+const HERO_TORU = {
+  build: { thigh: 1.5, shin: 1.3, hipW: 2.0, torso: 6.0, shoulderW: 3.6, upperArm: 1.9, foreArm: 1.7, headR: 0.1, headUp: 0, freq: 11, stride: 2.4, idleArms: 1.4 },
+  shadowW: 8.5,
+  blinkOffset: 1.1,
+  weapon: { blade: '#f1f5f9', grip: '#475569', guard: '#94a3b8', len: 8.0 },
+  draw(r, sk, ctx, t, info) {
+    const grey = '#6b7280';
+    const belly = '#eef1f4';
+    // Kurze, stämmige Krallenfüße
+    for (const S of ['R', 'L']) {
+      r.capsule(sk['hip' + S], sk['ankle' + S], 1.5, 1.2, grey);
+      const foot = sk['foot' + S];
+      r.ball(rigAdd(foot, rigV(0, 0.6, 0.6)), 1.25, grey, { sy: 0.7, bias: 0.02 });
+      for (let k = -1; k <= 1; k++) r.ball(rigAdd(foot, rigV(k * 0.55, 0.4, 1.7)), 0.28, '#1f2937', { bias: 0.05, gloss: 0, outline: false });
+    }
+    const waddle = info.moving ? Math.sin(sk.phase) * 0.5 : Math.sin(t * 1.2) * 0.15;
+    const C = rigV(sk.pelvis.x + waddle, sk.pelvis.y + 4.2 + sk.breathe * 0.4, 0.2);
+    const BR = 5.6;
+    // Großer birnenförmiger Körper mit Gesicht
+    r.ball(C, BR, grey, { sy: 1.1, gloss: 0.25, after: (c, P, rr) => {
+      rr.eye(c, C, BR, 0.36, 0.45, { white: true, style: 'dot', color: '#111827', size: 1.15, blink: info.blink, tall: 1.05 });
+      rr.eye(c, C, BR, -0.36, 0.45, { white: true, style: 'dot', color: '#111827', size: 1.15, blink: info.blink, tall: 1.05 });
+      rr.mark(c, C, BR, 0, 0.42, (cc, M, sq, s) => {
+        cc.fillStyle = rr.col('#1f2937'); cc.beginPath(); cc.ellipse(M.x, M.y, 0.7 * s * sq, 0.35 * s, 0, 0, 6.29); cc.fill();
+      });
+      // Breites Totoro-Grinsen
+      rr.mark(c, C, BR, 0, 0.2, (cc, M, sq, s) => {
+        const w = 2.6 * s * sq;
+        cc.fillStyle = rr.col('#3f1d1d');
+        cc.beginPath(); cc.moveTo(M.x - w, M.y - 0.2 * s); cc.quadraticCurveTo(M.x, M.y + 1.4 * s, M.x + w, M.y - 0.2 * s); cc.quadraticCurveTo(M.x, M.y + 0.2 * s, M.x - w, M.y - 0.2 * s); cc.fill();
+        cc.fillStyle = 'rgba(255,255,255,0.95)';
+        cc.fillRect(M.x - w * 0.6, M.y - 0.05 * s, w * 1.2, 0.35 * s);
+      });
+      // Schnurrhaare
+      for (const sd of [1, -1]) {
+        rr.mark(c, C, BR, sd * 0.75, 0.32, (cc, M, sq, s) => {
+          cc.strokeStyle = rr.col('#374151'); cc.lineWidth = 0.22 * s;
+          cc.beginPath(); cc.moveTo(M.x, M.y); cc.lineTo(M.x - sd * 2.4 * s * sq, M.y - 0.4 * s);
+          cc.moveTo(M.x, M.y + 0.5 * s); cc.lineTo(M.x - sd * 2.4 * s * sq, M.y + 0.6 * s); cc.stroke();
+        });
+      }
+    } });
+    // Heller Bauch mit Pfeilsicheln
+    const bc = rigAdd(C, rigV(0, -1.6, BR * 0.55));
+    r.ball(bc, 3.8, belly, { sy: 1.0, bias: 0.6, gloss: 0.15, after: (c, P, rr) => {
+      if (rr.toCam(rigV(0, 0, 1)) < 0.15) return;
+      c.save(); c.strokeStyle = rr.col('#64748b'); c.lineWidth = 0.38 * rr.s; c.lineCap = 'round'; c.lineJoin = 'round';
+      const marks = [[-1.3, -1.3], [0, -1.6], [1.3, -1.3], [-0.7, -0.3], [0.7, -0.3]];
+      for (const m of marks) {
+        const x = P.x + m[0] * rr.s;
+        const y = P.y + m[1] * rr.s;
+        c.beginPath(); c.moveTo(x - 0.45 * rr.s, y + 0.3 * rr.s); c.lineTo(x, y - 0.25 * rr.s); c.lineTo(x + 0.45 * rr.s, y + 0.3 * rr.s); c.stroke();
+      }
+      c.restore();
+    } });
+    // Stummelarme mit Krallen
+    for (const S of ['R', 'L']) {
+      r.capsule(sk['sh' + S], sk['hand' + S], 1.2, 0.95, grey, { bias: 0.1 });
+    }
+    // Hasenohren
+    for (const az of [0.32, -0.32]) {
+      heroEar(r, C, BR * 1.05, az, 1.05, grey, { len: 3.4, w: 0.18, tilt: rigV(Math.sign(az) * 0.15, 0.8, 0), smooth: true });
+    }
+    // Blatt auf dem Kopf
+    const lb = rigAdd(C, rigV(-1.0, BR * 1.05, -0.4));
+    const lt = rigAdd(lb, rigV(-1.8, 1.4 + Math.sin(t * 2.2) * 0.2, 0.6));
+    r.poly([lb, rigAdd(rigLerp(lb, lt, 0.5), rigV(0, 0.9, 0.5)), lt, rigAdd(rigLerp(lb, lt, 0.5), rigV(0.2, -0.6, -0.4))], '#16a34a', { bias: 0.5 });
+  }
+};
+
+// 13. TENGU HAYATE (Rabenkrieger) - Krähenkopf mit Goldschnabel, rotes Tokin, Origami-Flügel, Yamabushi-Bommeln
+const HERO_HAYATE = {
+  blinkOffset: 0.4,
+  weapon: { blade: '#e0e7ff', grip: '#1e1b4b', guard: '#f59e0b' },
+  draw(r, sk, ctx, t, info) {
+    const feather = '#1f2a44';
+    // Origami-Flügel auf dem Rücken
+    const flap = info.moving ? Math.sin(t * 14) * 0.5 : Math.sin(t * 3) * 0.3;
+    for (const sd of [1, -1]) {
+      const root = rigAdd(sk.chest, rigV(sd * 1.0, 0.9, -1.6));
+      const tip = rigAdd(root, rigV(sd * (5.0 + flap), 3.2 + flap * 2, -2.0));
+      const mid = rigAdd(root, rigV(sd * 3.8, -1.2 + flap, -2.4));
+      const low = rigAdd(root, rigV(sd * 1.6, -3.4, -1.8));
+      r.poly([root, tip, rigLerp(tip, mid, 0.5), mid, rigLerp(mid, low, 0.5), low], '#1e3a8a', { smooth: false, bias: -0.4 });
+      r.poly([root, tip, mid], '#2c52b5', { smooth: false, outline: false, bias: -0.35 });
+    }
+    heroLegs(r, sk, '#1e293b', '#92400e', { wrap: '#e2e8f0', toe: 0.9 });
+    // Geta-Holzzähne
+    for (const S of ['R', 'L']) r.capsule(rigAdd(sk['foot' + S], rigV(0, 0.05, -0.1)), rigAdd(sk['foot' + S], rigV(0, 0.05, 0.6)), 0.3, 0.3, '#78350f', { bias: -0.05 });
+    heroRobe(r, sk, '#1e3a8a', t, info.moving, { topY: 1.5, hemY: 2.3, rt: 2.0, rb: 2.9, hem: '#172554', trail: 0.5 });
+    heroTorso(r, sk, '#e2e8f0', { rt: 2.25, rb: 2.0 });
+    // Kragen-Schärpe mit orangefarbenen Bonbon-Bommeln
+    r.line([rigAdd(sk.shR, rigV(0, 0.3, 0.6)), rigAdd(sk.chest, rigV(0, -0.4, 2.0)), rigAdd(sk.shL, rigV(0, 0.3, 0.6))], '#1e3a8a', 0.6, { bias: 0.4 });
+    for (let i = 0; i < 2; i++) r.ball(rigAdd(sk.chest, rigV(i ? -0.9 : 0.9, 0.0 - i * 0.6, 2.1)), 0.65, '#f97316', { bias: 0.5, gloss: 0.2 });
+    heroSash(r, sk, '#1e293b', { y1: 1.8, y0: 1.2, r: 2.1 });
+    heroArms(r, sk, '#e2e8f0', feather, { wide: '#e2e8f0', glove: '#334155' });
+    heroHead(r, sk, feather, (c, H, R) => {
+      heroFace(r, c, H, R, info, { eye: '#facc15', pupil: '#111827', size: 0.95, white: false, blush: false, mouth: false, eyeAz: 0.48, eyeEl: -0.02 });
+      // Strenge Brauen
+      for (const sd of [1, -1]) {
+        r.mark(c, H, R, sd * 0.48, 0.22, (cc, P, sq, s) => {
+          cc.strokeStyle = r.col('#0b1020'); cc.lineWidth = 0.55 * s; cc.lineCap = 'round';
+          cc.beginPath(); cc.moveTo(P.x - sd * 0.2 * s * sq, P.y - 0.1 * s); cc.lineTo(P.x + sd * 1.2 * s * sq, P.y - 0.6 * s); cc.stroke();
+        });
+      }
+    }, (c, H, R) => {
+      // gefiederter Hinterkopf (zackige Federn)
+      r.cap(c, H, R, heroHairEdge(1.2, -0.2, -1.2, 0.0, 1), '#111a30', { grow: 1.07, gloss: 0.35 });
+    });
+    // Goldener Schnabel
+    const bb = rigSurfPt(sk.H, sk.R * 0.85, 0, -0.32);
+    r.capsule(bb, rigAdd(bb, rigV(0, -1.3, 3.0)), 1.15, 0.12, '#f59e0b', { bias: 0.5, light: 0.3 });
+    // Rotes Tokin-Käppchen
+    const tok = rigSurfPt(sk.H, sk.R * 1.02, 0, 0.78);
+    r.ball(tok, 1.15, '#dc2626', { sx: 1.1, sy: 0.85, bias: 0.6, gloss: 0.4 });
+    // Federschopf am Hinterkopf
+    for (let i = -1; i <= 1; i++) {
+      const fb = rigSurfPt(sk.H, sk.R, HERO_PI + i * 0.35, 0.3);
+      r.poly([fb, rigAdd(fb, rigV(i * 0.6, 0.5, -2.4 - Math.abs(i) * 0.3 + Math.sin(t * 4 + i) * 0.2)), rigAdd(fb, rigV(i * 0.6 + 0.6, -0.4, -0.6))], '#111a30', { smooth: false, bias: -0.2 });
+    }
+  }
+};
+
+// 14. YUREI SHIRATAMA (Tempelgeist) - schwebende Papierwolke, Kodama-Gesicht, Seelenfeuer-Orbs
+const HERO_SHIRATAMA = {
+  build: { headR: 4.4, headUp: 3.4 },
+  hover: 2.2,
+  shadowW: 5.5,
+  blinkOffset: 2.0,
+  weapon: { blade: '#e0f2fe', grip: '#0369a1', guard: '#a5f3fc', glow: 'rgba(56,189,248,0.8)' },
+  draw(r, sk, ctx, t, info) {
+    const paper = '#f8fafc';
+    // Wolkenkörper mit welligem Saum und Schweif
+    const body = rigAdd(sk.pelvis, rigV(0, 2.4, 0));
+    r.ball(body, 3.4, paper, { sy: 1.05, gloss: 0.2 });
+    const trail = info.moving ? -1.6 : 0;
+    for (let i = 1; i <= 3; i++) {
+      const w = Math.sin(t * 5 - i) * 0.5;
+      r.ball(rigAdd(body, rigV(w, -1.8 - i * 1.0, trail * i * 0.6 - i * 0.2)), 2.4 - i * 0.6, i === 3 ? '#e0f2fe' : paper, { bias: -0.05 * i, gloss: 0.1 });
+    }
+    // Papierfalz
+    r.line([rigAdd(body, rigV(-1.8, 1.4, 2.6)), rigAdd(body, rigV(0.2, -0.6, 3.3)), rigAdd(body, rigV(1.8, -2.0, 2.6))], '#cbd5e1', 0.25, { outline: false, bias: 0.4, smooth: false });
+    // Kleine schwebende Papierhände
+    r.ball(sk.handR, 0.85, paper, { bias: 0.1 });
+    r.ball(sk.handL, 0.85, paper, { bias: 0.1 });
+    // Kodama-Kopf mit Wackelneigung
+    const tilt = Math.sin(t * 1.7) * 0.7;
+    sk.H = rigAdd(sk.H, rigV(tilt, 0, 0));
+    heroHead(r, sk, '#f1f5f9', (c, H, R) => {
+      r.eye(c, H, R, 0.4, 0.0, { style: 'dot', color: '#1e293b', size: 1.15, tall: 1.2 });
+      r.eye(c, H, R, -0.4, 0.0, { style: 'dot', color: '#1e293b', size: 1.15, tall: 1.2 });
+      r.mark(c, H, R, 0, -0.42, (cc, P, sq, s) => {
+        cc.fillStyle = r.col('#1e293b'); cc.beginPath(); cc.ellipse(P.x, P.y, 0.55 * s * sq, 0.7 * s, 0, 0, 6.29); cc.fill();
+      });
+      r.blush(c, H, R, 0.66, -0.3, '#7dd3fc', 0.8);
+      r.blush(c, H, R, -0.66, -0.3, '#7dd3fc', 0.8);
+    }, null, { sy: 1.0 });
+    // Seelenfeuer-Orbs kreisen
+    for (let i = 0; i < 3; i++) {
+      const a = t * 2.2 + (i * HERO_PI * 2) / 3;
+      const p = rigV(Math.cos(a) * 6.5, 7 + Math.sin(t * 3 + i) * 1.2, Math.sin(a) * 6.5);
+      r.ball(p, 0.75, '#a5f3fc', { outline: false, gloss: 0.6 });
+      r.glow(p, 2.8, 'rgba(56,189,248,0.95)', { alpha: 0.6 });
+    }
+  }
+};
+
+// 15. MUKURO (Leeren-Schatten) - wabernder Schattenkörper, ovale Noh-Maske mit lila Tränen, Schattenschwaden
+const HERO_MUKURO = {
+  build: { torso: 6.2, headR: 4.2, headUp: 4.2 },
+  hover: 0.6,
+  blinkOffset: 3.3,
+  weapon: { blade: '#ddd6fe', grip: '#09090b', guard: '#7c3aed', glow: 'rgba(124,58,237,0.85)' },
+  draw(r, sk, ctx, t, info) {
+    const shade = '#1c1a24';
+    // Langer Schattenkörper bis zum Boden mit wogendem Saum
+    const neck = rigAdd(rigLerp(sk.shR, sk.shL, 0.5), rigV(0, 1.2, -0.2));
+    const hem = rigV(Math.sin(t * 2.2) * 0.5, -0.2, info.moving ? -1.4 : Math.cos(t * 1.8) * 0.3);
+    r.cone(neck, hem, 2.0, 3.8, shade, { sz: 0.9, hem: '#2e1065', hemW: 1.2, alpha: 0.95 });
+    // Dunkle Hinterkopf-Kapuze
+    r.ball(rigAdd(sk.H, rigV(0, 0.2, -0.8)), sk.R * 1.12, '#0e0d13', { sy: 1.15, bias: -0.3, gloss: 0.1 });
+    // Dünne Arme mit fahlen Händen
+    for (const S of ['R', 'L']) {
+      r.capsule(sk['sh' + S], sk['elbow' + S], 0.75, 0.6, shade);
+      r.capsule(sk['elbow' + S], sk['hand' + S], 0.6, 0.5, shade);
+      r.ball(sk['hand' + S], 0.65, '#d4d4d8', { bias: 0.05 });
+    }
+    heroHead(r, sk, '#f4f4f5', (c, H, R) => {
+      r.eye(c, H, R, 0.38, -0.05, { style: 'dot', color: '#09090b', size: 0.85, tall: 0.8 });
+      r.eye(c, H, R, -0.38, -0.05, { style: 'dot', color: '#09090b', size: 0.85, tall: 0.8 });
+      // Lila Malereien: Striche über den Augen, Tränen darunter
+      for (const az of [0.38, -0.38]) {
+        r.mark(c, H, R, az, 0.2, (cc, P, sq, s) => {
+          cc.fillStyle = r.col('#7c3aed');
+          cc.beginPath(); cc.moveTo(P.x - 0.35 * s * sq, P.y + 0.4 * s); cc.lineTo(P.x, P.y - 1.0 * s); cc.lineTo(P.x + 0.35 * s * sq, P.y + 0.4 * s); cc.closePath(); cc.fill();
+        });
+        r.mark(c, H, R, az, -0.33, (cc, P, sq, s) => {
+          cc.fillStyle = r.col('#8b5cf6');
+          cc.beginPath(); cc.moveTo(P.x - 0.3 * s * sq, P.y - 0.4 * s); cc.lineTo(P.x, P.y + 1.3 * s); cc.lineTo(P.x + 0.3 * s * sq, P.y - 0.4 * s); cc.closePath(); cc.fill();
+        });
+      }
+      r.mouth(c, H, R, 0, -0.62, { smile: false, w: 0.6, color: '#3f3f46' });
+    }, null, { sy: 1.2, sx: 0.88, gloss: 0.4 });
+    // Aufsteigende Schattenschwaden
+    for (let i = 0; i < 3; i++) {
+      const life = (t * 0.6 + i / 3) % 1;
+      const p = rigV(Math.sin(i * 2.3 + t) * 3, 2 + life * 14, Math.cos(i * 1.7) * 2 - 1);
+      r.glow(p, 2.0 + life * 1.5, 'rgba(124,58,237,0.8)', { alpha: (1 - life) * 0.5 });
+    }
+  }
+};
+
+// -----------------------------------------------------------------------------
+// RENDER-EINSTIEGSPUNKTE (Signatur bleibt kompatibel; action ist optional)
+// -----------------------------------------------------------------------------
+function renderRenTwilight(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_REN, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderKaitoWind(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_KAITO, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderJiroRonin(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_JIRO, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderTaroLantern(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_TARO, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderSoraMiko(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_SORA, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderKannaWolf(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_KANNA, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderAoiCelestial(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_AOI, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderMeiHerbalist(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_MEI, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderYutoKitsune(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_YUTO, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderPokoTanuki(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_POKO, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderKuroNeko(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_KURO, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderToruTotoro(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_TORU, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderHayateTengu(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_HAYATE, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderShiratamaSpirit(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_SHIRATAMA, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+function renderMukuroShadow(ctx, px, py, animTime, direction, isMoving, hitFlash, action) {
+  heroRender(HERO_MUKURO, ctx, px, py, animTime, direction, isMoving, hitFlash, action);
+}
+
 const CHARACTERS_DATA = [
   // ⚔️ MÄNNLICH (4)
   {
@@ -13918,6 +15147,30 @@ class Player {
     this.isAiming = false;
   }
 
+  /** Aktuelle Kampfaktion für das Skelett-Rig des Helden (Schwert, Stich, Wirbel, Bogen) */
+  getSkinAction(animTime) {
+    if (this.isBearForm) return null;
+    const angle = this.getFacingAngle();
+    if (this.melee.isSpinning) {
+      return { type: 'spin', progress: 0, angle, time: animTime };
+    }
+    if (this.melee.swingProgress < 1.0 && this.melee.swingType && this.melee.swingType !== 'spin') {
+      const type = this.melee.swingType === 'slash1' ? 'slash' : this.melee.swingType;
+      return { type, progress: this.melee.swingProgress, angle };
+    }
+    if (this.ranged.charging || this.ranged.isHolding || this.ranged.aiming) {
+      let pull = 0.85;
+      if (this.ranged.charging) {
+        pull = Math.min(1, 0.4 + this.ranged.chargeTimer * 1.5);
+      } else if (this.ranged.isHolding) {
+        const rate = COMBAT_CONFIG.ARROW_FIRE_RATE || 0.5;
+        pull = Math.max(0.15, Math.min(1, 1 - this.ranged.autoFireTimer / rate));
+      }
+      return { type: 'bow', progress: pull, pull, angle, aimed: Boolean(this.ranged.isAimedShot) };
+    }
+    return null;
+  }
+
   getFacingAngle() {
     if (this.isAiming && typeof this.aimAngle === 'number') {
       return this.aimAngle;
@@ -14210,8 +15463,9 @@ class Player {
 
     if (this.game && this.game.network && this.game.network.connected) {
       const effectRadius = (nextStep === 3) ? COMBAT_CONFIG.COMBO_THRUST_RANGE * (isBear ? 1.2 : 1.0) : COMBAT_CONFIG.COMBO_SLASH_RADIUS * (isBear ? 0.8 : 1.0);
+      const comboTypes = isBear ? ['bear_claw1', 'bear_claw2', 'bear_thrust'] : ['slash1', 'slash2', 'thrust'];
       this.game.network.sendAction('melee', {
-        subType: slashType,
+        subType: comboTypes[Math.max(0, Math.min(2, nextStep - 1))],
         angle,
         direction: this.direction,
         radius: effectRadius,
@@ -15636,8 +16890,14 @@ class Player {
       ctx.scale(1 - progress, 1 - progress);
       ctx.globalAlpha = 1 - progress;
 
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(-6, -12, 12, 16);
+      // Held fällt wirbelnd in sich zusammen (Papier faltet sich)
+      const deadSkin = (typeof CHARACTERS_MAP !== 'undefined' && (CHARACTERS_MAP[this.skinId] || CHARACTERS_MAP['ren_twilight']));
+      if (deadSkin && typeof deadSkin.render === 'function' && !this.isBearForm) {
+        deadSkin.render(ctx, 0, 8, animTime, this.direction, false, 1);
+      } else {
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-6, -12, 12, 16);
+      }
       ctx.restore();
       return;
     }
@@ -15663,12 +16923,13 @@ class Player {
     }
 
     // 2. Folded Papercraft Hero Skin (15 selectable Dark Ghibli skins) OR Druid Bear Form
+    const skinAction = this.getSkinAction(animTime);
     if (this.isBearForm) {
       this.renderBearForm(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
     } else {
       const skin = (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP[this.skinId]) || (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP['ren_twilight']);
       if (skin && typeof skin.render === 'function') {
-        skin.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+        skin.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash, skinAction);
       } else {
         ctx.fillStyle = '#1e2636';
         ctx.beginPath();
@@ -15736,148 +16997,9 @@ class Player {
 
     // 4. COMBAT WEAPONS & ABILITY RENDERING
 
-    // 4a. Sword & Melee Attack Rendering (Suppressed in Bear Form)
-    // Dynamic swing animations (Slash 1 -> Slash 2 -> Thrust) take precedence so combo is visible while holding!
-    if (!this.isBearForm && this.melee.swingProgress < 1.0 && this.melee.swingType) {
-      const swProg = this.melee.swingProgress;
-      const swAngle = this.getFacingAngle();
-
-      ctx.save();
-      ctx.translate(px, py - 10 + bob);
-
-      if (this.melee.swingType === 'thrust') {
-        ctx.rotate(swAngle);
-        // Linear thrust motion: shoots forward quickly, holds pose, then retracts
-        const thrustExtend = Math.sin(swProg * Math.PI) * 16;
-        const swordLen = 22;
-
-        // Thrust Speed Lines around blade
-        ctx.strokeStyle = 'rgba(254, 240, 138, 0.65)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(thrustExtend, -4);
-        ctx.lineTo(thrustExtend + swordLen + 6, -4);
-        ctx.moveTo(thrustExtend, 4);
-        ctx.lineTo(thrustExtend + swordLen + 6, 4);
-        ctx.stroke();
-
-        // Glowing white / silver blade
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.8;
-        ctx.beginPath();
-        ctx.moveTo(4 + thrustExtend, 0);
-        ctx.lineTo(4 + thrustExtend + swordLen, 0);
-        ctx.stroke();
-
-        // Sharp golden arrowhead spear tip
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.moveTo(4 + thrustExtend + swordLen + 5, 0);
-        ctx.lineTo(4 + thrustExtend + swordLen - 4, -3);
-        ctx.lineTo(4 + thrustExtend + swordLen - 2, 0);
-        ctx.lineTo(4 + thrustExtend + swordLen - 4, 3);
-        ctx.closePath();
-        ctx.fill();
-
-        // Red lacquered grip
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(2 + thrustExtend, -1.5, 3, 3);
-      } else {
-        // Slashes 1 & 2: Curved sweeping blade
-        ctx.rotate(swAngle + (swProg - 0.5) * (this.melee.swingType === 'slash2' ? -1.8 : 1.8));
-
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.lineWidth = 2.2;
-        ctx.beginPath();
-        ctx.moveTo(4, 0);
-        ctx.lineTo(18, 0);
-        ctx.stroke();
-
-        ctx.fillStyle = '#ef4444'; // Red grip wrap
-        ctx.fillRect(2, -1.5, 3, 3);
-      }
-      ctx.restore();
-    }
-
-    // 4a2. 360 Spin Attack Whirling Twin Blades
-    if (!this.isBearForm && this.melee.isSpinning) {
-      const spinAngle = animTime * 32;
-      ctx.save();
-      ctx.translate(px, py - 10 + bob);
-      for (let s = 0; s < 2; s++) {
-        const curAngle = spinAngle + s * Math.PI;
-        ctx.save();
-        ctx.rotate(curAngle);
-
-        // Radiant Cyan Blade
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 3.0;
-        ctx.beginPath();
-        ctx.moveTo(6, 0);
-        ctx.lineTo(26, 0);
-        ctx.stroke();
-
-        // Glowing white cutting edge
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(10, 0);
-        ctx.lineTo(28, 0);
-        ctx.stroke();
-
-        // Sharp tip
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.moveTo(30, 0);
-        ctx.lineTo(24, -3.5);
-        ctx.lineTo(24, 3.5);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
-      }
-      ctx.restore();
-    }
-
-    // 4b. Bow & Arrow Aiming (Pulled blue & glowing for Aimed Shot)
-    if (!this.isBearForm && (this.ranged.charging || this.ranged.isHolding || this.ranged.aiming)) {
-      const bowAngle = this.getFacingAngle();
-      const isAimed = Boolean(this.ranged.isAimedShot);
-
-      ctx.save();
-      ctx.translate(px, py - 10 + bob);
-      ctx.rotate(bowAngle);
-
-      if (isAimed) {
-        ctx.shadowColor = '#38bdf8';
-        ctx.shadowBlur = 10;
-      }
-
-      // Curved Bamboo Bow (turns radiant blue when Aimed Shot is active!)
-      ctx.strokeStyle = isAimed ? '#38bdf8' : '#a16207';
-      ctx.lineWidth = isAimed ? 2.4 : 1.8;
-      ctx.beginPath();
-      ctx.arc(8, 0, 10, -Math.PI * 0.35, Math.PI * 0.35);
-      ctx.stroke();
-
-      // Pulled Bowstring
-      ctx.strokeStyle = isAimed ? '#e0f2fe' : '#f8fafc';
-      ctx.lineWidth = isAimed ? 1.4 : 1;
-      ctx.beginPath();
-      ctx.moveTo(8 + Math.cos(-Math.PI * 0.35) * 10, Math.sin(-Math.PI * 0.35) * 10);
-      ctx.lineTo(isAimed ? 0 : 2, 0);
-      ctx.lineTo(8 + Math.cos(Math.PI * 0.35) * 10, Math.sin(Math.PI * 0.35) * 10);
-      ctx.stroke();
-
-      // Nocked Paper Arrow
-      ctx.strokeStyle = isAimed ? '#38bdf8' : '#cbd5e1';
-      ctx.lineWidth = isAimed ? 2.2 : 1.5;
-      ctx.beginPath();
-      ctx.moveTo(isAimed ? 0 : 2, 0);
-      ctx.lineTo(16, 0);
-      ctx.stroke();
-
-      ctx.restore();
+    // 4a. Leuchtende Schwungspuren (die Klinge selbst führt der Held im Skelett-Rig)
+    if (!this.isBearForm && skinAction && skinAction.type !== 'bow') {
+      renderHeroSwingTrail(ctx, px, py, skinAction);
     }
 
     // 4c. Translucent Shimmering Bubble Shield (Smash Bros / Zelda Style)
@@ -17683,6 +18805,22 @@ class RemotePlayer {
     return { x: Math.cos(angle), y: Math.sin(angle) };
   }
 
+  /** Kampfaktion für das Skelett-Rig (gleiches Format wie beim lokalen Spieler) */
+  getSkinAction(animTime) {
+    if (this.isBearForm) return null;
+    if (this.swingAnim > 0 && this.swingType && !this.swingType.startsWith('bear_')) {
+      const progress = 1 - this.swingAnim;
+      if (this.swingType === 'spin') return { type: 'spin', progress, angle: this.swingAngle, time: animTime };
+      const type = this.swingType === 'slash1' ? 'slash' : this.swingType;
+      return { type, progress, angle: this.swingAngle };
+    }
+    if (this.bowAnim > 0) {
+      const pull = Math.min(1, 0.3 + (0.45 - this.bowAnim) * 3);
+      return { type: 'bow', progress: pull, pull, angle: this.bowAngle || 0 };
+    }
+    return null;
+  }
+
   render(ctx, animTime, nightFactor = 0) {
     if (this.isDead) return;
 
@@ -17754,7 +18892,7 @@ class RemotePlayer {
     } else {
       const skinDef = CHARACTERS_MAP[this.skinId] || CHARACTERS_MAP['ren_twilight'];
       if (skinDef && typeof skinDef.render === 'function') {
-        skinDef.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+        skinDef.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash, this.getSkinAction(animTime));
       } else {
         ctx.fillStyle = '#60a5fa';
         ctx.beginPath();
@@ -17812,44 +18950,12 @@ class RemotePlayer {
         }
         ctx.stroke();
       } else {
-        ctx.strokeStyle = isSpin ? '#38bdf8' : '#f8fafc';
-        ctx.lineWidth = 2.4;
-        ctx.beginPath();
-        if (isSpin) {
-          ctx.arc(px, py - 6, 24 * (1.0 - this.swingAnim * 0.25), 0, Math.PI * 2);
-        } else if (isThrust) {
-          const tx = Math.cos(ang) * 24;
-          const ty = Math.sin(ang) * 24;
-          ctx.moveTo(px, py - 6);
-          ctx.lineTo(px + tx, py - 6 + ty);
-        } else {
-          ctx.arc(px, py - 6, 18, ang - 0.7, ang + 0.7);
-        }
-        ctx.stroke();
+        renderHeroSwingTrail(ctx, px, py, this.getSkinAction(animTime));
       }
       ctx.restore();
     }
 
-    // 5. Bogen-Zielen & Abschuss-Visual
-    if (this.bowAnim > 0 && !this.isBearForm) {
-      ctx.save();
-      ctx.translate(px, py - 6);
-      ctx.rotate(this.bowAngle);
-      ctx.strokeStyle = '#d97706';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.arc(6, 0, 7, -Math.PI / 2, Math.PI / 2);
-      ctx.stroke();
-
-      ctx.strokeStyle = '#f8fafc';
-      ctx.lineWidth = 1.0;
-      ctx.beginPath();
-      ctx.moveTo(6, -7);
-      ctx.lineTo(2, 0);
-      ctx.lineTo(6, 7);
-      ctx.stroke();
-      ctx.restore();
-    }
+    // 5. Bogen: wird vom Helden-Rig selbst in der Hand gehalten (siehe getSkinAction)
 
     // 6. Plasmakugeln im Orbit
     if (this.plasmaTimer > 0) {

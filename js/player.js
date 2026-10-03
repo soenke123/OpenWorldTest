@@ -1,5 +1,5 @@
 import { TILE_SIZE, PLAYER_CONFIG, TILES, OBJECTS, ELEVATION_PIXEL_OFFSET, RAMPS, COMBAT_CONFIG, PVP_CONFIG } from './constants.js';
-import { CHARACTERS_MAP, getSelectedSkin, setSelectedSkin, getSelectedPlayerName, setSelectedPlayerName } from './characters.js';
+import { CHARACTERS_MAP, getSelectedSkin, setSelectedSkin, getSelectedPlayerName, setSelectedPlayerName, renderHeroSwingTrail } from './characters.js';
 
 export class Player {
   constructor(x, y, map, game = null) {
@@ -473,6 +473,30 @@ export class Player {
     this.isAiming = false;
   }
 
+  /** Aktuelle Kampfaktion für das Skelett-Rig des Helden (Schwert, Stich, Wirbel, Bogen) */
+  getSkinAction(animTime) {
+    if (this.isBearForm) return null;
+    const angle = this.getFacingAngle();
+    if (this.melee.isSpinning) {
+      return { type: 'spin', progress: 0, angle, time: animTime };
+    }
+    if (this.melee.swingProgress < 1.0 && this.melee.swingType && this.melee.swingType !== 'spin') {
+      const type = this.melee.swingType === 'slash1' ? 'slash' : this.melee.swingType;
+      return { type, progress: this.melee.swingProgress, angle };
+    }
+    if (this.ranged.charging || this.ranged.isHolding || this.ranged.aiming) {
+      let pull = 0.85;
+      if (this.ranged.charging) {
+        pull = Math.min(1, 0.4 + this.ranged.chargeTimer * 1.5);
+      } else if (this.ranged.isHolding) {
+        const rate = COMBAT_CONFIG.ARROW_FIRE_RATE || 0.5;
+        pull = Math.max(0.15, Math.min(1, 1 - this.ranged.autoFireTimer / rate));
+      }
+      return { type: 'bow', progress: pull, pull, angle, aimed: Boolean(this.ranged.isAimedShot) };
+    }
+    return null;
+  }
+
   getFacingAngle() {
     if (this.isAiming && typeof this.aimAngle === 'number') {
       return this.aimAngle;
@@ -765,8 +789,9 @@ export class Player {
 
     if (this.game && this.game.network && this.game.network.connected) {
       const effectRadius = (nextStep === 3) ? COMBAT_CONFIG.COMBO_THRUST_RANGE * (isBear ? 1.2 : 1.0) : COMBAT_CONFIG.COMBO_SLASH_RADIUS * (isBear ? 0.8 : 1.0);
+      const comboTypes = isBear ? ['bear_claw1', 'bear_claw2', 'bear_thrust'] : ['slash1', 'slash2', 'thrust'];
       this.game.network.sendAction('melee', {
-        subType: slashType,
+        subType: comboTypes[Math.max(0, Math.min(2, nextStep - 1))],
         angle,
         direction: this.direction,
         radius: effectRadius,
@@ -2191,8 +2216,14 @@ export class Player {
       ctx.scale(1 - progress, 1 - progress);
       ctx.globalAlpha = 1 - progress;
 
-      ctx.fillStyle = '#f8fafc';
-      ctx.fillRect(-6, -12, 12, 16);
+      // Held fällt wirbelnd in sich zusammen (Papier faltet sich)
+      const deadSkin = (typeof CHARACTERS_MAP !== 'undefined' && (CHARACTERS_MAP[this.skinId] || CHARACTERS_MAP['ren_twilight']));
+      if (deadSkin && typeof deadSkin.render === 'function' && !this.isBearForm) {
+        deadSkin.render(ctx, 0, 8, animTime, this.direction, false, 1);
+      } else {
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-6, -12, 12, 16);
+      }
       ctx.restore();
       return;
     }
@@ -2218,12 +2249,13 @@ export class Player {
     }
 
     // 2. Folded Papercraft Hero Skin (15 selectable Dark Ghibli skins) OR Druid Bear Form
+    const skinAction = this.getSkinAction(animTime);
     if (this.isBearForm) {
       this.renderBearForm(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
     } else {
       const skin = (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP[this.skinId]) || (typeof CHARACTERS_MAP !== 'undefined' && CHARACTERS_MAP['ren_twilight']);
       if (skin && typeof skin.render === 'function') {
-        skin.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+        skin.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash, skinAction);
       } else {
         ctx.fillStyle = '#1e2636';
         ctx.beginPath();
@@ -2291,148 +2323,9 @@ export class Player {
 
     // 4. COMBAT WEAPONS & ABILITY RENDERING
 
-    // 4a. Sword & Melee Attack Rendering (Suppressed in Bear Form)
-    // Dynamic swing animations (Slash 1 -> Slash 2 -> Thrust) take precedence so combo is visible while holding!
-    if (!this.isBearForm && this.melee.swingProgress < 1.0 && this.melee.swingType) {
-      const swProg = this.melee.swingProgress;
-      const swAngle = this.getFacingAngle();
-
-      ctx.save();
-      ctx.translate(px, py - 10 + bob);
-
-      if (this.melee.swingType === 'thrust') {
-        ctx.rotate(swAngle);
-        // Linear thrust motion: shoots forward quickly, holds pose, then retracts
-        const thrustExtend = Math.sin(swProg * Math.PI) * 16;
-        const swordLen = 22;
-
-        // Thrust Speed Lines around blade
-        ctx.strokeStyle = 'rgba(254, 240, 138, 0.65)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(thrustExtend, -4);
-        ctx.lineTo(thrustExtend + swordLen + 6, -4);
-        ctx.moveTo(thrustExtend, 4);
-        ctx.lineTo(thrustExtend + swordLen + 6, 4);
-        ctx.stroke();
-
-        // Glowing white / silver blade
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 2.8;
-        ctx.beginPath();
-        ctx.moveTo(4 + thrustExtend, 0);
-        ctx.lineTo(4 + thrustExtend + swordLen, 0);
-        ctx.stroke();
-
-        // Sharp golden arrowhead spear tip
-        ctx.fillStyle = '#fef08a';
-        ctx.beginPath();
-        ctx.moveTo(4 + thrustExtend + swordLen + 5, 0);
-        ctx.lineTo(4 + thrustExtend + swordLen - 4, -3);
-        ctx.lineTo(4 + thrustExtend + swordLen - 2, 0);
-        ctx.lineTo(4 + thrustExtend + swordLen - 4, 3);
-        ctx.closePath();
-        ctx.fill();
-
-        // Red lacquered grip
-        ctx.fillStyle = '#ef4444';
-        ctx.fillRect(2 + thrustExtend, -1.5, 3, 3);
-      } else {
-        // Slashes 1 & 2: Curved sweeping blade
-        ctx.rotate(swAngle + (swProg - 0.5) * (this.melee.swingType === 'slash2' ? -1.8 : 1.8));
-
-        ctx.strokeStyle = '#e2e8f0';
-        ctx.lineWidth = 2.2;
-        ctx.beginPath();
-        ctx.moveTo(4, 0);
-        ctx.lineTo(18, 0);
-        ctx.stroke();
-
-        ctx.fillStyle = '#ef4444'; // Red grip wrap
-        ctx.fillRect(2, -1.5, 3, 3);
-      }
-      ctx.restore();
-    }
-
-    // 4a2. 360 Spin Attack Whirling Twin Blades
-    if (!this.isBearForm && this.melee.isSpinning) {
-      const spinAngle = animTime * 32;
-      ctx.save();
-      ctx.translate(px, py - 10 + bob);
-      for (let s = 0; s < 2; s++) {
-        const curAngle = spinAngle + s * Math.PI;
-        ctx.save();
-        ctx.rotate(curAngle);
-
-        // Radiant Cyan Blade
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 3.0;
-        ctx.beginPath();
-        ctx.moveTo(6, 0);
-        ctx.lineTo(26, 0);
-        ctx.stroke();
-
-        // Glowing white cutting edge
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(10, 0);
-        ctx.lineTo(28, 0);
-        ctx.stroke();
-
-        // Sharp tip
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.moveTo(30, 0);
-        ctx.lineTo(24, -3.5);
-        ctx.lineTo(24, 3.5);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.restore();
-      }
-      ctx.restore();
-    }
-
-    // 4b. Bow & Arrow Aiming (Pulled blue & glowing for Aimed Shot)
-    if (!this.isBearForm && (this.ranged.charging || this.ranged.isHolding || this.ranged.aiming)) {
-      const bowAngle = this.getFacingAngle();
-      const isAimed = Boolean(this.ranged.isAimedShot);
-
-      ctx.save();
-      ctx.translate(px, py - 10 + bob);
-      ctx.rotate(bowAngle);
-
-      if (isAimed) {
-        ctx.shadowColor = '#38bdf8';
-        ctx.shadowBlur = 10;
-      }
-
-      // Curved Bamboo Bow (turns radiant blue when Aimed Shot is active!)
-      ctx.strokeStyle = isAimed ? '#38bdf8' : '#a16207';
-      ctx.lineWidth = isAimed ? 2.4 : 1.8;
-      ctx.beginPath();
-      ctx.arc(8, 0, 10, -Math.PI * 0.35, Math.PI * 0.35);
-      ctx.stroke();
-
-      // Pulled Bowstring
-      ctx.strokeStyle = isAimed ? '#e0f2fe' : '#f8fafc';
-      ctx.lineWidth = isAimed ? 1.4 : 1;
-      ctx.beginPath();
-      ctx.moveTo(8 + Math.cos(-Math.PI * 0.35) * 10, Math.sin(-Math.PI * 0.35) * 10);
-      ctx.lineTo(isAimed ? 0 : 2, 0);
-      ctx.lineTo(8 + Math.cos(Math.PI * 0.35) * 10, Math.sin(Math.PI * 0.35) * 10);
-      ctx.stroke();
-
-      // Nocked Paper Arrow
-      ctx.strokeStyle = isAimed ? '#38bdf8' : '#cbd5e1';
-      ctx.lineWidth = isAimed ? 2.2 : 1.5;
-      ctx.beginPath();
-      ctx.moveTo(isAimed ? 0 : 2, 0);
-      ctx.lineTo(16, 0);
-      ctx.stroke();
-
-      ctx.restore();
+    // 4a. Leuchtende Schwungspuren (die Klinge selbst führt der Held im Skelett-Rig)
+    if (!this.isBearForm && skinAction && skinAction.type !== 'bow') {
+      renderHeroSwingTrail(ctx, px, py, skinAction);
     }
 
     // 4c. Translucent Shimmering Bubble Shield (Smash Bros / Zelda Style)

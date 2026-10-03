@@ -4,6 +4,7 @@ import path from 'path';
 const files = [
   'js/constants.js',
   'js/noise.js',
+  'js/rig.js',
   'js/characters.js',
   'bestiary.js',
   'js/worldPresets.js',
@@ -30,7 +31,7 @@ for (const file of files) {
   let content = fs.readFileSync(file, 'utf8');
 
   // Strip imports and exports
-  content = content.replace(/import\s+.*?from\s+['"].*?['"];?\r?\n?/g, '');
+  content = content.replace(/import\s+[^;]*?from\s+['"][^'"]+['"];?\r?\n?/g, '');
   content = content.replace(/export\s+const\s+/g, 'const ');
   content = content.replace(/export\s+class\s+/g, 'class ');
   content = content.replace(/export\s+function\s+/g, 'function ');

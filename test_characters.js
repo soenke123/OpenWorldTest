@@ -73,6 +73,11 @@ class MockCanvasContext {
   clearRect(x, y, w, h) { this.calls.push(`clearRect(${x},${y},${w},${h})`); }
   translate(x, y) { this.calls.push(`translate(${x},${y})`); }
   scale(x, y) { this.calls.push(`scale(${x},${y})`); }
+  rotate(a) { this.calls.push(`rotate(${a})`); }
+  rect(x, y, w, h) { this.calls.push(`rect(${x},${y},${w},${h})`); }
+  clip() { this.calls.push('clip'); }
+  createLinearGradient() { return { addColorStop() {} }; }
+  createRadialGradient() { return { addColorStop() {} }; }
 }
 
 const mockCtx = new MockCanvasContext();

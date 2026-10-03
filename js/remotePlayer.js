@@ -1,5 +1,5 @@
 import { TILE_SIZE, ELEVATION_PIXEL_OFFSET } from './constants.js';
-import { CHARACTERS_MAP } from './characters.js';
+import { CHARACTERS_MAP, renderHeroSwingTrail } from './characters.js';
 
 export class RemotePlayer {
   constructor(data) {
@@ -226,6 +226,22 @@ export class RemotePlayer {
     return { x: Math.cos(angle), y: Math.sin(angle) };
   }
 
+  /** Kampfaktion für das Skelett-Rig (gleiches Format wie beim lokalen Spieler) */
+  getSkinAction(animTime) {
+    if (this.isBearForm) return null;
+    if (this.swingAnim > 0 && this.swingType && !this.swingType.startsWith('bear_')) {
+      const progress = 1 - this.swingAnim;
+      if (this.swingType === 'spin') return { type: 'spin', progress, angle: this.swingAngle, time: animTime };
+      const type = this.swingType === 'slash1' ? 'slash' : this.swingType;
+      return { type, progress, angle: this.swingAngle };
+    }
+    if (this.bowAnim > 0) {
+      const pull = Math.min(1, 0.3 + (0.45 - this.bowAnim) * 3);
+      return { type: 'bow', progress: pull, pull, angle: this.bowAngle || 0 };
+    }
+    return null;
+  }
+
   render(ctx, animTime, nightFactor = 0) {
     if (this.isDead) return;
 
@@ -297,7 +313,7 @@ export class RemotePlayer {
     } else {
       const skinDef = CHARACTERS_MAP[this.skinId] || CHARACTERS_MAP['ren_twilight'];
       if (skinDef && typeof skinDef.render === 'function') {
-        skinDef.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash);
+        skinDef.render(ctx, px, py, animTime, this.direction, this.isMoving, this.hitFlash, this.getSkinAction(animTime));
       } else {
         ctx.fillStyle = '#60a5fa';
         ctx.beginPath();
@@ -355,44 +371,12 @@ export class RemotePlayer {
         }
         ctx.stroke();
       } else {
-        ctx.strokeStyle = isSpin ? '#38bdf8' : '#f8fafc';
-        ctx.lineWidth = 2.4;
-        ctx.beginPath();
-        if (isSpin) {
-          ctx.arc(px, py - 6, 24 * (1.0 - this.swingAnim * 0.25), 0, Math.PI * 2);
-        } else if (isThrust) {
-          const tx = Math.cos(ang) * 24;
-          const ty = Math.sin(ang) * 24;
-          ctx.moveTo(px, py - 6);
-          ctx.lineTo(px + tx, py - 6 + ty);
-        } else {
-          ctx.arc(px, py - 6, 18, ang - 0.7, ang + 0.7);
-        }
-        ctx.stroke();
+        renderHeroSwingTrail(ctx, px, py, this.getSkinAction(animTime));
       }
       ctx.restore();
     }
 
-    // 5. Bogen-Zielen & Abschuss-Visual
-    if (this.bowAnim > 0 && !this.isBearForm) {
-      ctx.save();
-      ctx.translate(px, py - 6);
-      ctx.rotate(this.bowAngle);
-      ctx.strokeStyle = '#d97706';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.arc(6, 0, 7, -Math.PI / 2, Math.PI / 2);
-      ctx.stroke();
-
-      ctx.strokeStyle = '#f8fafc';
-      ctx.lineWidth = 1.0;
-      ctx.beginPath();
-      ctx.moveTo(6, -7);
-      ctx.lineTo(2, 0);
-      ctx.lineTo(6, 7);
-      ctx.stroke();
-      ctx.restore();
-    }
+    // 5. Bogen: wird vom Helden-Rig selbst in der Hand gehalten (siehe getSkinAction)
 
     // 6. Plasmakugeln im Orbit
     if (this.plasmaTimer > 0) {
