@@ -1922,7 +1922,7 @@ const CHARACTERS_MAP = CHARACTERS_DATA.reduce((acc, char) => {
 // --- bestiary.js ---
 /**
  * Ocarina of Brawls - Bestiarium & Monster-Handbuch
- * 20 detaillierte, prozedural animierte Gegner-Modelle im "Süßen Dark Ghibli 2.5D Papercraft"-Stil
+ * 22 detaillierte, prozedural animierte Gegner-Modelle im "Süßen Dark Ghibli 2.5D Papercraft"-Stil
  * Inspiriert von Prinzessin Mononoke, Chihiros Reise ins Zauberland, Totoro und japanischer Mythologie
  */
 
@@ -2205,7 +2205,7 @@ function drawSakuraPetal(ctx, x, y, rot, scale = 1) {
 }
 
 // =============================================================================
-// BESTIARY DATA (20 ENEMY MODELS - GHIBLI PAPERCRAFT EDITION)
+// BESTIARY DATA (22 ENEMY MODELS - GHIBLI PAPERCRAFT EDITION)
 // =============================================================================
 
 const BESTIARY_DATA = [
